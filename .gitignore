@@ -5,6 +5,9 @@ dist/
 coverage/
 *.tsbuildinfo
 .next/
+next-env.d.ts
+test-results/
+playwright-report/
 out/
 
 # Python

@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(13);
+select plan(15);
 
 -- Acme e Varejo são Organizações distintas; Ana pertence à Acme.
 select tests.create_tenant('00000000-0000-4000-8000-00000000ac01', 'acme');
@@ -26,8 +26,18 @@ select is(
   'analyst não renomeia a Organização'
 );
 
--- Admin da Acme: renomeia a própria, não a dos outros.
+-- Admin sem MFA verificado (aal1) não executa ação administrativa.
 select tests.authenticate_as('00000000-0000-4000-8000-0000000a0001', '00000000-0000-4000-8000-00000000ac01', 'admin');
+update public.tenants set name = 'Sem MFA' where id = '00000000-0000-4000-8000-00000000ac01';
+select tests.clear_authentication();
+select is(
+  (select name from public.tenants where id = '00000000-0000-4000-8000-00000000ac01'), 'Acme',
+  'admin em aal1 não renomeia a Organização (MFA obrigatório)'
+);
+select has_function('app', 'current_aal', array[]::text[]);
+
+-- Admin com MFA (aal2): renomeia a própria, não a dos outros.
+select tests.authenticate_as('00000000-0000-4000-8000-0000000a0001', '00000000-0000-4000-8000-00000000ac01', 'admin', 'aal2');
 update public.tenants set name = 'Acme Consultoria' where id = '00000000-0000-4000-8000-00000000ac01';
 update public.tenants set name = 'Invadida' where id = '00000000-0000-4000-8000-00000000be01';
 select tests.clear_authentication();
@@ -40,8 +50,8 @@ select is(
   'admin não altera outra Organização'
 );
 
--- Mesmo um admin não muda plano, não cria nem apaga Organização direto.
-select tests.authenticate_as('00000000-0000-4000-8000-0000000a0001', '00000000-0000-4000-8000-00000000ac01', 'admin');
+-- Mesmo um admin com MFA não muda plano, não cria nem apaga Organização direto.
+select tests.authenticate_as('00000000-0000-4000-8000-0000000a0001', '00000000-0000-4000-8000-00000000ac01', 'admin', 'aal2');
 select throws_ok(
   $$update public.tenants set plan = 'enterprise' where id = '00000000-0000-4000-8000-00000000ac01'$$,
   '42501', null, 'plano não é editável pelo cliente'

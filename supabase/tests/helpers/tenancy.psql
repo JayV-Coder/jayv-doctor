@@ -5,13 +5,13 @@ create extension if not exists pgtap with schema extensions;
 create schema if not exists tests;
 grant usage on schema tests to anon, authenticated;
 
-create or replace function tests.create_user(user_id uuid, email text)
+create or replace function tests.create_user(user_id uuid, email text, metadata jsonb default '{}')
 returns uuid
 language plpgsql
 as $$
 begin
   insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
-  values (user_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', email, '{}', '{}', now(), now());
+  values (user_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', email, '{}', metadata, now(), now());
   return user_id;
 end;
 $$;
@@ -26,13 +26,16 @@ as $$
 $$;
 
 -- Passa a agir como `authenticated`, com as claims que o Custom Access Token Hook emite.
-create or replace function tests.authenticate_as(user_id uuid, tenant_id uuid, tenant_role text)
+-- `aal` é o nível de garantia da sessão: aal2 depois de verificar o MFA.
+create or replace function tests.authenticate_as(
+  user_id uuid, tenant_id uuid, tenant_role text, aal text default 'aal1'
+)
 returns void
 language plpgsql
 as $$
 begin
   perform set_config('request.jwt.claims', json_build_object(
-    'sub', user_id, 'role', 'authenticated', 'aud', 'authenticated',
+    'sub', user_id, 'role', 'authenticated', 'aud', 'authenticated', 'aal', aal,
     'tenant_id', tenant_id, 'tenant_role', tenant_role
   )::text, true);
   perform set_config('role', 'authenticated', true);

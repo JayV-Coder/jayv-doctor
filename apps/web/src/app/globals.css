@@ -1,0 +1,347 @@
+/* Linguagem visual do mockup (docs/mockups). O tema acompanha o sistema. */
+:root {
+  --bg: #f4f4f0;
+  --fg: #161616;
+  --card: #fff;
+  --sec: #eaeae5;
+  --mu: #6c6c68;
+  --bd: #d8d8d2;
+  --ac: #dfff5f;
+  --go: #23874a;
+  --ask: #b07a06;
+  --stop: #d13a26;
+  --grid: rgb(22 22 22 / 5%);
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111210;
+    --fg: #f4f4f0;
+    --card: #1b1c19;
+    --sec: #252620;
+    --mu: #a0a09a;
+    --bd: #353630;
+    --go: #3fd07a;
+    --ask: #f5b53d;
+    --stop: #f2402c;
+    --grid: rgb(244 244 240 / 5%);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: 28px 28px;
+  color: var(--fg);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--fg);
+  text-underline-offset: 4px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--go);
+  outline-offset: 2px;
+}
+
+.page {
+  width: 100%;
+  max-width: 440px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 32px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 3px;
+  border: 1px solid var(--bd);
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--go);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 1px;
+  padding: 2px 7px;
+  border: 1px solid var(--bd);
+  background: var(--card);
+}
+
+.chip::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--go);
+  flex: none;
+}
+
+h1 {
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+p {
+  margin: 0;
+}
+
+.muted {
+  color: var(--mu);
+}
+
+.small {
+  font-size: 12px;
+  color: var(--mu);
+}
+
+.mark {
+  position: relative;
+  display: inline-block;
+  z-index: 0;
+  color: var(--fg);
+}
+
+.mark::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: auto -0.03em -0.04em;
+  height: 0.22em;
+  background: var(--ac);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--mu);
+}
+
+/* 16 px: abaixo disso o iOS dá zoom ao focar o campo. */
+.field input {
+  min-height: 44px;
+  width: 100%;
+  border-radius: 3px;
+  border: 1px solid var(--bd);
+  background: var(--card);
+  color: var(--fg);
+  font:
+    400 16px var(--font-mono),
+    monospace;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 10px 12px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 3px;
+  border: 1px solid var(--bd);
+  background: var(--card);
+  color: var(--fg);
+  font:
+    500 13px var(--font-mono),
+    monospace;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: var(--fg);
+  border-color: var(--fg);
+  color: var(--bg);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--bd);
+}
+
+.label {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--mu);
+}
+
+.win {
+  background: var(--card);
+  border: 1px solid var(--bd);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.win-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--bd);
+  background: var(--sec);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--mu);
+}
+
+.lights {
+  display: flex;
+  gap: 6px;
+}
+
+.lights i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  opacity: 0.75;
+}
+
+.lights i:nth-child(1) {
+  background: var(--stop);
+}
+
+.lights i:nth-child(2) {
+  background: var(--ask);
+}
+
+.lights i:nth-child(3) {
+  background: var(--go);
+}
+
+.win-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.otp {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.otp input {
+  min-height: 48px;
+  width: 100%;
+  text-align: center;
+  border-radius: 3px;
+  border: 1px solid var(--bd);
+  background: var(--card);
+  color: var(--fg);
+  font:
+    600 18px var(--font-mono),
+    monospace;
+}
+
+.qr {
+  align-self: center;
+  padding: 12px;
+  background: #fff;
+  border-radius: 3px;
+  line-height: 0;
+}
+
+.secret {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.alert {
+  border: 1px solid var(--bd);
+  border-left: 2px solid var(--stop);
+  background: var(--sec);
+  border-radius: 3px;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.notice {
+  border-left-color: var(--go);
+}
+
+.foot {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 16px;
+  font-size: 12px;
+}
+
+.foot a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}

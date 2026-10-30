@@ -79,6 +79,9 @@ def get_claims(
         raise UNAUTHORIZED
     try:
         return verifier.verify(token)
+    except jwt.PyJWKClientConnectionError as exc:
+        # Falha nossa, não do token: o cliente deve tentar de novo, não voltar ao login.
+        raise ApiError(503, "auth_unavailable", "Autenticação indisponível.") from exc
     except jwt.PyJWTError as exc:
         raise UNAUTHORIZED from exc
 

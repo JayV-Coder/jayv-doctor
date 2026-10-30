@@ -26,8 +26,19 @@ export function decideRedirect(path: string, state: SessionState): string | null
   return ENTRY_PATHS.includes(path) ? "/" : null;
 }
 
+const MFA_PATHS = ["/mfa", "/mfa/cadastro"];
+
+// O desvio para o MFA não pode perder o destino: é assim que a recuperação de senha chega lá.
+export function redirectPath(target: string, from: string): string {
+  if (!MFA_PATHS.includes(target) || from === "/") return target;
+  return `${target}?next=${encodeURIComponent(from)}`;
+}
+
 // Só caminhos internos: `next` vem da URL e não pode virar redirecionamento aberto.
+// Quem decide é o parser de URL, o mesmo critério do navegador: tab e quebra de linha somem.
 export function safeNext(value: string | null): string {
-  if (!value?.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return "/";
-  return value;
+  if (!value?.startsWith("/")) return "/";
+  const base = "http://interno.invalid";
+  const url = new URL(value, base);
+  return url.origin === base ? url.pathname + url.search : "/";
 }

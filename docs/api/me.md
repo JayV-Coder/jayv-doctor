@@ -22,3 +22,4 @@ Até o ticket #5, `organizations` traz só a Organização ativa.
 |---|---|---|
 | 401 | `unauthorized` | Token ausente, inválido ou expirado |
 | 403 | `mfa_required` | Ação administrativa com sessão `aal1` (dependência `require_aal2`) |
+| 503 | `auth_unavailable` | Chaves do Auth indisponíveis; tente de novo sem encerrar a sessão |

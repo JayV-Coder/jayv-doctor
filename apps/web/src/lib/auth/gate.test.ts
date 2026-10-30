@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decideRedirect, safeNext } from "./gate";
+import { decideRedirect, redirectPath, safeNext } from "./gate";
 
 const session = { hasSession: true, role: null, currentLevel: "aal1", nextLevel: "aal1" } as const;
 const anonymous = { hasSession: false, role: null, currentLevel: null, nextLevel: null } as const;
@@ -56,5 +56,30 @@ describe("safeNext", () => {
     for (const value of ["https://mal.test", "//mal.test", "/\\mal.test", "", null]) {
       expect(safeNext(value)).toBe("/");
     }
+  });
+
+  it("recusa tab e quebra de linha, que o navegador remove da URL", () => {
+    for (const value of ["/\t/mal.test", "/\n/mal.test", "/\t\\mal.test"]) {
+      expect(safeNext(value)).toBe("/");
+    }
+  });
+
+  it("preserva a query do caminho interno", () => {
+    expect(safeNext("/seguranca?primeiro=1")).toBe("/seguranca?primeiro=1");
+  });
+});
+
+describe("redirectPath", () => {
+  it("guarda o destino ao desviar para o MFA", () => {
+    expect(redirectPath("/mfa", "/redefinir-senha")).toBe("/mfa?next=%2Fredefinir-senha");
+    expect(redirectPath("/mfa/cadastro", "/redefinir-senha")).toBe(
+      "/mfa/cadastro?next=%2Fredefinir-senha",
+    );
+  });
+
+  it("não polui a URL quando o destino é a home ou o desvio não é de MFA", () => {
+    expect(redirectPath("/mfa", "/")).toBe("/mfa");
+    expect(redirectPath("/login", "/seguranca")).toBe("/login");
+    expect(redirectPath("/", "/mfa")).toBe("/");
   });
 });

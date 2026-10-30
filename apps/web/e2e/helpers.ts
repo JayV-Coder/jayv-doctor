@@ -38,11 +38,17 @@ export async function lastEmailLink(email: string): Promise<string> {
       if (!id) return false;
       const message = await fetch(`${MAILPIT_URL}/api/v1/message/${id}`);
       const { HTML } = (await message.json()) as { HTML: string };
-      link = /href="([^"]*\/auth\/callback[^"]*)"/.exec(HTML)?.[1]?.replaceAll("&amp;", "&");
+      link = /href="([^"]*\/auth\/confirmar[^"]*)"/.exec(HTML)?.[1]?.replaceAll("&amp;", "&");
       return link !== undefined;
     })
     .toBe(true);
   return link ?? "";
+}
+
+// A verificação só acontece no clique: um scanner de e-mail que abre o link não gasta o token.
+export async function openEmailLink(page: Page, link: string): Promise<void> {
+  await page.goto(link);
+  await page.getByRole("button", { name: "Continuar" }).click();
 }
 
 export function totp(secret: string, now = Date.now()): string {

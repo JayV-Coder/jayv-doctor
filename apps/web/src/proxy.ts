@@ -1,8 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { decideRedirect } from "@/lib/auth/gate";
+import { decideRedirect, redirectPath } from "@/lib/auth/gate";
 import { toSessionState } from "@/lib/auth/session";
 import { SUPABASE_KEY, SUPABASE_URL } from "@/lib/supabase/env";
+
+const CACHE_HEADERS = ["cache-control", "expires", "pragma"];
 
 // Roda em toda navegação: renova o JWT expirado e aplica o portão de sessão e MFA.
 export async function proxy(request: NextRequest) {
@@ -10,10 +12,12 @@ export async function proxy(request: NextRequest) {
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_KEY, {
     cookies: {
       getAll: () => request.cookies.getAll(),
-      setAll(toSet) {
+      setAll(toSet, headers) {
         for (const { name, value } of toSet) request.cookies.set(name, value);
         response = NextResponse.next({ request });
         for (const { name, value, options } of toSet) response.cookies.set(name, value, options);
+        // Sem estes cabeçalhos um CDN poderia servir o cookie de uma sessão a outra pessoa.
+        for (const [key, value] of Object.entries(headers)) response.headers.set(key, value);
       },
     },
   });
@@ -23,14 +27,15 @@ export async function proxy(request: NextRequest) {
   // O nível vem da sessão no cookie: serve só para navegar. Quem barra de fato é o JWT, na API e no RLS.
   const levels = claims ? (await supabase.auth.mfa.getAuthenticatorAssuranceLevel()).data : null;
 
-  const target = decideRedirect(request.nextUrl.pathname, toSessionState(claims, levels));
+  const { pathname } = request.nextUrl;
+  const target = decideRedirect(pathname, toSessionState(claims, levels));
   if (target === null) return response;
 
-  const url = request.nextUrl.clone();
-  url.pathname = target;
-  url.search = "";
-  const redirect = NextResponse.redirect(url);
+  const redirect = NextResponse.redirect(new URL(redirectPath(target, pathname), request.url));
   for (const cookie of response.cookies.getAll()) redirect.cookies.set(cookie);
+  response.headers.forEach((value, key) => {
+    if (CACHE_HEADERS.includes(key)) redirect.headers.set(key, value);
+  });
   return redirect;
 }
 

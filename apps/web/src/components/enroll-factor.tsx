@@ -31,7 +31,7 @@ export function EnrollFactor({ onDone }: { onDone: () => void }) {
     }
     const { data, error: enrollError } = await mfa.enroll({
       factorType: "totp",
-      friendlyName: `App ${String((factors?.totp.length ?? 0) + 1)}`,
+      friendlyName: `App ${crypto.randomUUID().slice(0, 8)}`,
     });
     if (enrollError) setError(authErrorMessage(enrollError));
     else setEnrollment({ factorId: data.id, uri: data.totp.uri, secret: data.totp.secret });

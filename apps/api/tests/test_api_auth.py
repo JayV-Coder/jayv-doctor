@@ -89,3 +89,18 @@ def test_aal2_passa_e_expoe_as_claims(client: TestClient) -> None:
     response = post_admin(client, make_token(aal="aal2"))
     assert response.status_code == 200
     assert response.json() == {"sub": USER_ID}
+
+
+class UnreachableJwksVerifier(TokenVerifier):
+    def signing_key(self, token: str) -> Any:
+        raise jwt.PyJWKClientConnectionError("sem resposta do JWKS")
+
+
+def test_falha_ao_buscar_o_jwks_nao_derruba_a_sessao() -> None:
+    app = create_app()
+    app.dependency_overrides[get_verifier] = lambda: UnreachableJwksVerifier(ISSUER)
+    response = TestClient(app).get(
+        "/api/v1/me", headers={"Authorization": f"Bearer {make_token()}"}
+    )
+    assert response.status_code == 503
+    assert response.json()["code"] == "auth_unavailable"

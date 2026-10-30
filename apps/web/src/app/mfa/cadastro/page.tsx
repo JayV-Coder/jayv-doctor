@@ -1,16 +1,20 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { AuthShell, Win } from "@/components/auth-shell";
 import { EnrollFactor } from "@/components/enroll-factor";
+import { safeNext } from "@/lib/auth/gate";
 
-export default function EnrollMfaPage() {
+function EnrollMfa() {
+  const next = useSearchParams().get("next");
   return (
-    <AuthShell>
+    <>
       <Win title="cadastro · mfa">
         <p className="small">Seu papel exige MFA. Cadastre um app autenticador para continuar.</p>
         <EnrollFactor
           onDone={() => {
-            window.location.assign("/seguranca?primeiro=1");
+            window.location.assign(next ? safeNext(next) : "/seguranca?primeiro=1");
           }}
         />
       </Win>
@@ -19,6 +23,16 @@ export default function EnrollMfaPage() {
           Sair
         </button>
       </form>
+    </>
+  );
+}
+
+export default function EnrollMfaPage() {
+  return (
+    <AuthShell>
+      <Suspense>
+        <EnrollMfa />
+      </Suspense>
     </AuthShell>
   );
 }

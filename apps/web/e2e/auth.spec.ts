@@ -3,6 +3,7 @@ import {
   expectNoHorizontalScroll,
   fillOtp,
   lastEmailLink,
+  openEmailLink,
   randomPassword,
   signInWithPassword,
   signUp,
@@ -36,11 +37,13 @@ test("entra pelo link enviado por e-mail, que só vale uma vez", async ({ page }
 
   const link = await lastEmailLink(email);
   await page.goto(link);
+  await page.reload();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page.getByText(`Sessão ativa: ${email}`)).toBeVisible();
 
   await page.getByRole("button", { name: "Sair" }).click();
   await expect(page).toHaveURL(/\/login$/);
-  await page.goto(link);
+  await openEmailLink(page, link);
   await expect(page.locator("p[role=alert]")).toContainText("Link inválido ou expirado");
 });
 
@@ -62,7 +65,7 @@ test("redefine a senha pelo link do e-mail", async ({ page }) => {
   await page.getByRole("button", { name: "Enviar link de redefinição" }).click();
   await expect(page.getByRole("status")).toContainText("Se houver uma conta");
 
-  await page.goto(await lastEmailLink(email));
+  await openEmailLink(page, await lastEmailLink(email));
   await expect(page).toHaveURL(/\/redefinir-senha$/);
   await page.getByLabel("Nova senha").fill(newPassword);
   await page.getByRole("button", { name: "Salvar nova senha" }).click();
@@ -99,6 +102,45 @@ test("cadastra MFA e passa a exigir o código no login", async ({ page }) => {
   await page.getByRole("button", { name: "Verificar" }).click();
   await expect(page.getByText(`Sessão ativa: ${email}`)).toBeVisible();
   await expectNoHorizontalScroll(page);
+});
+
+test("quem tem MFA redefine a senha depois de verificar o código", async ({ page }) => {
+  const email = uniqueEmail();
+  const newPassword = randomPassword();
+  await signUp(email);
+  await signInWithPassword(page, email);
+  await page.getByRole("link", { name: "Segurança da conta" }).click();
+  await page.getByRole("button", { name: "Gerar QR code" }).click();
+  const secret = await page.locator("code.secret").innerText();
+  await fillOtp(page, totp(secret));
+  await page.getByRole("button", { name: "Confirmar" }).click();
+  await expect(page.getByRole("status")).toContainText("App autenticador cadastrado");
+  await page.goto("/");
+  await page.getByRole("button", { name: "Sair" }).click();
+
+  await page.goto("/esqueci-senha");
+  await page.getByLabel("E-mail corporativo").fill(email);
+  await page.getByRole("button", { name: "Enviar link de redefinição" }).click();
+  await expect(page.getByRole("status")).toContainText("Se houver uma conta");
+
+  await openEmailLink(page, await lastEmailLink(email));
+  await expect(page).toHaveURL(/\/mfa\?next=%2Fredefinir-senha$/);
+  await fillOtp(page, totp(secret));
+  await page.getByRole("button", { name: "Verificar" }).click();
+  await expect(page).toHaveURL(/\/redefinir-senha$/);
+  await page.getByLabel("Nova senha").fill(newPassword);
+  await page.getByRole("button", { name: "Salvar nova senha" }).click();
+  await expect(page.getByText(`Sessão ativa: ${email}`)).toBeVisible();
+});
+
+test("o callback recusa POST de outra origem", async ({ page }) => {
+  const response = await page.request.post("/auth/callback", {
+    headers: { origin: "https://mal.test" },
+    form: { token_hash: "qualquer", type: "magiclink" },
+    maxRedirects: 0,
+  });
+  expect(response.status()).toBe(303);
+  expect(response.headers().location).toContain("/login?erro=link");
 });
 
 test("token expirado é renovado de forma transparente", async ({ page, context }) => {

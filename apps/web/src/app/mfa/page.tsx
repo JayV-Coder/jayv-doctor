@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, type SubmitEvent } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState, type SubmitEvent } from "react";
 import { AuthShell, FormMessage, Win } from "@/components/auth-shell";
 import { OtpInput } from "@/components/otp-input";
+import { safeNext } from "@/lib/auth/gate";
 import { authErrorMessage } from "@/lib/auth/messages";
 import { EMPTY_OTP } from "@/lib/auth/otp";
 import { createClient } from "@/lib/supabase/client";
 
-export default function VerifyMfaPage() {
+function VerifyMfa() {
+  const next = safeNext(useSearchParams().get("next"));
   const [digits, setDigits] = useState<readonly string[]>(EMPTY_OTP);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,14 +20,15 @@ export default function VerifyMfaPage() {
     setBusy(true);
     setError(null);
     const { mfa } = createClient().auth;
-    const { data } = await mfa.listFactors();
+    const { data, error: listError } = await mfa.listFactors();
+    if (listError) setError(authErrorMessage(listError));
     const factors = data?.totp ?? [];
     const code = digits.join("");
     // Com fator de reserva, o código pode ser de qualquer um dos apps cadastrados.
     for (const factor of factors) {
       const result = await mfa.challengeAndVerify({ factorId: factor.id, code });
       if (!result.error) {
-        window.location.assign("/");
+        window.location.assign(next);
         return;
       }
       setError(authErrorMessage(result.error));
@@ -34,7 +38,7 @@ export default function VerifyMfaPage() {
   }
 
   return (
-    <AuthShell>
+    <>
       <Win title="verificação · mfa">
         <form className="stack" onSubmit={(event) => void submit(event)}>
           <p className="small">Digite o código de 6 dígitos do app autenticador.</p>
@@ -50,6 +54,16 @@ export default function VerifyMfaPage() {
           Sair
         </button>
       </form>
+    </>
+  );
+}
+
+export default function VerifyMfaPage() {
+  return (
+    <AuthShell>
+      <Suspense>
+        <VerifyMfa />
+      </Suspense>
     </AuthShell>
   );
 }

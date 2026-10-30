@@ -1,5 +1,5 @@
 # Comandos do dia a dia. Requer: Node 22 + pnpm 9 (corepack), uv; Docker + Supabase CLI para os alvos db:*.
-.PHONY: dev-setup dev lint typecheck test format check db\:reset db\:types db\:test
+.PHONY: dev-setup dev lint typecheck test format check db\:reset db\:types db\:test db\:lint
 
 dev-setup: ## instala dependências TS e Python e os hooks de pre-commit
 	pnpm install
@@ -38,3 +38,6 @@ db\:types: ## regenera os tipos TS do schema
 
 db\:test: ## testes pgTAP
 	supabase test db
+
+db\:lint: ## plpgsql_check só nos schemas mantidos aqui (extensões como pg_partman ficam de fora)
+	supabase db lint --schema public,app --fail-on warning

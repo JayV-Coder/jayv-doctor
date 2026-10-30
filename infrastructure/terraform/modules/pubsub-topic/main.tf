@@ -140,10 +140,10 @@ output "dead_letter_keeps_messages" {
 }
 
 output "storage_regions" {
-  value = toset(concat(
+  value = setunion(
     google_pubsub_topic.main.message_storage_policy[0].allowed_persistence_regions,
     google_pubsub_topic.dead_letter.message_storage_policy[0].allowed_persistence_regions,
-  ))
+  )
 }
 
 output "uses_oidc" {

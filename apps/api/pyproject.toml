@@ -3,7 +3,13 @@ name = "aid-api"
 version = "0.0.0"
 description = "API FastAPI do Integration AI Doctor"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.162",
+    "asyncpg>=0.30",
+    "pyjwt[crypto]>=2.15",
+    "sqlalchemy[asyncio]>=2.0",
+    "uvicorn>=0.54",
+]
 
 [build-system]
 requires = ["uv_build>=0.9.5,<0.10"]

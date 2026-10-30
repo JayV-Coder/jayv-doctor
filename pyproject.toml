@@ -14,11 +14,13 @@ members = ["apps/api", "packages/contracts"]
 [dependency-groups]
 dev = [
     "datamodel-code-generator>=0.35",
+    "httpx>=0.28",
     "hypothesis>=6.140",
     "hypothesis-jsonschema>=0.23",
     "mypy>=1.18",
     "types-jsonschema>=4.25",
     "pytest>=8.4",
+    "pytest-asyncio>=1.0",
     "pytest-cov>=7.0",
     "ruff==0.17.3",
 ]

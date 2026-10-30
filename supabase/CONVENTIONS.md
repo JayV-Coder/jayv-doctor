@@ -9,6 +9,7 @@ Base: [ADR-0004](../docs/adr/0004-isolamento-multi-tenant-rls-e-fks-compostas.md
 | `app.current_tenant_id()` | `uuid` da Organização ativa, ou `null` sem claim |
 | `app.current_tenant_role()` | `owner` · `admin` · `analyst` · `viewer`, ou `null` |
 | `app.has_role(variadic text[])` | `true` se o Papel ativo está na lista |
+| `app.current_aal()` | `aal1` ou `aal2` (MFA verificado), ou `null`; ações administrativas exigem `aal2` |
 | `app.set_updated_at()` | trigger `before update` que define `updated_at = now()` |
 
 Nas políticas, envolva os helpers em `(select …)` para o Postgres avaliar uma vez por consulta, não por linha:
@@ -36,9 +37,9 @@ using (tenant_id = (select app.current_tenant_id()))
 ## Testes
 
 - `make db:test` roda `supabase test db` (pgTAP) na stack local. Os testes incluem `tests/helpers/tenancy.psql`, que oferece:
-  - `tests.authenticate_as(user, tenant, role)`;
+  - `tests.authenticate_as(user, tenant, role, aal)`, com `aal` padrão `aal1`;
   - `tests.authenticate_without_tenant(user)`;
   - `tests.authenticate_as_anon()`;
   - `tests.clear_authentication()`;
-  - `tests.create_tenant(id, slug)` e `tests.create_user(id, email)`.
+  - `tests.create_tenant(id, slug)` e `tests.create_user(id, email, metadata)`.
 - Num projeto hospedado (sem psql), `python3 scripts/run-pgtap-remote.py <teste>` gera um SQL único que roda o teste numa transação sem commit e devolve a saída TAP.

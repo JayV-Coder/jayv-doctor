@@ -8,13 +8,13 @@ Perfil, Organizações e Papel na Organização ativa do Usuário autenticado. E
   "email": "ana@acme.test",
   "aal": "aal2",
   "profile": { "full_name": "Ana Souza", "avatar_url": null, "locale": "pt-BR" },
-  "organizations": [{ "id": "uuid", "name": "Acme", "slug": "acme" }],
+  "organizations": [{ "id": "uuid", "name": "Acme", "slug": "acme", "role": "owner" }],
   "active_tenant_id": "uuid",
   "active_role": "owner"
 }
 ```
 
-Até o ticket #5, `organizations` traz só a Organização ativa.
+`organizations` traz todas as Organizações em que o Usuário tem Vínculo.
 
 ## Erros (`application/problem+json`)
 

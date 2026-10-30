@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 USER_ID = "00000000-0000-4000-8000-0000000a0001"
 TENANT_ID = "00000000-0000-4000-8000-00000000ac01"
 PROFILE = Profile(full_name="Ana Souza", avatar_url=None, locale="pt-BR")
-ORGANIZATION = Organization(id=TENANT_ID, name="Acme", slug="acme")
+ORGANIZATION = Organization(id=TENANT_ID, name="Acme", slug="acme", role="owner")
 
 
 class FakeRepository(MeRepository):
@@ -35,7 +35,7 @@ def test_me_devolve_perfil_organizacoes_e_papel_ativo() -> None:
         "email": "ana@acme.test",
         "aal": "aal2",
         "profile": {"full_name": "Ana Souza", "avatar_url": None, "locale": "pt-BR"},
-        "organizations": [{"id": TENANT_ID, "name": "Acme", "slug": "acme"}],
+        "organizations": [{"id": TENANT_ID, "name": "Acme", "slug": "acme", "role": "owner"}],
         "active_tenant_id": TENANT_ID,
         "active_role": "owner",
     }

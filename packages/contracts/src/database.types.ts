@@ -23,7 +23,27 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "profiles": {
+            "memberships": {
+                  Row: {
+                    "created_at": string,"id": string,"role": string,"tenant_id": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"role": string,"tenant_id": string,"updated_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"role"?: string,"tenant_id"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "memberships_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"profiles": {
                   Row: {
                     "avatar_url": string | null,"created_at": string,"full_name": string | null,"id": string,"locale": string
                   }
@@ -39,17 +59,37 @@ export type Database = {
                   ]
                 },"tenants": {
                   Row: {
-                    "created_at": string,"id": string,"llm_provider": string,"name": string,"plan": string,"slug": string,"status": string,"updated_at": string
+                    "created_at": string,"dpa_accepted_at": string | null,"id": string,"llm_provider": string,"name": string,"plan": string,"segment": string | null,"slug": string,"status": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"id"?: string,"llm_provider"?: string,"name": string,"plan"?: string,"slug": string,"status"?: string,"updated_at"?: string
+                    "created_at"?: string,"dpa_accepted_at"?: string | null,"id"?: string,"llm_provider"?: string,"name": string,"plan"?: string,"segment"?: string | null,"slug": string,"status"?: string,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"llm_provider"?: string,"name"?: string,"plan"?: string,"slug"?: string,"status"?: string,"updated_at"?: string
+                    "created_at"?: string,"dpa_accepted_at"?: string | null,"id"?: string,"llm_provider"?: string,"name"?: string,"plan"?: string,"segment"?: string | null,"slug"?: string,"status"?: string,"updated_at"?: string
                   }
                   Relationships: [
 
+                  ]
+                },"user_active_tenant": {
+                  Row: {
+                    "tenant_id": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "tenant_id": string,"updated_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "tenant_id"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "user_active_tenant_tenant_id_user_id_fkey"
+      columns: ["tenant_id","user_id"]
+isOneToOne: false
+      referencedRelation: "memberships"
+      referencedColumns: ["tenant_id","user_id"]
+    }
                   ]
                 }
           }

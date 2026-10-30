@@ -51,10 +51,14 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
       - uses: supabase/setup-cli@v3
         with:
           version: latest
       - run: pnpm install --frozen-lockfile
+      - run: uv sync --all-packages --locked
       - run: supabase start -x realtime,storage-api,imgproxy,studio,postgres-meta,edge-runtime,logflare,vector,supavisor
       - name: Configurar app web com a stack local
         run: |

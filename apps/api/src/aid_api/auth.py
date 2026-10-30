@@ -66,7 +66,8 @@ def get_verifier() -> TokenVerifier:
     return JwksTokenVerifier(os.environ["SUPABASE_JWT_ISSUER"])
 
 
-UNAUTHORIZED = ApiError(401, "unauthorized", "Sessão ausente ou expirada.")
+def unauthorized() -> ApiError:
+    return ApiError(401, "unauthorized", "Sessão ausente ou expirada.")
 
 
 # Síncrona de propósito: o FastAPI a roda no threadpool e o PyJWKClient faz I/O bloqueante.
@@ -76,14 +77,14 @@ def get_claims(
 ) -> Claims:
     scheme, _, token = (authorization or "").partition(" ")
     if scheme.lower() != "bearer" or not token:
-        raise UNAUTHORIZED
+        raise unauthorized()
     try:
         return verifier.verify(token)
     except jwt.PyJWKClientConnectionError as exc:
         # Falha nossa, não do token: o cliente deve tentar de novo, não voltar ao login.
         raise ApiError(503, "auth_unavailable", "Autenticação indisponível.") from exc
     except jwt.PyJWTError as exc:
-        raise UNAUTHORIZED from exc
+        raise unauthorized() from exc
 
 
 def require_aal2(claims: Annotated[Claims, Depends(get_claims)]) -> Claims:

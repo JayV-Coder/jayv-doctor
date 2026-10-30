@@ -22,6 +22,7 @@ class Organization(BaseModel):
     id: str
     name: str
     slug: str
+    role: str
 
 
 class Me(BaseModel):
@@ -43,11 +44,12 @@ class MeRepository:
             row = result.mappings().first()
         return Profile.model_validate(dict(row)) if row else None
 
-    # Por ora o RLS só mostra a Organização ativa; a lista completa vem com os Vínculos (#5).
     async def organizations(self, claims: Claims) -> list[Organization]:
         async with tenant_tx(claims) as connection:
             result = await connection.execute(
-                text("select id::text, name, slug from public.tenants order by name")
+                text(
+                    "select id::text, name, slug, role from app.list_organizations() order by name"
+                )
             )
             return [Organization.model_validate(dict(row)) for row in result.mappings()]
 

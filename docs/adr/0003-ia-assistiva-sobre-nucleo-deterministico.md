@@ -1,0 +1,3 @@
+# A IA interpreta; correlação, regras e evidências são determinísticas
+
+A IA não decide a causa sozinha. O Diagnóstico segue seis etapas fixas: validação, correlação, regras versionadas, recuperação de conhecimento, interpretação por LLM, e verificação com publicação. Só a etapa 5 usa LLM, e a etapa 6 descarta qualquer Hipótese cuja Evidência não aponte para um Evento ou documento real. O sistema precisa funcionar com a IA desligada (modo `rules_only`). A Confiança é heurística e a interface a identifica como tal. Escolhemos isso pela auditabilidade, que é o diferencial do produto, e para não depender de um único fornecedor de modelos. Nenhuma Recomendação é executada automaticamente.

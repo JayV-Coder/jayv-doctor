@@ -1,0 +1,3 @@
+# Credenciais de conectores no Supabase Vault, nunca em colunas
+
+As credenciais de clientes (chave de Service Account GCP, tokens OAuth Salesforce, usuário técnico SAP) ficam criptografadas no Supabase Vault. A tabela `connectors` guarda só `secret_id`. A leitura é feita apenas por uma função `security definer` (`app.get_connector_secret(connector_id)`), concedida exclusivamente ao papel dos workers de conectores e que registra cada acesso na Trilha de auditoria. Escolhemos o Vault em vez do Secret Manager para que a credencial fique na mesma fronteira transacional e de RLS do conector, e para não precisar criar um segredo GCP por cliente.

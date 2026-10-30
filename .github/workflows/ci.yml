@@ -41,6 +41,20 @@ jobs:
       - run: uv run mypy
       - run: uv run pytest
 
+  workflows:
+    name: Workflows (actionlint)
+    runs-on: ubuntu-latest
+    env:
+      ACTIONLINT_VERSION: 1.7.8
+    steps:
+      - uses: actions/checkout@v5
+      - name: Instalar actionlint
+        run: |
+          curl -sSfL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin actionlint
+      - name: Validar workflows (inclui shellcheck dos run)
+        run: actionlint -color
+
   secrets:
     name: Segredos (gitleaks)
     runs-on: ubuntu-latest
@@ -76,4 +90,5 @@ jobs:
       - if: steps.supabase.outputs.present == 'true'
         run: supabase test db
       - if: steps.supabase.outputs.present != 'true'
-        run: echo "Sem supabase/config.toml ainda (chega no ticket #2); job ignorado."
+        run: |
+          echo "Sem supabase/config.toml ainda (chega no ticket #2); job ignorado."

@@ -80,6 +80,13 @@ resource "google_cloud_run_v2_service_iam_member" "developer" {
   member   = "serviceAccount:${google_service_account.deployer.email}"
 }
 
+# Os serviços usam Direct VPC egress: a validação da revisão lê a sub-rede.
+resource "google_project_iam_member" "network_viewer" {
+  project = var.project_id
+  role    = "roles/compute.networkViewer"
+  member  = "serviceAccount:${google_service_account.deployer.email}"
+}
+
 # Publicar uma revisão exige agir como a service account de runtime dela.
 resource "google_service_account_iam_member" "acts_as_runtime" {
   for_each           = var.runtime_service_accounts

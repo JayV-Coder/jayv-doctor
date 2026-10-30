@@ -79,8 +79,37 @@ run "segredos_ficam_no_brasil_e_cada_servico_le_so_o_seu" {
     error_message = "A API não lê chave de LLM."
   }
   assert {
+    condition     = contains(keys(module.secrets.accessors), "hmac-master-key/api") && !contains(keys(module.secrets.accessors), "hmac-master-key/correlation")
+    error_message = "A chave HMAC mestre vai para quem calcula a Referência: API e ingestão."
+  }
+  assert {
     condition     = contains(keys(module.secrets.accessors), "anthropic-api-key/diagnosis")
     error_message = "O worker de diagnóstico lê a chave de LLM."
+  }
+}
+
+run "mensagens_e_logs_ficam_no_brasil" {
+  command = plan
+
+  assert {
+    condition     = alltrue([for t in module.topics : t.storage_regions == toset(["southamerica-east1"])])
+    error_message = "Tópico e DLQ só persistem em southamerica-east1."
+  }
+  assert {
+    condition     = module.observability.log_location == "southamerica-east1"
+    error_message = "Logs dos serviços ficam em southamerica-east1."
+  }
+}
+
+run "pubsub_espera_o_worker_terminar" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for topic in values(local.topics) :
+      topic.ack_deadline >= tonumber(trimsuffix(local.workers[topic.worker].timeout, "s"))
+    ])
+    error_message = "Ack menor que o timeout do worker reentrega mensagem em processamento."
   }
 }
 
@@ -88,7 +117,7 @@ run "cloud_armor_limita_por_ip" {
   command = plan
 
   assert {
-    condition     = module.edge.rate_limit_action == "rate_based_ban" && module.edge.rate_limit_key == "IP"
+    condition     = module.edge.rate_limit_action == "throttle" && module.edge.rate_limit_key == "IP"
     error_message = "O Cloud Armor limita por IP."
   }
 }

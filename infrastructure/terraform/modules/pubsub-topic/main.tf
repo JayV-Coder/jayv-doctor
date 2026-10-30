@@ -6,6 +6,10 @@ variable "project_number" {
   type = string
 }
 
+variable "region" {
+  type = string
+}
+
 variable "name" {
   type = string
 }
@@ -40,11 +44,19 @@ locals {
 resource "google_pubsub_topic" "main" {
   project = var.project_id
   name    = var.name
+
+  message_storage_policy {
+    allowed_persistence_regions = [var.region]
+  }
 }
 
 resource "google_pubsub_topic" "dead_letter" {
   project = var.project_id
   name    = "${var.name}.dlq"
+
+  message_storage_policy {
+    allowed_persistence_regions = [var.region]
+  }
 }
 
 resource "google_pubsub_subscription" "push" {
@@ -125,6 +137,13 @@ output "maximum_backoff" {
 
 output "dead_letter_keeps_messages" {
   value = google_pubsub_subscription.dead_letter.message_retention_duration == "604800s"
+}
+
+output "storage_regions" {
+  value = toset(concat(
+    google_pubsub_topic.main.message_storage_policy[0].allowed_persistence_regions,
+    google_pubsub_topic.dead_letter.message_storage_policy[0].allowed_persistence_regions,
+  ))
 }
 
 output "uses_oidc" {

@@ -9,24 +9,24 @@ ENVELOPE = {
 }
 
 
-def post(worker: str, received: list[str], json: object = ENVELOPE) -> Any:
+def post(topic: str, received: list[str], json: object = ENVELOPE) -> Any:
     async def handler(message: PubSubMessage) -> None:
         received.append(message.message_id)
 
-    return TestClient(create_app(worker, {"ingestion": handler})).post("/pubsub", json=json)
+    return TestClient(create_app("ingestion", {topic: handler})).post("/pubsub", json=json)
 
 
-def test_worker_sem_handler_responde_501_para_a_mensagem_nao_se_perder() -> None:
-    assert post("correlation", []).status_code == 501
+def test_topico_sem_handler_responde_501_para_a_mensagem_nao_se_perder() -> None:
+    assert post("correlation.requested", []).status_code == 501
 
 
-def test_worker_com_handler_confirma_a_mensagem() -> None:
+def test_handler_e_escolhido_pelo_topico_da_assinatura() -> None:
     received: list[str] = []
-    assert post("ingestion", received).status_code == 204
+    assert post("ingestion.raw", received).status_code == 204
     assert received == ["1"]
 
 
 def test_envelope_invalido_nao_e_confirmado() -> None:
     received: list[str] = []
-    assert post("ingestion", received, {"subscription": "x"}).status_code == 422
+    assert post("ingestion.raw", received, {"subscription": "x"}).status_code == 422
     assert received == []

@@ -4,18 +4,22 @@ locals {
   # Privilégio mínimo: o que cada serviço lê e publica é declarado aqui.
   workers = {
     ingestion   = { secrets = ["supabase-db-url", "hmac-master-key"], memory = "512Mi", timeout = "300s" }
-    correlation = { secrets = ["supabase-db-url", "hmac-master-key"], memory = "512Mi", timeout = "300s" }
-    diagnosis   = { secrets = ["supabase-db-url", "anthropic-api-key"], memory = "1Gi", timeout = "900s" }
+    correlation = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "300s" }
+    diagnosis   = { secrets = ["supabase-db-url", "anthropic-api-key"], memory = "1Gi", timeout = "600s" }
     connectors  = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "600s" }
   }
 
+  # ack_deadline >= timeout do worker: no push, o Pub/Sub reentrega ao fim do prazo, mesmo com o
+  # worker ainda processando. 600 s é o máximo do Pub/Sub.
   topics = {
-    "ingestion.raw"         = { worker = "ingestion", publishers = ["api", "connectors"], ack_deadline = 60 }
-    "ingestion.normalized"  = { worker = "correlation", publishers = ["ingestion"], ack_deadline = 60 }
-    "correlation.requested" = { worker = "correlation", publishers = ["ingestion"], ack_deadline = 60 }
+    "ingestion.raw"         = { worker = "ingestion", publishers = ["api", "connectors"], ack_deadline = 300 }
+    "ingestion.normalized"  = { worker = "correlation", publishers = ["ingestion"], ack_deadline = 300 }
+    "correlation.requested" = { worker = "correlation", publishers = ["ingestion"], ack_deadline = 300 }
     "diagnosis.requested"   = { worker = "diagnosis", publishers = ["api", "correlation"], ack_deadline = 600 }
     "connector.sync"        = { worker = "connectors", publishers = ["api"], ack_deadline = 600 }
   }
+
+  api_secrets = ["supabase-db-url", "hmac-master-key"]
 
   secret_env = {
     "supabase-db-url"   = "SUPABASE_DB_URL"
@@ -77,7 +81,12 @@ module "secrets" {
   region     = var.region
   secret_ids = toset(keys(local.secret_env))
   accessors = merge(
-    { "supabase-db-url/api" = { secret = "supabase-db-url", member = "serviceAccount:${google_service_account.api.email}" } },
+    {
+      for secret in local.api_secrets : "${secret}/api" => {
+        secret = secret
+        member = "serviceAccount:${google_service_account.api.email}"
+      }
+    },
     merge([
       for name, worker in local.workers : {
         for secret in worker.secrets : "${secret}/${name}" => {
@@ -111,7 +120,7 @@ module "api" {
   min_instances       = var.api_min_instances
   deletion_protection = var.environment == "prod"
   env                 = { SUPABASE_JWT_ISSUER = var.supabase_jwt_issuer }
-  secret_env          = { SUPABASE_DB_URL = "supabase-db-url" }
+  secret_env          = { for secret in local.api_secrets : local.secret_env[secret] => secret }
   depends_on          = [module.secrets]
 }
 
@@ -168,6 +177,7 @@ module "topics" {
   for_each                   = local.topics
   project_id                 = var.project_id
   project_number             = data.google_project.this.number
+  region                     = var.region
   name                       = each.key
   push_endpoint              = "${module.workers[each.value.worker].uri}/pubsub"
   push_audience              = module.workers[each.value.worker].uri
@@ -207,6 +217,7 @@ module "deploy" {
 module "observability" {
   source     = "../modules/observability"
   project_id = var.project_id
+  region     = var.region
   api_domain = var.api_domain
   depends_on = [module.project]
 }

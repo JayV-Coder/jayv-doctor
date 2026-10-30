@@ -29,7 +29,7 @@ Exemplo com staging. Requer um projeto com billing e `gcloud auth login` + `gclo
    printf %s "$VALOR" | gcloud secrets versions add supabase-db-url --project <projeto> --data-file=-
    ```
 
-   Repita para `anthropic-api-key` e `hmac-master-key`.
+   Repita para `anthropic-api-key` e `hmac-master-key`. Se os segredos existirem sem valor, o passo 5 falha.
 
 5. `make tf:apply ENV=staging`.
 6. Aponte o DNS de `api_domain` para a saída `api_ip`. O certificado gerenciado só ativa depois disso e pode levar até 1 h.
@@ -40,7 +40,7 @@ Exemplo com staging. Requer um projeto com billing e `gcloud auth login` + `gclo
 
 ## Deploy
 
-Merge na `main` dispara `deploy.yml`: staging publica a imagem do commit e production espera aprovação. O Terraform ignora a imagem dos serviços, então deploy não gera diff. Como o Artifact Registry é por projeto, cada ambiente constrói a própria imagem do mesmo commit.
+Quando o CI de um merge na `main` passa, `deploy.yml` roda: staging publica a imagem do commit e production espera aprovação. O Terraform ignora a imagem dos serviços, então deploy não gera diff. Como o Artifact Registry é por projeto, cada ambiente constrói a própria imagem do mesmo commit.
 
 ## Mensagens na DLQ
 
@@ -50,8 +50,8 @@ Cada tópico tem `<tópico>.dlq` e a assinatura `<tópico>.dlq.pull`, com reten�
 gcloud pubsub subscriptions pull ingestion.raw.dlq.pull --project <projeto> --limit 5
 ```
 
-Enquanto um worker não tiver handler, ele responde `501` e a mensagem vai para a DLQ.
+Enquanto um tópico não tiver handler, o worker responde `501` e a mensagem vai para a DLQ.
 
 ## Custos fixos
 
-Além do uso, cada ambiente paga Load Balancer, Cloud NAT com IP estático e Cloud Armor, mesmo sem tráfego. Em dev, prefira `terraform destroy` quando não estiver em uso.
+Além do uso, cada ambiente paga Load Balancer, Cloud NAT com IP estático e Cloud Armor, mesmo sem tráfego. `terraform destroy` não é um jeito de economizar: o id do pool de Workload Identity fica reservado por 30 dias, o que quebra o próximo apply, e os valores dos segredos se perdem.

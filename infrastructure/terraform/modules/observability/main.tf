@@ -2,16 +2,38 @@ variable "project_id" {
   type = string
 }
 
+variable "region" {
+  type = string
+}
+
 variable "api_domain" {
   type = string
 }
 
-# Logs de aplicação: 30 dias. Alertas (incluindo DLQ) vêm no ticket #34.
-resource "google_logging_project_bucket_config" "default" {
+# O bucket _Default é global e não pode mudar de região: logs dos serviços têm bucket próprio no
+# Brasil e saem do _Default. Alertas (incluindo DLQ) vêm no ticket #34.
+locals {
+  run_logs = "resource.type=\"cloud_run_revision\""
+}
+
+resource "google_logging_project_bucket_config" "services" {
   project        = var.project_id
-  location       = "global"
-  bucket_id      = "_Default"
+  location       = var.region
+  bucket_id      = "aid-services"
   retention_days = 30
+}
+
+resource "google_logging_project_sink" "services" {
+  project     = var.project_id
+  name        = "aid-services"
+  destination = "logging.googleapis.com/${google_logging_project_bucket_config.services.id}"
+  filter      = local.run_logs
+}
+
+resource "google_logging_project_exclusion" "services_from_default" {
+  project = var.project_id
+  name    = "aid-services-fora-do-default"
+  filter  = local.run_logs
 }
 
 resource "google_monitoring_uptime_check_config" "api" {
@@ -33,4 +55,8 @@ resource "google_monitoring_uptime_check_config" "api" {
       host       = var.api_domain
     }
   }
+}
+
+output "log_location" {
+  value = google_logging_project_bucket_config.services.location
 }

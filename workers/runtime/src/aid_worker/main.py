@@ -30,8 +30,13 @@ class PushEnvelope(BaseModel):
 
 Handler = Callable[[PubSubMessage], Awaitable[None]]
 
-# Cada ticket de worker registra aqui o próprio handler.
+# Chave: nome do tópico. Um worker pode receber mais de um, com formatos diferentes.
 HANDLERS: dict[str, Handler] = {}
+
+
+def topic_of(subscription: str) -> str:
+    """`projects/x/subscriptions/ingestion.raw.push` => `ingestion.raw` (ver Terraform)."""
+    return subscription.rsplit("/", 1)[-1].removesuffix(".push")
 
 
 def create_app(worker: str, handlers: Mapping[str, Handler]) -> FastAPI:
@@ -39,11 +44,15 @@ def create_app(worker: str, handlers: Mapping[str, Handler]) -> FastAPI:
 
     @app.post("/pubsub", status_code=status.HTTP_204_NO_CONTENT)
     async def receive(envelope: PushEnvelope) -> Response:
-        handler = handlers.get(worker)
+        topic = topic_of(envelope.subscription)
+        handler = handlers.get(topic)
         if handler is None:
             # Só identificadores: o conteúdo da mensagem pode trazer dados de clientes.
             logger.warning(
-                "sem handler: worker=%s message_id=%s", worker, envelope.message.message_id
+                "sem handler: worker=%s topic=%s message_id=%s",
+                worker,
+                topic,
+                envelope.message.message_id,
             )
             return Response(status_code=status.HTTP_501_NOT_IMPLEMENTED)
         await handler(envelope.message)

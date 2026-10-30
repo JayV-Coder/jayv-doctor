@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "event_id": "6f1c2e4a-8b3d-4c5e-9f1a-2b3c4d5e6f70",
+  "integration_id": "integration-001",
+  "timestamp": "2026-10-29T18:00:00Z",
+  "source": {
+    "provider": "gcp",
+    "service": "cloud-run"
+  },
+  "operation": "create_order",
+  "severity": "ERROR"
+}

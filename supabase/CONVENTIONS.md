@@ -10,6 +10,8 @@ Base: [ADR-0004](../docs/adr/0004-isolamento-multi-tenant-rls-e-fks-compostas.md
 | `app.current_tenant_role()` | `owner` · `admin` · `analyst` · `viewer`, ou `null` |
 | `app.has_role(variadic text[])` | `true` se o Papel ativo está na lista |
 | `app.current_aal()` | `aal1` ou `aal2` (MFA verificado), ou `null`; ações administrativas exigem `aal2` |
+| `app.create_organization(name, slug, segment, llm_provider)` | cria Organização, Vínculo Owner e Organização ativa; `authenticated` só escreve nessas tabelas por aqui |
+| `app.switch_organization(target)` | troca a Organização ativa; `42501` sem Vínculo |
 | `app.set_updated_at()` | trigger `before update` que define `updated_at = now()` |
 
 Nas políticas, envolva os helpers em `(select …)` para o Postgres avaliar uma vez por consulta, não por linha:

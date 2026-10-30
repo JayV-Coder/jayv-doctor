@@ -41,6 +41,32 @@ jobs:
       - run: uv run mypy
       - run: uv run pytest
 
+  e2e:
+    name: E2E (Playwright + Supabase local)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: supabase/setup-cli@v3
+        with:
+          version: latest
+      - run: pnpm install --frozen-lockfile
+      - run: supabase start -x realtime,storage-api,imgproxy,studio,postgres-meta,edge-runtime,logflare,vector,supavisor
+      - name: Configurar app web com a stack local
+        run: |
+          key="$(supabase status -o json | jq -r .PUBLISHABLE_KEY)"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321"
+            echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$key"
+            echo "NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3000"
+          } | tee apps/web/.env.local >> "$GITHUB_ENV"
+      - run: pnpm --filter @aid/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @aid/web test:e2e
+
   contracts:
     name: Contratos gerados atualizados
     runs-on: ubuntu-latest

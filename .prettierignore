@@ -8,3 +8,4 @@ coverage/
 dist/
 .next/
 supabase/.temp/
+packages/contracts/src/database.types.ts

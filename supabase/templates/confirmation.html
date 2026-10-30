@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+  <body
+    style="
+      margin: 0;
+      background: #f4f4f0;
+      font-family: &quot;IBM Plex Mono&quot;, ui-monospace, monospace;
+      color: #161616;
+    "
+  >
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      style="padding: 32px 16px"
+    >
+      <tr>
+        <td align="center">
+          <table
+            role="presentation"
+            width="100%"
+            style="
+              max-width: 480px;
+              background: #ffffff;
+              border: 1px solid #d8d8d2;
+              border-radius: 5px;
+              padding: 24px;
+            "
+          >
+            <tr>
+              <td
+                style="
+                  font-size: 12px;
+                  letter-spacing: 0.05em;
+                  text-transform: uppercase;
+                  color: #6c6c68;
+                "
+              >
+                ❯ Integration AI Doctor
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-top: 12px; font-size: 20px; font-weight: 600">
+                Confirme seu e-mail
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-top: 8px; font-size: 14px; line-height: 1.6">
+                Confirme seu e-mail para ativar o acesso.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-top: 20px">
+                <a
+                  href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&amp;type=email"
+                  style="
+                    display: inline-block;
+                    background: #161616;
+                    color: #ffffff;
+                    text-decoration: none;
+                    font-size: 14px;
+                    font-weight: 500;
+                    padding: 12px 20px;
+                    border-radius: 3px;
+                  "
+                  >Confirmar e-mail</a
+                >
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-top: 20px; font-size: 12px; color: #6c6c68">
+                Se você não fez este pedido, ignore este e-mail.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

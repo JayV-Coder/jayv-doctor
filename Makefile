@@ -1,5 +1,5 @@
 # Comandos do dia a dia. Requer: Node 22 + pnpm 9 (corepack), uv; Docker + Supabase CLI para os alvos db:*.
-.PHONY: dev-setup dev lint typecheck test format check db\:reset db\:types db\:test db\:lint
+.PHONY: dev-setup dev lint typecheck test format check contracts db\:reset db\:types db\:test db\:lint
 
 dev-setup: ## instala dependências TS e Python e os hooks de pre-commit
 	pnpm install
@@ -29,6 +29,10 @@ format:
 	uv run ruff format .
 
 check: lint typecheck test ## o mesmo que o CI roda
+
+contracts: ## regenera modelos Pydantic e tipos TS a partir de packages/contracts/schemas
+	pnpm exec prettier --write packages/contracts/schemas
+	uv run python packages/contracts/scripts/generate.py
 
 db\:reset: ## recria o banco local com migrações e seed (ticket #2)
 	supabase db reset

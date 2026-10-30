@@ -9,11 +9,15 @@ requires-python = ">=3.12,<3.13"
 package = false
 
 [tool.uv.workspace]
-members = ["apps/api"]
+members = ["apps/api", "packages/contracts"]
 
 [dependency-groups]
 dev = [
+    "datamodel-code-generator>=0.35",
+    "hypothesis>=6.140",
+    "hypothesis-jsonschema>=0.23",
     "mypy>=1.18",
+    "types-jsonschema>=4.25",
     "pytest>=8.4",
     "pytest-cov>=7.0",
     "ruff==0.17.3",
@@ -30,6 +34,9 @@ select = ["E", "F", "W", "I", "N", "B", "UP", "SIM", "C4", "S", "PT", "RUF", "T2
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101"]
 "scripts/**" = ["T20", "S603", "S607", "S608"]
+"packages/*/scripts/**" = ["T20", "S603", "S607"]
+# Gerado pelo datamodel-codegen; as docstrings vêm das descrições do schema.
+"packages/contracts/python/aid_contracts/event_v1.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -37,7 +44,12 @@ strict = true
 warn_unreachable = true
 # Nomes de arquivos de teste são únicos no repositório (ex.: test_api_smoke.py),
 # porque o mypy trata cada pasta tests/ sem __init__.py como módulos de topo.
-files = ["apps/api/src", "apps/api/tests"]
+files = [
+    "apps/api/src",
+    "apps/api/tests",
+    "packages/contracts/python",
+    "packages/contracts/tests",
+]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib --strict-markers"

@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "event_id": "018f2f20-5d9a-7b81-ba20-9b1200000003",
+  "integration_id": "3f8a2a5e-1b7c-4c5e-9d1e-0a6f9f3b2c11",
+  "execution_id": "exec-124",
+  "timestamp": "2026-10-29T18:00:02Z",
+  "source": { "provider": "sap", "service": "bapi", "resource": "BAPI_SALESORDER_CREATE" },
+  "operation": "create_order",
+  "severity": "ERROR",
+  "error": { "category": "BUSINESS_REJECTION", "code": "V1 801", "message": "Material bloqueado" },
+  "attributes": { "bapi_type": "E", "retryable": false, "quantity": 12.5, "plant": null }
+}

@@ -15,6 +15,26 @@ Plataforma SaaS B2B que coleta, correlaciona e diagnostica falhas em integraçõ
 ## Stack
 Supabase (Postgres + pgvector, Auth, Storage, Realtime, Vault) · Python 3.12 + FastAPI · Cloud Run + Pub/Sub · Next.js + TypeScript + Tailwind + shadcn/ui (PWA) · Claude / Vertex AI · Terraform.
 
+## Desenvolvimento
+Requisitos: Node 22 com pnpm 9 (`corepack enable`), [uv](https://docs.astral.sh/uv/) e GNU make. Docker e Supabase CLI são necessários a partir do ticket #2.
+
+```bash
+cp .env.example .env
+make dev-setup   # pnpm install, uv sync, hooks de pre-commit
+make check       # lint + typecheck + testes (o mesmo que o CI)
+```
+
+| Pasta | Conteúdo |
+|---|---|
+| `apps/web`, `apps/api` | Next.js (PWA) e FastAPI |
+| `workers/*` | ingestion, correlation, diagnosis, connectors, retention |
+| `packages/*` | contracts, connectors, diagnosis-engine, knowledge, security |
+| `supabase/` | migrações, seed e testes pgTAP |
+| `infrastructure/terraform` | GCP |
+| `tests/*` | integração, segurança, avaliação, carga |
+
+Pacotes TS são workspaces pnpm (orquestrados pelo Turborepo). Pacotes Python são membros do workspace uv em `pyproject.toml`; nomes de arquivos de teste Python são únicos no repositório.
+
 ## Criar as issues no GitHub
 ```bash
 gh auth login

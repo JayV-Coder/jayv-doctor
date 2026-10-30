@@ -81,7 +81,7 @@ def parse_backlog() -> tuple[list[Issue], list[tuple[str, str]]]:
                 Issue(
                     key=key,
                     title=fields["title"].strip(),
-                    labels=[l.strip() for l in fields["labels"].split(",")],
+                    labels=[label.strip() for label in fields["labels"].split(",")],
                     body=body.strip(),
                     milestone=meta["milestone"],
                     source=path.relative_to(ROOT).as_posix(),
@@ -98,7 +98,7 @@ def validate(issues: list[Issue]) -> None:
         errors.append("chaves de issue duplicadas")
     for i in issues:
         errors += [f"#{i.key}: referência inexistente {{{{#{r}}}}}" for r in i.refs - keys]
-        errors += [f"#{i.key}: label desconhecida {l}" for l in i.labels if l not in LABELS]
+        errors += [f"#{i.key}: label desconhecida {lb}" for lb in i.labels if lb not in LABELS]
     if errors:
         sys.exit("Backlog inválido:\n  " + "\n  ".join(errors))
 
@@ -113,38 +113,88 @@ def gh(*args: str, input: str | None = None) -> str:
 def render(issue: Issue, numbers: dict[str, int], repo: str) -> str:
     body = REF.sub(lambda m: f"#{numbers[m.group(1)]}", issue.body)
     body = body.replace("{{repo}}", f"https://github.com/{repo}/blob/main")
-    return f"{body}\n\n---\n_Fonte: [`{issue.source}`](https://github.com/{repo}/blob/main/{issue.source}) · ticket {issue.key} do backlog_"
+    source_url = f"https://github.com/{repo}/blob/main/{issue.source}"
+    footer = f"_Fonte: [`{issue.source}`]({source_url}) · ticket {issue.key} do backlog_"
+    return f"{body}\n\n---\n{footer}"
 
 
 def ensure_labels(repo: str) -> None:
     for name, (color, description) in LABELS.items():
-        gh("label", "create", name, "--repo", repo, "--color", color, "--description", description, "--force")
+        gh(
+            "label",
+            "create",
+            name,
+            "--repo",
+            repo,
+            "--color",
+            color,
+            "--description",
+            description,
+            "--force",
+        )
 
 
 def ensure_milestones(repo: str, milestones: list[tuple[str, str]]) -> None:
-    existing = {m["title"] for m in json.loads(gh("api", f"repos/{repo}/milestones?state=all&per_page=100"))}
+    existing = {
+        m["title"] for m in json.loads(gh("api", f"repos/{repo}/milestones?state=all&per_page=100"))
+    }
     for title, description in milestones:
         if title not in existing:
-            gh("api", "-X", "POST", f"repos/{repo}/milestones", "-f", f"title={title}", "-f", f"description={description}")
+            gh(
+                "api",
+                "-X",
+                "POST",
+                f"repos/{repo}/milestones",
+                "-f",
+                f"title={title}",
+                "-f",
+                f"description={description}",
+            )
 
 
 def existing_issues(repo: str) -> dict[str, int]:
-    out = gh("issue", "list", "--repo", repo, "--state", "all", "--limit", "1000", "--json", "number,title")
+    out = gh(
+        "issue",
+        "list",
+        "--repo",
+        repo,
+        "--state",
+        "all",
+        "--limit",
+        "1000",
+        "--json",
+        "number,title",
+    )
     return {i["title"]: i["number"] for i in json.loads(out)}
 
 
 def create_issue(repo: str, issue: Issue, body: str) -> int:
     url = gh(
-        "issue", "create", "--repo", repo, "--title", issue.title, "--milestone", issue.milestone,
-        "--label", ",".join(issue.labels), "--body-file", "-", input=body,
+        "issue",
+        "create",
+        "--repo",
+        repo,
+        "--title",
+        issue.title,
+        "--milestone",
+        issue.milestone,
+        "--label",
+        ",".join(issue.labels),
+        "--body-file",
+        "-",
+        input=body,
     ).strip()
     return int(url.rsplit("/", 1)[-1])
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--repo", default="JayV-Coder/jayv-doctor")
-    parser.add_argument("--dry-run", action="store_true", help="só valida e lista o que seria criado")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="só valida e lista o que seria criado"
+    )
     args = parser.parse_args()
 
     issues, milestones = parse_backlog()
@@ -155,7 +205,10 @@ def main() -> None:
             print(f"\n## {title} ({len(group)})")
             for i in group:
                 print(f"  {i.key}  {i.title}  [{', '.join(i.labels)}]  deps→{sorted(i.refs)}")
-        print(f"\n{len(issues)} issues + 1 índice, {len(milestones)} milestones, {len(LABELS)} labels. Backlog válido.")
+        print(
+            f"\n{len(issues)} issues + 1 índice, {len(milestones)} milestones, "
+            f"{len(LABELS)} labels. Backlog válido."
+        )
         return
 
     ensure_labels(args.repo)
@@ -185,7 +238,16 @@ def main() -> None:
     for issue in issues:
         used = rendered_with.get(issue.key)
         if used and any(used[r] != numbers[r] for r in issue.refs):
-            gh("issue", "edit", str(issue.number), "--repo", args.repo, "--body-file", "-", input=render(issue, numbers, args.repo))
+            gh(
+                "issue",
+                "edit",
+                str(issue.number),
+                "--repo",
+                args.repo,
+                "--body-file",
+                "-",
+                input=render(issue, numbers, args.repo),
+            )
             print(f"~ #{issue.number} referências corrigidas")
 
     # Índice do roadmap.
@@ -199,10 +261,31 @@ def main() -> None:
         lines += [f"- [ ] #{i.number} {i.title}" for i in issues if i.milestone == title]
     index_body = "\n".join(lines)
     if INDEX_TITLE in known:
-        gh("issue", "edit", str(known[INDEX_TITLE]), "--repo", args.repo, "--body-file", "-", input=index_body)
+        gh(
+            "issue",
+            "edit",
+            str(known[INDEX_TITLE]),
+            "--repo",
+            args.repo,
+            "--body-file",
+            "-",
+            input=index_body,
+        )
         print(f"~ #{known[INDEX_TITLE]} índice atualizado")
     else:
-        url = gh("issue", "create", "--repo", args.repo, "--title", INDEX_TITLE, "--label", "epic", "--body-file", "-", input=index_body)
+        url = gh(
+            "issue",
+            "create",
+            "--repo",
+            args.repo,
+            "--title",
+            INDEX_TITLE,
+            "--label",
+            "epic",
+            "--body-file",
+            "-",
+            input=index_body,
+        )
         print(f"+ {url.strip()}")
 
 

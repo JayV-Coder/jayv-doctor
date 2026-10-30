@@ -1,0 +1,21 @@
+name: Bug
+description: Algo não funciona como esperado
+labels: [bug]
+body:
+  - type: textarea
+    id: passos
+    attributes:
+      label: Passos para reproduzir
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: Esperado × obtido
+    validations:
+      required: true
+  - type: input
+    id: ambiente
+    attributes:
+      label: Ambiente
+      placeholder: dev / staging / prod · navegador · versão

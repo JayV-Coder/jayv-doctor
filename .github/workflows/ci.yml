@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  typescript:
+    name: TypeScript (lint, typecheck, test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm turbo run lint typecheck test
+
+  python:
+    name: Python (ruff, mypy, pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --all-packages --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      - run: uv run pytest
+
+  workflows:
+    name: Workflows (actionlint)
+    runs-on: ubuntu-latest
+    env:
+      ACTIONLINT_VERSION: 1.7.8
+    steps:
+      - uses: actions/checkout@v5
+      - name: Instalar actionlint
+        run: |
+          curl -sSfL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin actionlint
+      - name: Validar workflows (inclui shellcheck dos run)
+        run: actionlint -color
+
+  secrets:
+    name: Segredos (gitleaks)
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: 8.28.0
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Instalar gitleaks
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+      - name: Varrer histórico
+        run: gitleaks git --redact --verbose --config .gitleaks.toml .
+
+  database:
+    name: Banco (supabase db lint + pgTAP)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verificar projeto Supabase
+        id: supabase
+        run: echo "present=$([ -f supabase/config.toml ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - if: steps.supabase.outputs.present == 'true'
+        uses: supabase/setup-cli@v3
+        with:
+          version: latest
+      - if: steps.supabase.outputs.present == 'true'
+        run: supabase db start
+      - if: steps.supabase.outputs.present == 'true'
+        run: supabase db lint --fail-on warning
+      - if: steps.supabase.outputs.present == 'true'
+        run: supabase test db
+      - if: steps.supabase.outputs.present != 'true'
+        run: |
+          echo "Sem supabase/config.toml ainda (chega no ticket #2); job ignorado."

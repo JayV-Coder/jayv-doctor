@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Valores de exemplo, sem segredo real"
+paths = ['''\.env\.example$''', '''pnpm-lock\.yaml$''', '''uv\.lock$''']

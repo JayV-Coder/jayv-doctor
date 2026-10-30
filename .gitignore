@@ -1,0 +1,39 @@
+# Node
+node_modules/
+.turbo/
+dist/
+coverage/
+*.tsbuildinfo
+.next/
+out/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Ambiente
+.env
+.env.*
+!.env.example
+
+# Supabase
+supabase/.branches/
+supabase/.temp/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+
+# Editores e SO
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

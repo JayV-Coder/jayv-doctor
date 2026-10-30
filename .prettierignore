@@ -1,0 +1,10 @@
+# Documentação em Markdown segue o próprio estilo (docs/backlog é lido por scripts).
+*.md
+pnpm-lock.yaml
+uv.lock
+.venv/
+.turbo/
+coverage/
+dist/
+.next/
+supabase/.temp/

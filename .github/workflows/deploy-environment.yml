@@ -1,0 +1,63 @@
+name: Publicar em um ambiente
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      sha:
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    name: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    # Aprovação manual e variáveis GCP_* ficam no GitHub Environment.
+    environment: ${{ inputs.environment }}
+    # Por ambiente: production esperando aprovação não pode segurar staging.
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      REGISTRY: southamerica-east1-docker.pkg.dev
+      REGION: southamerica-east1
+      SHA: ${{ inputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.sha }}
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - run: gcloud auth configure-docker "$REGISTRY" --quiet
+      - name: Construir e enviar as imagens do commit
+        env:
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          build() {
+            image="$REGISTRY/$PROJECT/aid/$1:$SHA"
+            docker build -f infrastructure/docker/python.Dockerfile \
+              --build-arg PACKAGE="$2" --build-arg APP="$3" -t "$image" .
+            docker push "$image"
+          }
+          build api aid-api aid_api.main:app
+          build worker aid-worker aid_worker.main:app
+      - name: Publicar a API e os workers
+        env:
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          publish() {
+            gcloud run services update "$1" --project "$PROJECT" --region "$REGION" \
+              --image "$REGISTRY/$PROJECT/aid/$2:$SHA" --quiet
+          }
+          publish api api
+          for worker in ingestion correlation diagnosis connectors; do
+            publish "worker-$worker" worker
+          done

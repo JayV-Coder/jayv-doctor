@@ -1,0 +1,33 @@
+name: Deploy
+
+# Só depois do CI da main passar. A definição usada é sempre a da branch padrão.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  staging:
+    # Desligado até existir projeto GCP: ver docs/operations/gcp.md.
+    if: vars.DEPLOY_ENABLED == 'true' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    uses: ./.github/workflows/deploy-environment.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      environment: staging
+      sha: ${{ github.event.workflow_run.head_sha }}
+
+  production:
+    needs: staging
+    uses: ./.github/workflows/deploy-environment.yml
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      environment: production
+      sha: ${{ github.event.workflow_run.head_sha }}

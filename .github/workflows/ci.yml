@@ -71,6 +71,36 @@ jobs:
       - run: pnpm --filter @aid/web exec playwright install --with-deps chromium
       - run: pnpm --filter @aid/web test:e2e
 
+  terraform:
+    name: Terraform (fmt, validate, tflint, test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infrastructure/terraform
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v3
+      - uses: terraform-linters/setup-tflint@v5
+      - run: terraform fmt -check -recursive
+      - run: terraform -chdir=stack init -backend=false -input=false
+      - run: terraform -chdir=stack validate
+      - run: tflint --recursive --config="$PWD/.tflint.hcl"
+      - run: terraform -chdir=stack test
+
+  images:
+    name: Imagens Docker
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { package: aid-api, app: "aid_api.main:app" }
+          - { package: aid-worker, app: "aid_worker.main:app" }
+    steps:
+      - uses: actions/checkout@v5
+      - run: >-
+          docker build -f infrastructure/docker/python.Dockerfile
+          --build-arg PACKAGE=${{ matrix.package }} --build-arg APP=${{ matrix.app }} .
+
   contracts:
     name: Contratos gerados atualizados
     runs-on: ubuntu-latest

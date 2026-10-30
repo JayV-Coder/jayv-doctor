@@ -19,3 +19,5 @@ supabase migration list # confere o histórico local × remoto
 ## Ligar o Custom Access Token Hook
 
 `supabase db push` aplica a migração, mas **não** liga o hook. Sem ele, o JWT não traz `tenant_id`: depois de criar ou trocar de Organização, o Usuário continua sem Organização ativa e o RLS não devolve nada. Em cada projeto hospedado, em Authentication → Hooks → Customize Access Token, escolha o schema `app` e a função `custom_access_token_hook`.
+
+Computação no GCP: [gcp.md](gcp.md).

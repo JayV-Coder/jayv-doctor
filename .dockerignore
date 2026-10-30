@@ -1,0 +1,9 @@
+**
+!pyproject.toml
+!uv.lock
+!apps/api/**
+!packages/contracts/**
+!workers/runtime/**
+**/node_modules
+**/__pycache__
+**/tests

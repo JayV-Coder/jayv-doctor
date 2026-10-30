@@ -1,0 +1,44 @@
+# Raiz do workspace uv (não é um pacote). Cada app, worker ou pacote Python
+# tem o próprio pyproject.toml e entra em [tool.uv.workspace].members.
+[project]
+name = "jayv-doctor"
+version = "0.0.0"
+requires-python = ">=3.12,<3.13"
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["apps/api"]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18",
+    "pytest>=8.4",
+    "pytest-cov>=7.0",
+    "ruff==0.17.3",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["supabase", "infrastructure", "docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "B", "UP", "SIM", "C4", "S", "PT", "RUF", "T20"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101"]
+"scripts/**" = ["T20", "S603", "S607"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+# Nomes de arquivos de teste são únicos no repositório (ex.: test_api_smoke.py),
+# porque o mypy trata cada pasta tests/ sem __init__.py como módulos de topo.
+files = ["apps/api/src", "apps/api/tests"]
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib --strict-markers"
+testpaths = ["apps", "packages", "workers", "tests"]

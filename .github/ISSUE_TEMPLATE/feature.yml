@@ -1,0 +1,33 @@
+name: Funcionalidade
+description: Nova fatia vertical do produto
+labels: [feature]
+body:
+  - type: textarea
+    id: contexto
+    attributes:
+      label: Contexto
+      description: Por que isso importa (referencie PRD, ADR ou glossário).
+    validations:
+      required: true
+  - type: textarea
+    id: historia
+    attributes:
+      label: História de usuário
+      placeholder: Como <papel>, quero <ação>, para <resultado>.
+  - type: textarea
+    id: escopo
+    attributes:
+      label: Escopo e fora de escopo
+    validations:
+      required: true
+  - type: textarea
+    id: aceite
+    attributes:
+      label: Critérios de aceite
+      placeholder: "- **Dado** … **quando** … **então** …"
+    validations:
+      required: true
+  - type: textarea
+    id: dependencias
+    attributes:
+      label: Dependências

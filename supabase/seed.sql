@@ -1,0 +1,1 @@
+-- Dados locais de desenvolvimento (supabase db reset). Vazio até o ticket #5.

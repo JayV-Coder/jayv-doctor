@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "event_id": "018f2f20-5d9a-7b81-9a20-9b1200000001",
+  "integration_id": "integration-001",
+  "execution_id": "exec-123",
+  "trace_id": "trace-abc",
+  "timestamp": "2026-10-29T18:00:00Z",
+  "source": { "provider": "gcp", "service": "cloud-run", "resource": "sap-order-sync" },
+  "operation": "create_order",
+  "severity": "ERROR",
+  "error": {
+    "category": "TIMEOUT",
+    "http_status": 504,
+    "code": "UPSTREAM_TIMEOUT",
+    "message": "Upstream request timed out"
+  },
+  "business_context": { "entity_type": "order", "entity_reference": "hmac:9a7b3c1d2e4f5a6b" },
+  "attributes": { "duration_ms": 30000, "attempt": 1 }
+}

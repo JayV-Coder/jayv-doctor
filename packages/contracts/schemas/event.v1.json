@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:aid:schema:event:v1",
+  "title": "EventV1",
+  "description": "Contrato de evento v1: formato canônico de todo Evento normalizado, independente da fonte. O tenant nunca vem no payload; é atribuído pela identidade autenticada do Conector ou do token de ingestão.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "integration_id",
+    "timestamp",
+    "source",
+    "operation",
+    "severity"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Versão do contrato. Major 1; o minor cresce em mudanças compatíveis.",
+      "type": "string",
+      "pattern": "^1\\.(0|[1-9][0-9]{0,2})$"
+    },
+    "event_id": {
+      "description": "UUIDv7 do Evento (ordenável pelo tempo).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "integration_id": {
+      "description": "Identificador da Integração a que o Evento pertence.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "execution_id": {
+      "description": "Identificador técnico da Execução, quando a fonte o fornece.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "trace_id": {
+      "description": "Identificador de trace distribuído, quando houver.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "timestamp": {
+      "description": "Instante do Evento em RFC 3339, com fuso e no máximo microssegundos.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?!0000)[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]{1,6})?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$"
+    },
+    "source": {
+      "$ref": "#/$defs/EventSource"
+    },
+    "operation": {
+      "description": "Operação de negócio ou técnica (ex.: create_order).",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+    },
+    "error": {
+      "$ref": "#/$defs/EventError"
+    },
+    "business_context": {
+      "$ref": "#/$defs/EventBusinessContext"
+    },
+    "attributes": {
+      "description": "Atributos planos (sem objetos aninhados). Os limites mantêm o bloco abaixo de 16 KB.",
+      "type": "object",
+      "maxProperties": 64,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,39}$"
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string",
+            "maxLength": 200
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "EventSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "service"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["gcp", "salesforce", "sap", "aws", "azure", "mulesoft", "manual", "custom"]
+        },
+        "service": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "resource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "EventError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category"],
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "TIMEOUT",
+            "AUTH",
+            "RATE_LIMIT",
+            "VALIDATION",
+            "BUSINESS_REJECTION",
+            "DUPLICATE",
+            "CONNECTIVITY",
+            "UNKNOWN"
+          ]
+        },
+        "http_status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 8192
+        }
+      }
+    },
+    "EventBusinessContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "entity_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "entity_reference": {
+          "description": "Referência de negócio. Após a Sanitização é sempre persistida como hmac:<hex>.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    }
+  }
+}

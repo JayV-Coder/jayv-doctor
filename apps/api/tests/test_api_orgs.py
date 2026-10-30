@@ -4,11 +4,11 @@ from aid_api.auth import Claims, get_claims
 from aid_api.errors import ApiError
 from aid_api.main import create_app
 from aid_api.orgs import (
-    NOT_A_MEMBER,
-    SLUG_TAKEN,
     NewOrganization,
     OrganizationRepository,
     get_organization_repository,
+    not_a_member,
+    slug_taken,
 )
 from fastapi.testclient import TestClient
 
@@ -72,7 +72,7 @@ def test_payload_nao_define_tenant_nem_papel() -> None:
 
 
 def test_identificador_repetido_responde_409() -> None:
-    response = client(FakeRepository(SLUG_TAKEN)).post("/api/v1/orgs", json=PAYLOAD)
+    response = client(FakeRepository(slug_taken())).post("/api/v1/orgs", json=PAYLOAD)
     assert response.status_code == 409
     assert response.json()["code"] == "slug_taken"
 
@@ -85,6 +85,6 @@ def test_troca_de_organizacao_responde_204() -> None:
 
 
 def test_troca_sem_vinculo_responde_403() -> None:
-    response: Any = client(FakeRepository(NOT_A_MEMBER)).post(f"/api/v1/orgs/{TENANT_ID}/switch")
+    response: Any = client(FakeRepository(not_a_member())).post(f"/api/v1/orgs/{TENANT_ID}/switch")
     assert response.status_code == 403
     assert response.json()["code"] == "not_a_member"

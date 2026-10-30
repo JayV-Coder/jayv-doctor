@@ -7,6 +7,7 @@ const MESSAGES: Record<string, string> = {
   slug_taken: "Este identificador já está em uso. Escolha outro.",
   not_a_member: "Você não tem acesso a esta organização.",
 };
+const RENEW_FAILED = "A organização mudou, mas não renovamos sua sessão. Saia e entre de novo.";
 const GENERIC = "Não foi possível concluir agora. Tente de novo.";
 
 async function errorMessage(response: Response): Promise<string> {
@@ -18,9 +19,10 @@ async function errorMessage(response: Response): Promise<string> {
 // Organização anterior ficar em memória e o proxy reaplicar o portão com o JWT novo.
 
 // As claims mudam só na renovação: sem isto o JWT continuaria apontando para a Organização anterior.
-async function renewSession(): Promise<void> {
+async function renewSession(): Promise<string | null> {
   const supabase = await createClient();
-  await supabase.auth.refreshSession();
+  const { error } = await supabase.auth.refreshSession();
+  return error ? RENEW_FAILED : null;
 }
 
 export async function createOrganization(form: FormData): Promise<string | null> {
@@ -36,14 +38,12 @@ export async function createOrganization(form: FormData): Promise<string | null>
   }).catch(() => null);
   if (!response) return GENERIC;
   if (!response.ok) return errorMessage(response);
-  await renewSession();
-  return null;
+  return renewSession();
 }
 
 export async function switchOrganization(tenantId: string): Promise<string | null> {
   const response = await apiFetch(`/orgs/${tenantId}/switch`, { method: "POST" }).catch(() => null);
   if (!response) return GENERIC;
   if (!response.ok) return errorMessage(response);
-  await renewSession();
-  return null;
+  return renewSession();
 }

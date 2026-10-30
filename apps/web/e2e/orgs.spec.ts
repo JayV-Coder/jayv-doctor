@@ -73,8 +73,11 @@ test("identificador repetido mostra erro em pt-BR", async ({ page }) => {
   await signUp(second);
   await signInWithPassword(page, second);
   await page.getByRole("link", { name: "Criar organização" }).click();
+  await page.getByLabel("Vertex AI").check();
   await fillOrganization(page, name);
   await expect(page.locator("p[role=alert]")).toContainText("identificador já está em uso");
+  await expect(page.getByLabel("Vertex AI")).toBeChecked();
+  await expect(page.getByLabel("Segmento")).toHaveValue("Varejo");
 });
 
 test("a API recusa trocar para Organização sem Vínculo", async ({ page, request }) => {

@@ -48,11 +48,7 @@ class MeRepository:
         async with tenant_tx(claims) as connection:
             result = await connection.execute(
                 text(
-                    "select t.id::text, t.name, t.slug, m.role"
-                    " from public.memberships m"
-                    " join public.tenants t on t.id = m.tenant_id"
-                    " where m.user_id = auth.uid()"
-                    " order by t.name"
+                    "select id::text, name, slug, role from app.list_organizations() order by name"
                 )
             )
             return [Organization.model_validate(dict(row)) for row in result.mappings()]

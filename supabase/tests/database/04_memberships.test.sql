@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(24);
+select plan(29);
 
 select has_table('public', 'memberships', 'tabela public.memberships existe');
 select has_table('public', 'user_active_tenant', 'tabela public.user_active_tenant existe');
@@ -77,9 +77,19 @@ select tests.authenticate_as(
   '00000000-0000-4000-8000-0000000a0001', '00000000-0000-4000-8000-00000000ac01', 'owner', 'aal2'
 );
 select results_eq(
-  $$select slug from public.tenants order by slug$$,
-  $$values ('acme'::text), ('varejo-brasil'::text)$$,
-  'o Usuário vê as Organizações em que tem Vínculo, e não as outras'
+  $$select slug from public.tenants$$,
+  $$values ('acme'::text)$$,
+  'em public.tenants, o Usuário só lê a Organização ativa'
+);
+select results_eq(
+  $$select slug, role from app.list_organizations() order by slug$$,
+  $$values ('acme'::text, 'owner'::text), ('varejo-brasil'::text, 'viewer'::text)$$,
+  'o seletor lista as Organizações com Vínculo, e não as outras'
+);
+select results_eq(
+  $$select count(*)::int from public.memberships where tenant_id <> app.current_tenant_id()$$,
+  $$values (0)$$,
+  'Vínculos fora da Organização ativa ficam ocultos, mesmo os próprios'
 );
 select results_eq(
   $$select tenant_id::text from public.memberships where user_id <> auth.uid()$$,
@@ -140,6 +150,23 @@ where tenant_id = '00000000-0000-4000-8000-00000000be01' and user_id = '00000000
 select is(
   tests.hook_claims('00000000-0000-4000-8000-0000000a0001') ->> 'tenant_id', null,
   'Vínculo removido: as claims de tenant somem'
+);
+
+-- Organização que não está ativa na plataforma não emite claims nem aceita troca.
+update public.tenants set status = 'suspended' where slug = 'nova-org';
+select is(
+  tests.hook_claims('00000000-0000-4000-8000-0000000b0001') ->> 'tenant_id', null,
+  'Organização suspensa: as claims de tenant somem'
+);
+select tests.authenticate_without_tenant('00000000-0000-4000-8000-0000000b0001');
+select results_eq(
+  $$select slug from app.list_organizations()$$,
+  $$values ('varejo-brasil'::text)$$,
+  'Organização suspensa sai do seletor'
+);
+select throws_ok(
+  $$select app.switch_organization((select id from public.tenants where slug = 'nova-org'))$$,
+  '42501', null, 'troca para Organização suspensa é recusada'
 );
 
 select * from finish();

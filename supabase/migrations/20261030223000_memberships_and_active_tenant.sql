@@ -46,24 +46,13 @@ revoke all on public.user_active_tenant from anon, authenticated;
 grant select on public.memberships to authenticated;
 grant select on public.user_active_tenant to authenticated;
 
--- Os próprios Vínculos alimentam o seletor; os demais só aparecem na Organização ativa.
 create policy memberships_select on public.memberships
 for select to authenticated
-using (user_id = (select auth.uid()) or tenant_id = (select app.current_tenant_id()));
+using (tenant_id = (select app.current_tenant_id()));
 
 create policy user_active_tenant_select_own on public.user_active_tenant
 for select to authenticated
 using (user_id = (select auth.uid()));
-
--- O seletor precisa do nome das Organizações do Usuário, não só da ativa.
-create policy tenants_select_member on public.tenants
-for select to authenticated
-using (
-  exists (
-    select 1 from public.memberships m
-    where m.tenant_id = tenants.id and m.user_id = (select auth.uid())
-  )
-);
 
 -- security definer: supabase_auth_admin não lê estas tabelas, por causa do RLS.
 create function app.custom_access_token_hook(event jsonb)
@@ -81,7 +70,8 @@ begin
   select m.tenant_id, m.role into active_tenant, active_role
   from public.user_active_tenant a
   join public.memberships m on m.tenant_id = a.tenant_id and m.user_id = a.user_id
-  where a.user_id = (event ->> 'user_id')::uuid;
+  join public.tenants t on t.id = m.tenant_id
+  where a.user_id = (event ->> 'user_id')::uuid and t.status = 'active';
 
   if active_tenant is not null then
     claims := claims || jsonb_build_object('tenant_id', active_tenant, 'tenant_role', active_role);
@@ -130,7 +120,9 @@ declare
   user_id uuid := auth.uid();
 begin
   if not exists (
-    select 1 from public.memberships m where m.tenant_id = target and m.user_id = auth.uid()
+    select 1 from public.memberships m
+    join public.tenants t on t.id = m.tenant_id
+    where m.tenant_id = target and m.user_id = auth.uid() and t.status = 'active'
   ) then
     raise insufficient_privilege using message = 'sem Vínculo com a Organização';
   end if;
@@ -138,6 +130,24 @@ begin
   on conflict on constraint user_active_tenant_pkey do update set tenant_id = excluded.tenant_id;
 end;
 $$;
+
+-- security definer: o RLS mostra só a Organização ativa, e o seletor precisa das outras. Expõe
+-- apenas o necessário para escolher, e só das Organizações do próprio Usuário.
+create function app.list_organizations()
+returns table (id uuid, name text, slug text, role text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select t.id, t.name, t.slug, m.role
+  from public.memberships m
+  join public.tenants t on t.id = m.tenant_id
+  where m.user_id = auth.uid() and t.status = 'active'
+$$;
+
+revoke all on function app.list_organizations() from public, service_role;
+grant execute on function app.list_organizations() to authenticated;
 
 revoke all on function app.create_organization(text, text, text, text) from public, service_role;
 revoke all on function app.switch_organization(uuid) from public, service_role;

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useState, type SubmitEvent } from "react";
 import { AuthShell, FormMessage, Win } from "@/components/auth-shell";
 import { slugify } from "@/lib/orgs/slug";
 import { createOrganization } from "../actions";
@@ -9,18 +9,26 @@ import { createOrganization } from "../actions";
 const SEGMENTS = ["Consultoria de integração", "Indústria", "Varejo"];
 
 export default function NewOrganizationPage() {
-  const [error, action, busy] = useActionState(async (_: string | null, form: FormData) => {
-    const failure = await createOrganization(form);
-    if (failure === null) window.location.assign("/");
-    return failure;
-  }, null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
 
+  // `onSubmit`, não form action: esta reseta o formulário, e um erro devolveria o provedor de IA ao padrão.
+  async function submit(event: SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    const form = new FormData(event.currentTarget);
+    const failure = await createOrganization(form).catch(() => "Sem conexão. Tente de novo.");
+    setError(failure);
+    if (failure === null) window.location.assign("/");
+    else setBusy(false);
+  }
+
   return (
     <AuthShell>
-      <form className="stack" action={action}>
+      <form className="stack" onSubmit={(event) => void submit(event)}>
         <h2 className="title">Crie sua organização</h2>
         <p className="muted small">
           Todos os dados ficam isolados por organização. Você poderá convidar sua equipe depois.
@@ -45,7 +53,7 @@ export default function NewOrganizationPage() {
             name="slug"
             required
             pattern="[a-z0-9][a-z0-9\-]{1,46}[a-z0-9]"
-            title="Letras minúsculas, números e hífens"
+            title="De 3 a 48 caracteres: letras minúsculas, números e hífens"
             autoCapitalize="none"
             value={slug}
             onChange={(event) => {

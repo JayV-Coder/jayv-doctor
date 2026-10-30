@@ -5,6 +5,9 @@ import { useRef, useState, useTransition } from "react";
 import { FormMessage } from "@/components/auth-shell";
 import { switchOrganization } from "@/app/organizacoes/actions";
 import type { Organization } from "@/lib/api";
+import { matchesSearch } from "@/lib/orgs/slug";
+
+const CONNECTION_ERROR = "Sem conexão. Tente de novo.";
 
 const ROLE_LABELS: Record<string, string> = {
   owner: "Owner",
@@ -31,13 +34,11 @@ export function OrgList({
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, startTransition] = useTransition();
-  const visible = organizations.filter((organization) =>
-    organization.name.toLowerCase().includes(query.trim().toLowerCase()),
-  );
+  const visible = organizations.filter(({ name }) => matchesSearch(name, query));
 
   function choose(id: string) {
     startTransition(async () => {
-      const failure = await switchOrganization(id);
+      const failure = await switchOrganization(id).catch(() => CONNECTION_ERROR);
       setError(failure);
       if (failure === null) window.location.assign("/");
     });

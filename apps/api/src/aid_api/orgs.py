@@ -22,8 +22,13 @@ router = APIRouter(prefix="/api/v1/orgs", tags=["orgs"])
 UNIQUE_VIOLATION = "23505"
 INSUFFICIENT_PRIVILEGE = "42501"
 
-SLUG_TAKEN = ApiError(409, "slug_taken", "Este identificador já está em uso.")
-NOT_A_MEMBER = ApiError(403, "not_a_member", "Você não tem Vínculo com esta Organização.")
+
+def slug_taken() -> ApiError:
+    return ApiError(409, "slug_taken", "Este identificador já está em uso.")
+
+
+def not_a_member() -> ApiError:
+    return ApiError(403, "not_a_member", "Você não tem Vínculo com esta Organização.")
 
 
 class NewOrganization(BaseModel):
@@ -59,7 +64,7 @@ class OrganizationRepository:
                 return str(result.scalar_one())
         except DBAPIError as exc:
             if sqlstate(exc) == UNIQUE_VIOLATION:
-                raise SLUG_TAKEN from exc
+                raise slug_taken() from exc
             raise
 
     async def switch(self, claims: Claims, tenant_id: str) -> None:
@@ -71,7 +76,7 @@ class OrganizationRepository:
                 )
         except DBAPIError as exc:
             if sqlstate(exc) == INSUFFICIENT_PRIVILEGE:
-                raise NOT_A_MEMBER from exc
+                raise not_a_member() from exc
             raise
 
 

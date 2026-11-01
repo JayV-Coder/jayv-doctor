@@ -16,6 +16,11 @@ describe("decideRedirect", () => {
     }
   });
 
+  it("não desvia o aceite de convite, com ou sem sessão", () => {
+    expect(decideRedirect("/convites/aceitar", anonymous)).toBeNull();
+    expect(decideRedirect("/convites/aceitar", { ...session, nextLevel: "aal2" })).toBeNull();
+  });
+
   it("deixa um analista sem MFA entrar", () => {
     expect(decideRedirect("/", { ...session, role: "analyst" })).toBeNull();
   });

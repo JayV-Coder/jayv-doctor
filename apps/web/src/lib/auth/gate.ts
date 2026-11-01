@@ -7,11 +7,13 @@ export interface SessionState {
 
 const PUBLIC_PATHS = ["/login", "/esqueci-senha", "/privacidade"];
 const ENTRY_PATHS = ["/login", "/esqueci-senha", "/mfa", "/mfa/cadastro"];
+const ACCEPT_INVITATION_PATH = "/convites/aceitar";
 const ADMIN_ROLES = ["owner", "admin"];
 
 // Decide para onde mandar o Usuário antes de abrir `path`; `null` deixa passar.
 export function decideRedirect(path: string, state: SessionState): string | null {
-  if (path.startsWith("/auth/")) return null;
+  // O aceite decide sozinho o que mostrar: um desvio aqui perderia o token, que vem no fragmento.
+  if (path.startsWith("/auth/") || path === ACCEPT_INVITATION_PATH) return null;
   const isPublic = PUBLIC_PATHS.includes(path);
   if (!state.hasSession) return isPublic ? null : "/login";
   if (path === "/privacidade") return null;

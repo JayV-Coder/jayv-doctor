@@ -9,6 +9,21 @@ export interface Organization {
   role: string;
 }
 
+export interface Member {
+  id: string;
+  display_name: string | null;
+  email: string;
+  role: string;
+  mfa_enabled: boolean;
+}
+
+export interface Invitation {
+  id: string;
+  email: string;
+  role: string;
+  expires_at: string;
+}
+
 interface Me {
   organizations: Organization[];
   active_tenant_id: string | null;

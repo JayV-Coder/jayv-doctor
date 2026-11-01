@@ -23,6 +23,8 @@ export default defineConfig({
       env: {
         SUPABASE_DB_URL: "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
         SUPABASE_JWT_ISSUER: "http://127.0.0.1:54321/auth/v1",
+        SMTP_URL: "smtp://127.0.0.1:54325",
+        APP_URL: "http://127.0.0.1:3000",
       },
     },
   ],

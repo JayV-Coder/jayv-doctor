@@ -19,12 +19,13 @@ locals {
     "connector.sync"        = { worker = "connectors", publishers = ["api"], ack_deadline = 600 }
   }
 
-  api_secrets = ["supabase-db-url", "hmac-master-key"]
+  api_secrets = ["supabase-db-url", "hmac-master-key", "smtp-url"]
 
   secret_env = {
     "supabase-db-url"   = "SUPABASE_DB_URL"
     "anthropic-api-key" = "ANTHROPIC_API_KEY"
     "hmac-master-key"   = "HMAC_MASTER_KEY"
+    "smtp-url"          = "SMTP_URL"
   }
 
   service_accounts = merge(
@@ -119,9 +120,12 @@ module "api" {
   subnetwork          = module.network.subnetwork_id
   min_instances       = var.api_min_instances
   deletion_protection = var.environment == "prod"
-  env                 = { SUPABASE_JWT_ISSUER = var.supabase_jwt_issuer }
-  secret_env          = { for secret in local.api_secrets : local.secret_env[secret] => secret }
-  depends_on          = [module.secrets]
+  env = {
+    SUPABASE_JWT_ISSUER = var.supabase_jwt_issuer
+    APP_URL             = var.app_url
+  }
+  secret_env = { for secret in local.api_secrets : local.secret_env[secret] => secret }
+  depends_on = [module.secrets]
 }
 
 resource "google_service_account" "api" {

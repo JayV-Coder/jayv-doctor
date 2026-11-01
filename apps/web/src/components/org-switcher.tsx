@@ -5,24 +5,10 @@ import { useRef, useState, useTransition } from "react";
 import { FormMessage } from "@/components/auth-shell";
 import { switchOrganization } from "@/app/organizacoes/actions";
 import type { Organization } from "@/lib/api";
+import { initials, roleLabel } from "@/lib/orgs/labels";
 import { matchesSearch } from "@/lib/orgs/slug";
 
 const CONNECTION_ERROR = "Sem conexão. Tente de novo.";
-
-const ROLE_LABELS: Record<string, string> = {
-  owner: "Owner",
-  admin: "Admin",
-  analyst: "Analyst",
-  viewer: "Viewer",
-};
-
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((word) => word.charAt(0).toUpperCase())
-    .join("");
-}
 
 export function OrgList({
   organizations,
@@ -73,9 +59,7 @@ export function OrgList({
               </span>
               <span className="org-name">
                 <strong>{organization.name}</strong>
-                <span className="muted small">
-                  {ROLE_LABELS[organization.role] ?? organization.role}
-                </span>
+                <span className="muted small">{roleLabel(organization.role)}</span>
               </span>
               {organization.id === activeId && <span className="tag">Ativa</span>}
             </button>

@@ -27,6 +27,11 @@ export default async function HomePage() {
         <p>
           Sessão ativa: <strong>{data?.claims.email}</strong>
         </p>
+        {active && ["owner", "admin"].includes(active.role) && (
+          <Link className="btn" href="/membros">
+            Membros
+          </Link>
+        )}
         <Link className="btn" href="/seguranca">
           Segurança da conta
         </Link>

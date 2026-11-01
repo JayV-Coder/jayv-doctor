@@ -1,6 +1,7 @@
 """Validação do JWT do Supabase Auth e exigência de MFA (`aal2`)."""
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Annotated, Any
@@ -87,7 +88,22 @@ def get_claims(
         raise unauthorized() from exc
 
 
-def require_aal2(claims: Annotated[Claims, Depends(get_claims)]) -> Claims:
+def require_aal2_claims(claims: Claims) -> Claims:
     if claims.aal != "aal2":
         raise ApiError(403, "mfa_required", "Esta ação exige verificação em duas etapas.")
     return claims
+
+
+def require_aal2(claims: Annotated[Claims, Depends(get_claims)]) -> Claims:
+    return require_aal2_claims(claims)
+
+
+def require_role(*roles: str) -> Callable[[Claims], Claims]:
+    def dependency(claims: Annotated[Claims, Depends(get_claims)]) -> Claims:
+        if claims.tenant_id is None:
+            raise ApiError(403, "no_active_tenant", "Escolha uma Organização para continuar.")
+        if claims.tenant_role not in roles:
+            raise ApiError(403, "forbidden", "Seu Papel não permite esta ação.")
+        return claims
+
+    return dependency

@@ -461,3 +461,30 @@ p {
 .sheet::backdrop {
   background: rgb(0 0 0 / 50%);
 }
+
+.member {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--bd);
+  border-radius: 3px;
+  background: var(--card);
+}
+
+.member-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.member-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: end;
+}
+
+.member > .tag {
+  align-self: flex-start;
+}

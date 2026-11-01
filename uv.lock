@@ -1,11 +1,12 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.12.*"
 
 [manifest]
 members = [
     "aid-api",
     "aid-contracts",
+    "aid-worker",
     "jayv-doctor",
 ]
 
@@ -45,6 +46,21 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4.25" },
     { name = "pydantic", specifier = ">=2.12" },
     { name = "rfc3339-validator", specifier = ">=0.1.4" },
+]
+
+[[package]]
+name = "aid-worker"
+version = "0.0.0"
+source = { editable = "workers/runtime" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.162" },
+    { name = "uvicorn", specifier = ">=0.54" },
 ]
 
 [[package]]

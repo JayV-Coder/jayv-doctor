@@ -45,3 +45,21 @@ db\:test: ## testes pgTAP
 
 db\:lint: ## plpgsql_check só nos schemas mantidos aqui (extensões como pg_partman ficam de fora)
 	supabase db lint --schema public,app --fail-on warning
+
+ENV ?= dev
+TF := terraform -chdir=infrastructure/terraform/stack
+
+tf\:check: ## fmt, validate, tflint e testes do Terraform (sem credenciais)
+	terraform -chdir=infrastructure/terraform fmt -check -recursive
+	$(TF) init -backend=false -input=false
+	$(TF) validate
+	cd infrastructure/terraform && tflint --recursive --config="$$PWD/.tflint.hcl"
+	$(TF) test
+
+tf\:plan: ## plan de um ambiente: make tf:plan ENV=staging
+	$(TF) init -reconfigure -input=false -backend-config=../environments/$(ENV).backend.hcl
+	$(TF) plan -var-file=../environments/$(ENV).tfvars
+
+tf\:apply: ## apply de um ambiente: make tf:apply ENV=staging
+	$(TF) init -reconfigure -input=false -backend-config=../environments/$(ENV).backend.hcl
+	$(TF) apply -var-file=../environments/$(ENV).tfvars

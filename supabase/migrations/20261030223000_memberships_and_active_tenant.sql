@@ -68,6 +68,7 @@ language plpgsql
 stable
 security definer
 set search_path = ''
+set lock_timeout = '500ms'
 as $$
 declare
   claims jsonb := coalesce(event -> 'claims', '{}') - 'tenant_id' - 'tenant_role';
@@ -84,10 +85,11 @@ begin
     claims := claims || jsonb_build_object('tenant_id', active_tenant, 'tenant_role', active_role);
   end if;
   return jsonb_set(event, '{claims}', claims);
-exception when others then
+exception when query_canceled or others then
   -- O hook vale para o projeto todo: um erro aqui derrubaria o login do jayv-coder. Sem as claims,
-  -- o RLS do Doctor nega tudo, então falhar assim é seguro.
-  return jsonb_set(event, '{claims}', claims);
+  -- o RLS do Doctor nega tudo, então falhar assim é seguro. `others` não cobre query_canceled.
+  raise warning 'doctor.custom_access_token_hook: %', sqlstate;
+  return event #- '{claims,tenant_id}' #- '{claims,tenant_role}';
 end;
 $$;
 
@@ -110,10 +112,14 @@ begin
   if user_id is null then
     raise insufficient_privilege using message = 'sessão obrigatória';
   end if;
-  if exists (select 1 from public.organizations o where o.slug = lower(btrim(create_organization.slug))) then
-    raise unique_violation using message = 'identificador em uso';
-  end if;
-  new_tenant := public.create_organization(name, slug);
+  begin
+    new_tenant := public.create_organization(name, slug);
+  exception when raise_exception then
+    if sqlerrm = 'org.slugTaken' then
+      raise unique_violation using message = 'identificador em uso';
+    end if;
+    raise;
+  end;
   insert into doctor.tenants (id, segment, llm_provider, dpa_accepted_at)
   values (new_tenant, segment, llm_provider, now());
   insert into doctor.memberships (tenant_id, user_id, role) values (new_tenant, user_id, 'owner');

@@ -1,13 +1,12 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(12);
+select plan(11);
 
 select has_schema('doctor');
 select has_function('doctor', 'current_tenant_id', array[]::text[]);
 select has_function('doctor', 'current_tenant_role', array[]::text[]);
 select has_function('doctor', 'has_role', array['text[]']);
 select has_function('doctor', 'set_updated_at', array[]::text[]);
-select is((select count(*)::int from pg_extension where extname = 'vector'), 1, 'pgvector instalado');
 
 select tests.clear_authentication();
 select is(doctor.current_tenant_id(), null, 'sem JWT não há Organização ativa');

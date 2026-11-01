@@ -10,9 +10,11 @@ Criar uma Organização passa por `public.create_organization`, para manter as r
 
 ## Consequências
 
-- **Migrações:** ficam fora de `supabase_migrations.schema_migrations`, que é do jayv-coder; `supabase db push` não serve para o Doctor. O procedimento está em `docs/operations/environments.md`.
+- **Migrações:** ficam fora de `supabase_migrations.schema_migrations`, que é do jayv-coder. Quem aplica é `scripts/apply-doctor-migrations.py`, nunca `supabase db push`. Para chegar a este desenho, editamos migrações já aplicadas no antigo projeto dev, que foi abandonado: é a única exceção à regra de não editá-las.
+- **Extensões:** instalar uma exige aprovação, porque afeta o banco do jayv-coder. `vector` e `pg_partman` entram nos tickets que as usarem.
+- **Apagar uma Organização habilitada no Doctor é recusado** no jayv-coder (`on delete restrict`), com erro de FK, até haver desprovisionamento. Diagnósticos são imutáveis e o aceite do DPA é evidência.
 - **Stack local:** `00000000000000_shared_public_stub.sql` copia o mínimo de `public` e nunca vai para o projeto hospedado. Mudanças do jayv-coder nessas tabelas precisam ser refletidas nele à mão.
-- **Auth é um só:** hook de JWT, templates de e-mail, URLs de redirecionamento e política de senha valem para os dois produtos. O hook não pode falhar: em erro, devolve o token sem claims de tenant, e o RLS do Doctor nega tudo.
+- **Auth é um só:** hook de JWT, templates de e-mail, URLs de redirecionamento e política de senha valem para os dois produtos. O hook não pode derrubar o login: em erro de banco, devolve o token sem claims de tenant, e o RLS do Doctor nega tudo. O Supabase aceita um hook por projeto: se o jayv-coder passar a precisar de outro, os dois terão de virar um.
 - **Ambientes:** dev, staging e prod do GCP apontam para o mesmo banco enquanto não houver outro projeto Supabase.
 
 ## Considered Options

@@ -14,7 +14,7 @@ Perfil, Organizações e Papel na Organização ativa do Usuário autenticado. E
 }
 ```
 
-`organizations` traz todas as Organizações em que o Usuário tem Vínculo.
+`organizations` traz as Organizações em que o Usuário tem Papel no Doctor. `profile` vem de `public.profiles` e é `null` numa sessão `aal1` de quem tem MFA verificado, até o código ser confirmado.
 
 ## Erros (`application/problem+json`)
 

@@ -3,7 +3,9 @@
 -- localmente, e não faz nada se já existirem. Cópia de exvsozyemolrjbjetqww em 2026-11-01.
 do $stub$
 begin
-  if to_regclass('public.organizations') is not null then
+  if to_regclass('public.organizations') is not null
+    or to_regclass('public.organization_members') is not null
+    or to_regclass('public.profiles') is not null then
     return;
   end if;
 

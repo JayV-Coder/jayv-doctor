@@ -46,4 +46,4 @@ using (tenant_id = (select doctor.current_tenant_id()))
   - `tests.authenticate_as_anon()`;
   - `tests.clear_authentication()`;
   - `tests.create_tenant(id, slug)`, `tests.add_member(tenant, user, role)` e `tests.create_user(id, email, metadata)`.
-- Num projeto hospedado (sem psql), `python3 scripts/run-pgtap-remote.py <teste>` gera um SQL único que roda o teste numa transação sem commit e devolve a saída TAP.
+- Testes rodam só na stack local: o único projeto hospedado tem dados reais do jayv-coder.

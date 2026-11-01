@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(33);
+select plan(39);
 
 select has_table('doctor', 'memberships', 'tabela doctor.memberships existe');
 select has_table('doctor', 'user_active_tenant', 'tabela doctor.user_active_tenant existe');
@@ -171,6 +171,29 @@ select throws_ok(
   $$select doctor.switch_organization((select id from public.organizations where slug = 'nova-org'))$$,
   '42501', null, 'troca para Organização suspensa é recusada'
 );
+
+-- A plataforma administra o Doctor com service_role.
+select is(has_table_privilege('service_role', 'doctor.tenants', 'update'), true, 'service_role altera tenants');
+select is(has_table_privilege('service_role', 'doctor.memberships', 'delete'), true, 'service_role altera Papéis');
+select is(has_table_privilege('authenticated', 'doctor.schema_migrations', 'select'), false, 'histórico não é do cliente');
+
+-- Apagar a Organização no jayv-coder não pode levar dados do Doctor junto.
+select tests.clear_authentication();
+select throws_ok(
+  $$delete from public.organizations where id = '00000000-0000-4000-8000-00000000ac01'$$,
+  '23503', null, 'Organização habilitada no Doctor não é apagada por public'
+);
+
+-- O perfil é o de public.profiles, com o RLS do jayv-coder.
+select tests.authenticate_without_tenant('00000000-0000-4000-8000-0000000b0001');
+select is_empty(
+  $$select 1 from public.profiles where user_id <> auth.uid()$$, 'perfil de outra pessoa fica oculto'
+);
+select throws_ok(
+  $$select doctor.create_organization('Outra', 'nova-org', 'Varejo', 'anthropic')$$,
+  '23505', null, 'identificador repetido vira unique_violation'
+);
+select tests.clear_authentication();
 
 -- Quem só existe no jayv-coder não ganha nada no Doctor.
 select tests.authenticate_without_tenant('00000000-0000-4000-8000-0000000b0001');

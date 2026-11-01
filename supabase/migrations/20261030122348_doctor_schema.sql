@@ -5,6 +5,9 @@ comment on schema doctor is 'Integration AI Doctor: tabelas e helpers de tenancy
 revoke all on schema doctor from public;
 grant usage on schema doctor to authenticated, service_role;
 
+-- Fora de `public` não valem os privilégios padrão do Supabase: jobs de plataforma precisam disto.
+alter default privileges in schema doctor grant all on tables to service_role;
+
 -- Migrações do Doctor aplicadas: o histórico do Supabase é do jayv-coder (ADR-0009).
 create table doctor.schema_migrations (
   version text primary key,
@@ -58,8 +61,9 @@ grant execute on all functions in schema doctor to authenticated, service_role;
 
 -- O que uma Organização tem no Doctor. Nome e slug ficam em public.organizations, do jayv-coder;
 -- só as Organizações com linha aqui usam o Doctor. Plano e status mudam só pela plataforma.
+-- `restrict`: apagar no jayv-coder não pode levar Diagnósticos e o aceite do DPA junto.
 create table doctor.tenants (
-  id uuid primary key references public.organizations (id) on delete cascade,
+  id uuid primary key references public.organizations (id) on delete restrict,
   plan text not null default 'pilot' check (plan in ('pilot', 'professional', 'enterprise')),
   llm_provider text not null default 'anthropic' check (llm_provider in ('anthropic', 'vertex')),
   status text not null default 'active' check (status in ('active', 'suspended', 'deleted')),

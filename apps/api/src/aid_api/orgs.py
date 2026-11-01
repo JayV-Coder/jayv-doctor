@@ -33,7 +33,7 @@ def not_a_member() -> ApiError:
 
 class NewOrganization(BaseModel):
     # `extra=forbid`: o payload nunca define tenant nem Papel.
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     name: str = Field(min_length=2, max_length=80)
     slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$")

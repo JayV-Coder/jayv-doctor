@@ -4,13 +4,18 @@ Todos os ambientes usam o projeto Supabase `exvsozyemolrjbjetqww` (`jayv-coder`,
 
 ## Aplicar migrações
 
-Nunca use `supabase db push` nem `apply_migration`: eles gravam ou comparam `supabase_migrations.schema_migrations`, que é do jayv-coder. Aplique cada arquivo de `supabase/migrations`, em ordem, **exceto** `00000000000000_shared_public_stub.sql`, numa transação, e registre a versão em `doctor.schema_migrations`.
+Nunca use `supabase db push` nem `apply_migration`: eles usam `supabase_migrations.schema_migrations`, que é do jayv-coder. Use o script, que confere as tabelas de `public`, ignora o stub local e registra cada versão em `doctor.schema_migrations`:
+
+```bash
+SUPABASE_DB_URL=<url direta> uv run python scripts/apply-doctor-migrations.py --check   # só leitura
+SUPABASE_DB_URL=<url direta> uv run python scripts/apply-doctor-migrations.py --apply
+```
 
 Toda aplicação nesse projeto precisa de janela combinada com o responsável pelo jayv-coder.
 
 ## Ligar o Custom Access Token Hook
 
-`config.toml` só vale localmente. Sem o hook, o JWT não traz `tenant_id` e o Doctor não funciona. No projeto, em Authentication → Hooks → Customize Access Token, escolha o schema `doctor` e a função `custom_access_token_hook`. Toda emissão de token do jayv-coder passa a usá-lo; faça isso em janela combinada, depois de aplicar as migrações, e confirme o login do jayv-coder em seguida.
+`config.toml` só vale localmente. Sem o hook, o JWT não traz `tenant_id` e o Doctor não funciona. O Supabase aceita um hook por projeto: **antes**, abra Authentication → Hooks e confirme que Customize Access Token está vazio. Se houver outro, pare: selecionar o do Doctor removeria as claims dele. Depois, escolha o schema `doctor` e a função `custom_access_token_hook`. Toda emissão de token do jayv-coder passa a usá-lo; faça isso em janela combinada, depois de aplicar as migrações, e confirme o login do jayv-coder em seguida.
 
 ## Configuração de Auth compartilhada
 

@@ -39,7 +39,10 @@ class MeRepository:
     async def profile(self, claims: Claims) -> Profile | None:
         async with tenant_tx(claims) as connection:
             result = await connection.execute(
-                text("select full_name, avatar_url, locale from public.profiles")
+                text(
+                    "select display_name as full_name, avatar_url, 'pt-BR' as locale"
+                    " from public.profiles where user_id = auth.uid()"
+                )
             )
             row = result.mappings().first()
         return Profile.model_validate(dict(row)) if row else None
@@ -48,7 +51,8 @@ class MeRepository:
         async with tenant_tx(claims) as connection:
             result = await connection.execute(
                 text(
-                    "select id::text, name, slug, role from app.list_organizations() order by name"
+                    "select id::text, name, slug, role"
+                    " from doctor.list_organizations() order by name"
                 )
             )
             return [Organization.model_validate(dict(row)) for row in result.mappings()]

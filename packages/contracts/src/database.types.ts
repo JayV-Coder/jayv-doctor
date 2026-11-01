@@ -3,25 +3,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type Database = {
 
-  "graphql_public": {
-          Tables: {
-            [_ in never]: never
-          }
-          Views: {
-            [_ in never]: never
-          }
-          Functions: {
-            "graphql":
-{ Args: { "extensions"?: Json,"operationName"?: string,"query"?: string,"variables"?: Json }; Returns: Json
-                           }
-          }
-          Enums: {
-            [_ in never]: never
-          }
-          CompositeTypes: {
-            [_ in never]: never
-          }
-        },"public": {
+  "doctor": {
           Tables: {
             "memberships": {
                   Row: {
@@ -43,30 +25,30 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"profiles": {
+                },"schema_migrations": {
                   Row: {
-                    "avatar_url": string | null,"created_at": string,"full_name": string | null,"id": string,"locale": string
+                    "applied_at": string,"version": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "avatar_url"?: string | null,"created_at"?: string,"full_name"?: string | null,"id": string,"locale"?: string
+                    "applied_at"?: string,"version": string
                   }
                   Update: {
-                    "avatar_url"?: string | null,"created_at"?: string,"full_name"?: string | null,"id"?: string,"locale"?: string
+                    "applied_at"?: string,"version"?: string
                   }
                   Relationships: [
 
                   ]
                 },"tenants": {
                   Row: {
-                    "created_at": string,"dpa_accepted_at": string | null,"id": string,"llm_provider": string,"name": string,"plan": string,"segment": string | null,"slug": string,"status": string,"updated_at": string
+                    "created_at": string,"dpa_accepted_at": string | null,"id": string,"llm_provider": string,"plan": string,"segment": string | null,"status": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"dpa_accepted_at"?: string | null,"id"?: string,"llm_provider"?: string,"name": string,"plan"?: string,"segment"?: string | null,"slug": string,"status"?: string,"updated_at"?: string
+                    "created_at"?: string,"dpa_accepted_at"?: string | null,"id": string,"llm_provider"?: string,"plan"?: string,"segment"?: string | null,"status"?: string,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"dpa_accepted_at"?: string | null,"id"?: string,"llm_provider"?: string,"name"?: string,"plan"?: string,"segment"?: string | null,"slug"?: string,"status"?: string,"updated_at"?: string
+                    "created_at"?: string,"dpa_accepted_at"?: string | null,"id"?: string,"llm_provider"?: string,"plan"?: string,"segment"?: string | null,"status"?: string,"updated_at"?: string
                   }
                   Relationships: [
 
@@ -97,7 +79,32 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            [_ in never]: never
+            "create_organization":
+{ Args: { "llm_provider": string,"name": string,"segment": string,"slug": string }; Returns: string
+                           },
+"current_aal":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"current_tenant_id":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"current_tenant_role":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"custom_access_token_hook":
+{ Args: { "event": Json }; Returns: Json
+                           },
+"has_role":
+{ Args: { "roles": (string)[] }; Returns: boolean
+                           },
+"list_organizations":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "id": string,"name": string,"role": string,"slug": string
+            }[]
+                           },
+"switch_organization":
+{ Args: { "target": string }; Returns: undefined
+                           }
           }
           Enums: {
             [_ in never]: never
@@ -110,7 +117,7 @@ isOneToOne: false
 
 type DatabaseWithoutInternals = Omit<Database, '__InternalSupabase'>
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "doctor">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
@@ -214,11 +221,7 @@ export type CompositeTypes<
   : never
 
 export const Constants = {
-  "graphql_public": {
-          Enums: {
-
-          }
-        },"public": {
+  "doctor": {
           Enums: {
 
           }

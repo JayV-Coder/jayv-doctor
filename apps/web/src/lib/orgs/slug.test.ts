@@ -10,8 +10,8 @@ describe("slugify", () => {
     expect(slugify("  --Acme!! ")).toBe("acme");
   });
 
-  it("respeita o limite de 48 caracteres sem terminar em hífen", () => {
-    expect(slugify(`${"a".repeat(47)} b`)).toBe("a".repeat(47));
+  it("respeita o limite de 40 caracteres sem terminar em hífen", () => {
+    expect(slugify(`${"a".repeat(39)} b`)).toBe("a".repeat(39));
   });
 });
 

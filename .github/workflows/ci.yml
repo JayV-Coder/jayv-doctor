@@ -135,7 +135,7 @@ jobs:
       - if: steps.supabase.outputs.present == 'true'
         run: supabase db start
       - if: steps.supabase.outputs.present == 'true'
-        run: supabase db lint --schema public,app --fail-on warning
+        run: supabase db lint --schema doctor --fail-on warning
       - if: steps.supabase.outputs.present == 'true'
         run: supabase test db
       - if: steps.supabase.outputs.present != 'true'

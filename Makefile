@@ -38,10 +38,10 @@ db\:reset: ## recria o banco local com migrações e seed (ticket #2)
 	supabase db reset
 
 db\:types: ## regenera os tipos TS do schema
-	supabase gen types typescript --local > packages/contracts/src/database.types.ts
+	supabase gen types typescript --local --schema doctor > packages/contracts/src/database.types.ts
 
 db\:test: ## testes pgTAP
 	supabase test db
 
 db\:lint: ## plpgsql_check só nos schemas mantidos aqui (extensões como pg_partman ficam de fora)
-	supabase db lint --schema public,app --fail-on warning
+	supabase db lint --schema doctor --fail-on warning

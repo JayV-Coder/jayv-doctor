@@ -33,10 +33,10 @@ def not_a_member() -> ApiError:
 
 class NewOrganization(BaseModel):
     # `extra=forbid`: o payload nunca define tenant nem Papel.
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    name: str = Field(min_length=2, max_length=120)
-    slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,46}[a-z0-9]$")
+    name: str = Field(min_length=2, max_length=80)
+    slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$")
     segment: str = Field(min_length=2, max_length=80)
     llm_provider: Literal["anthropic", "vertex"]
     dpa_accepted: Literal[True]
@@ -56,7 +56,7 @@ class OrganizationRepository:
             async with tenant_tx(claims) as connection:
                 result = await connection.execute(
                     text(
-                        "select app.create_organization("
+                        "select doctor.create_organization("
                         ":name, :slug, :segment, :llm_provider)::text"
                     ),
                     organization.model_dump(exclude={"dpa_accepted"}),
@@ -71,7 +71,7 @@ class OrganizationRepository:
         try:
             async with tenant_tx(claims) as connection:
                 await connection.execute(
-                    text("select app.switch_organization(cast(:tenant_id as uuid))"),
+                    text("select doctor.switch_organization(cast(:tenant_id as uuid))"),
                     {"tenant_id": tenant_id},
                 )
         except DBAPIError as exc:

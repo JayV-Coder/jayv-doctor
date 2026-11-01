@@ -64,6 +64,13 @@ def test_sem_aceite_do_dpa_nao_cria() -> None:
     assert repository.created == []
 
 
+def test_nome_so_com_espacos_nao_chega_ao_banco() -> None:
+    repository = FakeRepository()
+    response = client(repository).post("/api/v1/orgs", json={**PAYLOAD, "name": "   "})
+    assert response.status_code == 422
+    assert repository.created == []
+
+
 def test_payload_nao_define_tenant_nem_papel() -> None:
     response = client(FakeRepository()).post(
         "/api/v1/orgs", json={**PAYLOAD, "tenant_id": TENANT_ID, "role": "owner"}

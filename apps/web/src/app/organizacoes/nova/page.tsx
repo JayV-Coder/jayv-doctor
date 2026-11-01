@@ -39,7 +39,7 @@ export default function NewOrganizationPage() {
             name="name"
             required
             minLength={2}
-            maxLength={120}
+            maxLength={80}
             value={name}
             onChange={(event) => {
               setName(event.target.value);
@@ -52,8 +52,8 @@ export default function NewOrganizationPage() {
           <input
             name="slug"
             required
-            pattern="[a-z0-9][a-z0-9\-]{1,46}[a-z0-9]"
-            title="De 3 a 48 caracteres: letras minúsculas, números e hífens"
+            pattern="[a-z0-9][a-z0-9\-]{1,38}[a-z0-9]"
+            title="De 3 a 40 caracteres: letras minúsculas, números e hífens"
             autoCapitalize="none"
             value={slug}
             onChange={(event) => {

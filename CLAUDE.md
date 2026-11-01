@@ -10,6 +10,7 @@ SaaS B2B que diagnostica falhas de integrações (SAP, Salesforce, GCP). Supabas
 - **Tabela nova**: siga `supabase/CONVENTIONS.md`.
 
 ## Invariantes
+- O projeto Supabase é compartilhado com o jayv-coder em produção: tudo do Doctor fica no schema `doctor`, e `public` não é alterado ([ADR-0009](docs/adr/0009-doctor-no-projeto-supabase-do-jayv-coder.md)).
 - O `tenant_id` vem só do JWT (claim do Custom Access Token Hook) ou da identidade do conector; payload externo nunca o define.
 - Toda tabela de tenant: `tenant_id`, `unique (tenant_id, id)`, FKs compostas, RLS e teste de isolamento.
 - A API acessa dados dentro de `tenant_tx(claims)`, com o RLS valendo; `service_role` fica restrita a jobs de plataforma.

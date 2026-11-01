@@ -16,13 +16,29 @@ begin
 end;
 $$;
 
+-- Organização compartilhada com o jayv-coder, habilitada no Doctor.
 create or replace function tests.create_tenant(tenant_id uuid, slug text)
 returns uuid
-language sql
+language plpgsql
 as $$
-  insert into public.tenants (id, name, slug)
-  values (tenant_id, initcap(replace(slug, '-', ' ')), slug)
-  returning id;
+begin
+  insert into public.organizations (id, name, slug)
+  values (tenant_id, initcap(replace(slug, '-', ' ')), slug);
+  insert into doctor.tenants (id) values (tenant_id);
+  return tenant_id;
+end;
+$$;
+
+-- Vínculo em public e Papel no Doctor.
+create or replace function tests.add_member(tenant_id uuid, user_id uuid, doctor_role text)
+returns void
+language plpgsql
+as $$
+begin
+  insert into public.organization_members (org_id, user_id, role)
+  values (tenant_id, user_id, case doctor_role when 'owner' then 'owner' else 'member' end);
+  insert into doctor.memberships (tenant_id, user_id, role) values (tenant_id, user_id, doctor_role);
+end;
 $$;
 
 -- Passa a agir como `authenticated`, com as claims que o Custom Access Token Hook emite.

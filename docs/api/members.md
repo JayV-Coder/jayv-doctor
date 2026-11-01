@@ -1,6 +1,6 @@
 # Membros e Convites
 
-Exigem `Authorization: Bearer <JWT do Supabase Auth>`. Salvo `accept`, exigem Owner ou Admin com `aal2`. O Papel vale pelo que está no banco: quem foi rebaixado perde o acesso na hora, mesmo com JWT antigo.
+Exigem `Authorization: Bearer <JWT do Supabase Auth>`. Salvo `accept`, exigem Owner ou Admin com `aal2`. Quem foi rebaixado perde o acesso na hora, mesmo com JWT antigo, porque o banco lê o Papel da tabela. Já quem foi promovido precisa renovar a sessão, porque a API confere primeiro o Papel do JWT.
 
 | Rota | Efeito |
 |---|---|
@@ -13,7 +13,7 @@ Exigem `Authorization: Bearer <JWT do Supabase Auth>`. Salvo `accept`, exigem Ow
 | `DELETE /api/v1/invitations/{id}` | Revoga |
 | `POST /api/v1/invitations/accept` | Aceita: `{ "token": "..." }` → `{ "tenant_id": "uuid" }` |
 
-O token vai no corpo, e não na URL como no ticket #6, para não entrar nos logs. Só o hash sha256 é guardado. Depois de aceitar, o cliente chama `refreshSession()`. O aceite exige sessão de quem confirmou o e-mail convidado, e não exige Organização ativa.
+`resend` só troca o token se o e-mail sair. O token vai no corpo, e não na URL como no ticket #6, para não entrar nos logs. Só o hash sha256 é guardado. Depois de aceitar, o cliente chama `refreshSession()`. O aceite exige sessão de quem confirmou o e-mail convidado, e não exige Organização ativa. Quem já tem Papel recebe `already_member`: convite não muda Papel.
 
 Admin não convida nem promove a Owner, e não altera nem remove um Owner.
 

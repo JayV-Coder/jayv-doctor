@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AuthShell, FormMessage } from "@/components/auth-shell";
 import { MembersPanel } from "@/components/members-panel";
+import { RenewSessionButton } from "@/components/renew-session-button";
 import { apiFetch, getMe, type Invitation, type Member } from "@/lib/api";
 
 export const metadata = { title: "Membros · Integration AI Doctor" };
@@ -25,7 +26,10 @@ export default async function MembersPage() {
         {members && invitations && role ? (
           <MembersPanel members={members} invitations={invitations} viewerRole={role} />
         ) : (
-          <FormMessage error="Só Owner e Admin, com a verificação em duas etapas, veem esta tela." />
+          <>
+            <FormMessage error="Só Owner e Admin, com a verificação em duas etapas, veem esta tela." />
+            <RenewSessionButton />
+          </>
         )}
         <Link className="btn" href="/">
           Voltar

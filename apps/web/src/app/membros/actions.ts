@@ -54,13 +54,20 @@ export async function removeMember(id: string): Promise<string | null> {
 }
 
 // As claims mudam só na renovação: sem isto o JWT não traria a Organização do convite.
-export async function acceptInvitation(token: string): Promise<string | null> {
+export async function acceptInvitation(
+  token: string,
+): Promise<{ accepted: boolean; error: string | null }> {
   const failure = await send("/invitations/accept", {
     method: "POST",
     body: JSON.stringify({ token }),
   });
-  if (failure) return failure;
+  if (failure) return { accepted: false, error: failure };
+  const error = await renewSession();
+  return { accepted: true, error };
+}
+
+export async function renewSession(): Promise<string | null> {
   const supabase = await createClient();
   const { error } = await supabase.auth.refreshSession();
-  return error ? "Convite aceito, mas não renovamos sua sessão. Saia e entre de novo." : null;
+  return error ? "Não renovamos sua sessão. Saia e entre de novo." : null;
 }

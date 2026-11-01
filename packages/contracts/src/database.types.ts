@@ -125,6 +125,11 @@ isOneToOne: false
               "id": string,"organization": string
             }[]
                            },
+"list_invitations":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "email": string,"expires_at": string,"id": string,"role": string
+            }[]
+                           },
 "list_members":
 { Args: Record<PropertyKey, never>; Returns: {
               "display_name": string,"email": string,"id": string,"mfa_enabled": boolean,"role": string

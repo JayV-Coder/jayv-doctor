@@ -19,6 +19,6 @@ Toda aplicação nesse projeto precisa de janela combinada com o responsável pe
 
 ## Configuração de Auth compartilhada
 
-Templates de e-mail, política de senha e TOTP são do projeto. Não copie `supabase/templates` nem os limites do `config.toml` para lá sem revisar o efeito no jayv-coder. As URLs do Doctor devem ser **acrescentadas** à lista de redirecionamento.
+Templates de e-mail, política de senha e TOTP são do projeto. Não copie `supabase/templates` nem os limites do `config.toml` para lá sem revisar o efeito no jayv-coder. As URLs do Doctor devem ser **acrescentadas** à lista de redirecionamento, com curinga: `https://<app>/auth/callback**`.
 
 Computação no GCP: [gcp.md](gcp.md).

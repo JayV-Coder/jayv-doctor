@@ -27,17 +27,8 @@ for each row execute function doctor.set_updated_at();
 
 alter table doctor.invitations enable row level security;
 
--- Sem token_hash: nem quem gerencia lê o hash.
+-- Sem grant nem policy: tudo passa pelas funções abaixo, que leem o Papel da tabela.
 revoke all on doctor.invitations from anon, authenticated;
-grant select (id, tenant_id, email, role, invited_by, expires_at, accepted_at, created_at)
-on doctor.invitations to authenticated;
-
-create policy invitations_select_by_manager on doctor.invitations
-for select to authenticated
-using (
-  tenant_id = (select doctor.current_tenant_id())
-  and (select doctor.has_role('owner', 'admin'))
-);
 
 -- O Papel vem do banco, não do JWT: a claim pode estar até 1 h atrasada, e aqui ela daria a quem foi
 -- rebaixado ou removido o poder de mexer em Papéis. Só para as funções abaixo: sem grant.
@@ -166,7 +157,9 @@ begin
   if not found then
     raise no_data_found using message = 'convite não encontrado';
   end if;
-  if invitation.accepted_at is not null or invitation.expires_at < now() then
+  if invitation.accepted_at is not null or invitation.expires_at < now() or not exists (
+    select 1 from doctor.tenants t where t.id = invitation.tenant_id and t.status = 'active'
+  ) then
     raise exception 'convite expirado ou usado' using errcode = 'DR002';
   end if;
 
@@ -182,13 +175,34 @@ begin
   on conflict do nothing;
   insert into doctor.memberships (tenant_id, user_id, role)
   values (invitation.tenant_id, user_id, invitation.role)
-  on conflict on constraint memberships_tenant_id_user_id_key do update set role = excluded.role;
+  on conflict on constraint memberships_tenant_id_user_id_key do nothing;
+  -- Convite não muda Papel: aqui ele contornaria as regras de Owner.
+  if not found then
+    raise exception 'já tem Papel' using errcode = 'DR004';
+  end if;
   insert into doctor.user_active_tenant (user_id, tenant_id)
   values (user_id, invitation.tenant_id)
   on conflict on constraint user_active_tenant_pkey do update set tenant_id = excluded.tenant_id;
 
   update doctor.invitations i set accepted_at = now() where i.id = invitation.id;
   return invitation.tenant_id;
+end;
+$$;
+
+create function doctor.list_invitations()
+returns table (id uuid, email text, role text, expires_at timestamptz)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  perform doctor.require_manager();
+  return query
+    select i.id, i.email, i.role, i.expires_at
+    from doctor.invitations i
+    where i.tenant_id = doctor.current_tenant_id() and i.accepted_at is null
+    order by i.created_at;
 end;
 $$;
 
@@ -299,6 +313,7 @@ revoke all on function doctor.resend_invitation(uuid, text) from public, service
 revoke all on function doctor.revoke_invitation(uuid) from public, service_role;
 revoke all on function doctor.accept_invitation(text) from public, service_role;
 revoke all on function doctor.list_members() from public, service_role;
+revoke all on function doctor.list_invitations() from public, service_role;
 revoke all on function doctor.update_member_role(uuid, text) from public, service_role;
 revoke all on function doctor.remove_member(uuid) from public, service_role;
 grant execute on function doctor.invite_member(text, text, text) to authenticated;
@@ -306,5 +321,6 @@ grant execute on function doctor.resend_invitation(uuid, text) to authenticated;
 grant execute on function doctor.revoke_invitation(uuid) to authenticated;
 grant execute on function doctor.accept_invitation(text) to authenticated;
 grant execute on function doctor.list_members() to authenticated;
+grant execute on function doctor.list_invitations() to authenticated;
 grant execute on function doctor.update_member_role(uuid, text) to authenticated;
 grant execute on function doctor.remove_member(uuid) to authenticated;

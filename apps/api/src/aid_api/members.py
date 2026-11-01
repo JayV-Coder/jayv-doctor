@@ -8,7 +8,7 @@ import asyncio
 import hashlib
 import os
 import secrets
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Annotated, Literal
@@ -29,6 +29,7 @@ from aid_api.permissions import MANAGE_MEMBERS
 router = APIRouter(prefix="/api/v1", tags=["members"])
 
 Role = Literal["owner", "admin", "analyst", "viewer"]
+Deliver = Callable[[str, str], Awaitable[None]]
 
 
 def last_owner() -> ApiError:
@@ -124,10 +125,7 @@ class MemberRepository:
     async def invitations(self, claims: Claims) -> list[Invitation]:
         async with transaction(claims) as execute:
             result = await execute(  # type: ignore[misc]
-                text(
-                    "select id::text, email, role, expires_at from doctor.invitations"
-                    " where accepted_at is null order by created_at"
-                )
+                text("select id::text, email, role, expires_at from doctor.list_invitations()")
             )
             return [Invitation.model_validate(dict(row)) for row in result.mappings()]
 
@@ -142,7 +140,8 @@ class MemberRepository:
             row = result.one()
             return row.id, row.organization
 
-    async def resend(self, claims: Claims, target: str, token_hash: str) -> tuple[str, str]:
+    # O e-mail sai dentro da transação: se falhar, o token antigo continua valendo.
+    async def resend(self, claims: Claims, target: str, token_hash: str, deliver: Deliver) -> None:
         async with transaction(claims) as execute:
             result = await execute(  # type: ignore[misc]
                 text(
@@ -151,7 +150,7 @@ class MemberRepository:
                 {"t": target, "h": token_hash},
             )
             row = result.one()
-            return row.email, row.organization
+            await deliver(row.email, row.organization)
 
     async def revoke(self, claims: Claims, target: str) -> None:
         async with transaction(claims) as execute:
@@ -267,8 +266,11 @@ async def resend_invitation(
     target: UUID, claims: Manager, repository: Repository, mailer: MailerDep
 ) -> None:
     token, token_hash = new_token()
-    email, organization = await repository.resend(claims, str(target), token_hash)
-    await send(mailer, email, organization, token)
+
+    async def deliver(email: str, organization: str) -> None:
+        await send(mailer, email, organization, token)
+
+    await repository.resend(claims, str(target), token_hash, deliver)
 
 
 @router.delete("/invitations/{target}", status_code=status.HTTP_204_NO_CONTENT)

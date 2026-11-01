@@ -2,6 +2,7 @@
 
 import os
 import smtplib
+import ssl
 from email.message import EmailMessage
 from urllib.parse import unquote, urlsplit
 
@@ -28,12 +29,24 @@ class SmtpMailer(Mailer):
             f"Para aceitar, abra o link abaixo. Ele vale por 7 dias.\n{url}\n\n"
             "Se você não esperava este convite, ignore este e-mail.\n"
         )
-        secure = self.smtp_url.scheme == "smtps"
-        client = smtplib.SMTP_SSL if secure else smtplib.SMTP
-        with client(self.smtp_url.hostname or "", self.smtp_url.port or 0, timeout=10) as smtp:
-            if self.smtp_url.username:
-                smtp.login(unquote(self.smtp_url.username), unquote(self.smtp_url.password or ""))
-            smtp.send_message(message)
+        host, port = self.smtp_url.hostname or "", self.smtp_url.port or 0
+        # O contexto padrão do smtplib não confere certificado nem nome do servidor.
+        context = ssl.create_default_context()
+        if self.smtp_url.scheme == "smtps":
+            with smtplib.SMTP_SSL(host, port, timeout=10, context=context) as smtp:
+                self.authenticate(smtp)
+                smtp.send_message(message)
+        else:
+            with smtplib.SMTP(host, port, timeout=10) as smtp:
+                # Sem usuário é o Mailpit local; com usuário, a senha não trafega em claro.
+                if self.smtp_url.username:
+                    smtp.starttls(context=context)
+                self.authenticate(smtp)
+                smtp.send_message(message)
+
+    def authenticate(self, smtp: smtplib.SMTP) -> None:
+        if self.smtp_url.username:
+            smtp.login(unquote(self.smtp_url.username), unquote(self.smtp_url.password or ""))
 
 
 def get_mailer() -> Mailer:

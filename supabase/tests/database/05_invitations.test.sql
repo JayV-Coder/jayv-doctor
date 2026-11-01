@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(35);
+select plan(43);
 
 select has_table('doctor', 'invitations', 'tabela doctor.invitations existe');
 select is(
@@ -41,11 +41,20 @@ as $$
 $$;
 grant execute on function tests.member_id(text) to anon, authenticated;
 
+create function tests.invitation_id(target text)
+returns uuid
+language sql
+security definer
+as $$
+  select id from doctor.invitations where email = target
+$$;
+grant execute on function tests.invitation_id(text) to anon, authenticated;
+
 -- Quem convida
 select tests.as_acme('a', 'owner');
 select lives_ok($$select * from doctor.invite_member('OWNER2@acme.test', 'owner', 'h-owner')$$, 'Owner convida Owner');
 select results_eq(
-  $$select email, role from doctor.invitations where email = 'owner2@acme.test'$$,
+  $$select email, role from doctor.list_invitations() where email = 'owner2@acme.test'$$,
   $$values ('owner2@acme.test'::text, 'owner'::text)$$, 'e-mail fica em minúsculas'
 );
 select tests.as_acme('b', 'admin');
@@ -70,16 +79,29 @@ select throws_ok(
 
 -- O que cada Papel lê
 select tests.as_acme('b', 'admin');
-select is((select count(*)::int from doctor.invitations), 2, 'Admin lê os convites da Organização');
+select is((select count(*)::int from doctor.list_invitations()), 2, 'Admin lê os convites da Organização');
 select throws_ok($$select token_hash from doctor.invitations$$, '42501', null, 'hash do token não é legível');
+select throws_ok($$select id from doctor.invitations$$, '42501', null, 'convites só saem pela função');
 select is((select count(*)::int from doctor.list_members()), 4, 'Admin lista os membros');
 select tests.as_acme('c', 'analyst');
-select is((select count(*)::int from doctor.invitations), 0, 'Analyst não lê convites');
+select throws_ok($$select * from doctor.list_invitations()$$, '42501', null, 'Analyst não lê convites');
+select tests.as_acme('c', 'admin');
+select throws_ok($$select * from doctor.list_invitations()$$, '42501', null, 'claim antiga não lê convites');
+select tests.as_acme('c', 'analyst');
 select throws_ok($$select * from doctor.list_members()$$, '42501', null, 'Analyst não lista membros');
 select tests.authenticate_as('00000000-0000-4000-8000-00000000000e', '00000000-0000-4000-8000-00000000be01', 'owner', 'aal2');
-select is((select count(*)::int from doctor.invitations), 0, 'outra Organização não lê os convites da Acme');
+select is((select count(*)::int from doctor.list_invitations()), 0, 'outra Organização não lê os convites da Acme');
 select throws_ok(
-  $$select doctor.revoke_invitation((select id from doctor.invitations limit 1))$$, 'P0002', null, 'sem convite visível nada é revogado'
+  format($$select doctor.revoke_invitation('%s')$$, tests.invitation_id('fabi@acme.test')), 'P0002', null, 'não revoga convite de outra Organização'
+);
+select throws_ok(
+  format($$select * from doctor.resend_invitation('%s', 'h-z')$$, tests.invitation_id('fabi@acme.test')), 'P0002', null, 'não reenvia convite de outra Organização'
+);
+select throws_ok(
+  format($$select doctor.update_member_role('%s', 'owner')$$, tests.member_id('c')), 'P0002', null, 'não muda Papel em outra Organização'
+);
+select throws_ok(
+  format($$select doctor.remove_member('%s')$$, tests.member_id('c')), 'P0002', null, 'não remove membro de outra Organização'
 );
 select tests.clear_authentication();
 select throws_ok(
@@ -113,6 +135,27 @@ update doctor.invitations set accepted_at = null, expires_at = now() - interval 
 delete from doctor.memberships where user_id = '00000000-0000-4000-8000-00000000000f';
 select tests.authenticate_without_tenant('00000000-0000-4000-8000-00000000000f');
 select throws_ok($$select doctor.accept_invitation('h-fabi')$$, 'DR002', null, 'convite expirado não vale');
+
+-- Quem já tem Papel não muda por convite, mesmo trocando de e-mail depois de convidado.
+select tests.clear_authentication();
+insert into doctor.invitations (tenant_id, email, role, token_hash)
+values ('00000000-0000-4000-8000-00000000ac01', 'ana@acme.test', 'viewer', 'h-ana');
+select tests.authenticate_without_tenant('00000000-0000-4000-8000-00000000000a');
+select throws_ok($$select doctor.accept_invitation('h-ana')$$, 'DR004', null, 'aceite não rebaixa quem já tem Papel');
+select tests.clear_authentication();
+select is(
+  (select role from doctor.memberships where user_id = '00000000-0000-4000-8000-00000000000a'), 'owner',
+  'o Papel continua o mesmo'
+);
+
+-- Organização suspensa não recebe ninguém.
+delete from doctor.invitations where email = 'ana@acme.test';
+update doctor.invitations set accepted_at = null, expires_at = now() + interval '1 day' where email = 'fabi@acme.test';
+update doctor.tenants set status = 'suspended' where id = '00000000-0000-4000-8000-00000000ac01';
+select tests.authenticate_without_tenant('00000000-0000-4000-8000-00000000000f');
+select throws_ok($$select doctor.accept_invitation('h-fabi')$$, 'DR002', null, 'convite de Organização suspensa não vale');
+select tests.clear_authentication();
+update doctor.tenants set status = 'active' where id = '00000000-0000-4000-8000-00000000ac01';
 
 -- Papel e remoção
 select tests.as_acme('a', 'owner');

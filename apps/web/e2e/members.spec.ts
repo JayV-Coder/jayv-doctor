@@ -3,7 +3,9 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   expectNoHorizontalScroll,
   fillOtp,
+  lastEmailLink,
   lastInvitationLink,
+  openEmailLink,
   PASSWORD,
   signInWithPassword,
   signUp,
@@ -60,6 +62,28 @@ test("convida, a pessoa entra pelo link e cai na Organização", async ({ page, 
 
   await page.goto("/membros");
   await expect(page.locator("p[role=alert]")).toContainText("Só Owner e Admin");
+});
+
+test("quem entra por link mágico retoma o convite na tela inicial", async ({ page, context }) => {
+  const organization = `Link ${randomUUID().slice(0, 8)}`;
+  await ownerWithOrganization(page, organization);
+  const invited = uniqueEmail();
+  await page.getByLabel("E-mail", { exact: true }).fill(invited);
+  await page.getByRole("button", { name: "Enviar convite" }).click();
+  await expect(page.getByRole("status")).toContainText("Convite enviado");
+  const invitation = await lastInvitationLink(invited);
+  await context.clearCookies();
+
+  await page.goto(invitation);
+  await page.getByRole("link", { name: "Entrar para aceitar" }).click();
+  await page.getByLabel("E-mail corporativo").fill(invited);
+  await page.getByRole("button", { name: "Enviar link de acesso" }).click();
+  await expect(page.getByRole("status")).toContainText("Enviamos um link");
+  await openEmailLink(page, await lastEmailLink(invited));
+
+  await page.getByRole("link", { name: "Ver convite pendente" }).click();
+  await page.getByRole("button", { name: "Aceitar convite" }).click();
+  await expect(page.getByRole("heading", { name: organization })).toBeVisible();
 });
 
 test("o único Owner não se rebaixa", async ({ page }) => {

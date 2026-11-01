@@ -1,11 +1,14 @@
+import smtplib
+import ssl
 from typing import Any
 
 import pytest
 from aid_api.auth import Claims, get_claims
 from aid_api.errors import ApiError
-from aid_api.mailer import Mailer, get_mailer
+from aid_api.mailer import Mailer, SmtpMailer, get_mailer
 from aid_api.main import create_app
 from aid_api.members import (
+    Deliver,
     Invitation,
     Member,
     MemberRepository,
@@ -52,10 +55,10 @@ class FakeRepository(MemberRepository):
         self.token_hashes.append(token_hash)
         return TARGET_ID, "Acme"
 
-    async def resend(self, claims: Claims, target: str, token_hash: str) -> tuple[str, str]:
+    async def resend(self, claims: Claims, target: str, token_hash: str, deliver: Deliver) -> None:
         self.fail()
+        await deliver("carla@acme.test", "Acme")
         self.token_hashes.append(token_hash)
-        return "carla@acme.test", "Acme"
 
     async def revoke(self, claims: Claims, target: str) -> None:
         self.fail()
@@ -184,6 +187,71 @@ def test_falha_no_email_nao_perde_o_convite() -> None:
     )
     assert response.status_code == 503
     assert response.json()["code"] == "mail_unavailable"
+
+
+def test_reenvio_com_falha_no_email_mantem_o_link_antigo() -> None:
+    class BrokenMailer(FakeMailer):
+        def send_invitation(self, email: str, organization: str, url: str) -> None:
+            raise OSError
+
+    repository = FakeRepository()
+    response = client(claims("owner"), repository, BrokenMailer()).post(
+        f"/api/v1/invitations/{TARGET_ID}/resend"
+    )
+    assert response.status_code == 503
+    assert repository.token_hashes == []
+
+
+def test_smtp_verifica_o_certificado(monkeypatch: pytest.MonkeyPatch) -> None:
+    contexts: list[ssl.SSLContext] = []
+
+    class FakeSmtp:
+        def __init__(self, *_: Any, context: ssl.SSLContext, **__: Any) -> None:
+            contexts.append(context)
+
+        def __enter__(self) -> "FakeSmtp":
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        def login(self, user: str, password: str) -> None:
+            return None
+
+        def send_message(self, message: object) -> None:
+            return None
+
+    monkeypatch.setattr(smtplib, "SMTP_SSL", FakeSmtp)
+    SmtpMailer("smtps://u:p@mail.test:465", "a@b.test").send_invitation("c@d.test", "Acme", "url")
+    assert contexts[0].verify_mode == ssl.CERT_REQUIRED
+    assert contexts[0].check_hostname
+
+
+def test_smtp_com_senha_nao_trafega_sem_tls(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    class FakeSmtp:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            return None
+
+        def __enter__(self) -> "FakeSmtp":
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        def starttls(self, context: ssl.SSLContext) -> None:
+            calls.append("starttls")
+
+        def login(self, user: str, password: str) -> None:
+            calls.append("login")
+
+        def send_message(self, message: object) -> None:
+            return None
+
+    monkeypatch.setattr(smtplib, "SMTP", FakeSmtp)
+    SmtpMailer("smtp://u:p@mail.test:587", "a@b.test").send_invitation("c@d.test", "Acme", "url")
+    assert calls == ["starttls", "login"]
 
 
 def test_aceite_leva_o_token_no_corpo_e_nao_exige_organizacao_ativa() -> None:

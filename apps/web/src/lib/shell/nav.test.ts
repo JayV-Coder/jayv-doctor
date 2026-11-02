@@ -27,6 +27,7 @@ describe("activeTab", () => {
 
   it("põe em Mais as telas que se abrem de lá", () => {
     expect(activeTab("/membros")).toBe("/mais");
+    expect(activeTab("/integracoes")).toBe("/mais");
   });
 
   it("não confunde prefixo de palavra com subrota", () => {
@@ -39,6 +40,7 @@ describe("pageTitle", () => {
     expect(pageTitle("/")).toBe("Início");
     expect(pageTitle("/execucoes")).toBe("Execuções");
     expect(pageTitle("/membros")).toBe("Membros");
+    expect(pageTitle("/integracoes")).toBe("Integrações");
   });
 
   it("cai no rótulo da aba nas subrotas sem título próprio", () => {

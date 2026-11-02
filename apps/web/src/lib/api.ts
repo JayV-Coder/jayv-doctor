@@ -9,6 +9,7 @@ type Schemas = ApiComponents["schemas"];
 export type Organization = Schemas["Organization"];
 export type Member = Schemas["Member"];
 export type Invitation = Schemas["Invitation"];
+export type Integration = Schemas["Integration"];
 type Me = Schemas["Me"];
 
 // Só no servidor: o token sai do cookie da sessão e a API o valida.

@@ -933,3 +933,64 @@ p {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+.t {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 16px;
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 2px solid var(--ac);
+  background: color-mix(in srgb, var(--sec) 60%, transparent);
+  font-size: 12px;
+}
+
+.kv dt {
+  color: var(--mu);
+}
+
+.kv dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.field textarea {
+  width: 100%;
+  border-radius: 3px;
+  border: 1px solid var(--bd);
+  background: var(--card);
+  color: var(--fg);
+  font:
+    400 16px var(--font-mono),
+    monospace;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+/* Botões ao lado de texto, ou de ação secundária no card, ocupam só o próprio rótulo. */
+.row-between > .btn,
+.card > .btn {
+  flex: none;
+  width: auto;
+}
+
+.card > .btn {
+  align-self: flex-start;
+}

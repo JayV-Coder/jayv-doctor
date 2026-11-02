@@ -15,11 +15,10 @@ export default async function MorePage() {
 
   return (
     <>
-      {isManager(role) && (
-        <ul className="list">
-          <ListItem href="/membros" title="Membros e convites" />
-        </ul>
-      )}
+      <ul className="list">
+        <ListItem href="/integracoes" title="Integrações" />
+        {isManager(role) && <ListItem href="/membros" title="Membros e convites" />}
+      </ul>
       <ThemeSelect initial={parseTheme(store.get(THEME_COOKIE)?.value)} />
       <h2 className="label">Conta</h2>
       <SessionFooter />

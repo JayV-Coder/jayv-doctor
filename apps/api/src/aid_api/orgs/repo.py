@@ -8,11 +8,10 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from aid_api.core.auth import Claims
-from aid_api.core.db import tenant_tx
+from aid_api.core.db import tenant_tx, translated_tx
 from aid_api.core.errors import ApiError
 from aid_api.orgs.schemas import Invitation, Member, NewOrganization, Organization, Profile
 
@@ -51,24 +50,13 @@ def not_a_member() -> ApiError:
     return ApiError(403, "not_a_member", "Você não tem Vínculo com esta Organização.")
 
 
-def sqlstate(exc: DBAPIError) -> str | None:
-    return getattr(exc.orig, "sqlstate", None)
-
-
 @asynccontextmanager
 async def transaction(
     claims: Claims, overrides: dict[str, Callable[[], ApiError]] | None = None
 ) -> AsyncIterator[AsyncConnection]:
     """`tenant_tx` que traduz o erro do banco em erro da API; `overrides` vale por rota."""
-    try:
-        async with tenant_tx(claims) as connection:
-            yield connection
-    except DBAPIError as exc:
-        state = sqlstate(exc) or ""
-        factory = (overrides or {}).get(state) or ERRORS.get(state)
-        if factory:
-            raise factory() from exc
-        raise
+    async with translated_tx(claims, {**ERRORS, **(overrides or {})}) as connection:
+        yield connection
 
 
 class MeRepository:

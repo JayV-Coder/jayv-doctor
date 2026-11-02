@@ -9,7 +9,10 @@ import pytest
 import pytest_asyncio
 from aid_api.core.auth import Claims
 from aid_api.core.db import tenant_tx
+from aid_api.core.errors import ApiError
 from aid_api.core.idempotency import IdempotencyStore
+from aid_api.integrations.repo import IntegrationRepository
+from aid_api.integrations.schemas import NewIntegration
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -18,16 +21,16 @@ URL = os.environ.get("INTEGRATION_DB_URL")
 pytestmark = pytest.mark.skipif(URL is None, reason="sem INTEGRATION_DB_URL")
 
 
-def claims_for(tenant_id: str, user_id: str, role: str = "viewer") -> Claims:
+def claims_for(tenant_id: str, user_id: str, role: str = "viewer", aal: str = "aal1") -> Claims:
     raw = {
         "sub": user_id,
         "role": "authenticated",
-        "aal": "aal1",
+        "aal": aal,
         "tenant_id": tenant_id,
         "tenant_role": role,
     }
     return Claims(
-        sub=raw["sub"], email=None, aal="aal1", tenant_id=tenant_id, tenant_role=role, raw=raw
+        sub=raw["sub"], email=None, aal=aal, tenant_id=tenant_id, tenant_role=role, raw=raw
     )
 
 
@@ -161,3 +164,54 @@ async def test_chave_de_requisicao_que_falhou_fica_livre(
         await failing_request()
     async with store.session(claims) as session:
         assert await session.reserve("k2", "h") is None
+
+
+async def add_admin(engine: AsyncEngine, tenant_id: str, user_id: str) -> None:
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "insert into public.organization_members (org_id, user_id, role)"
+                " values (:t, :u, 'member')"
+            ),
+            {"t": tenant_id, "u": user_id},
+        )
+        await connection.execute(
+            text(
+                "insert into doctor.memberships (tenant_id, user_id, role) values (:t, :u, 'admin')"
+            ),
+            {"t": tenant_id, "u": user_id},
+        )
+
+
+@pytest.mark.asyncio
+async def test_integracoes_isoladas_com_nome_unico_por_organizacao(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str
+) -> None:
+    first, second = tenants
+    for tenant in tenants:
+        await add_admin(engine, tenant, user)
+    repository = IntegrationRepository(engine)
+    new = NewIntegration(
+        name="Pedidos Salesforce → SAP",
+        source_system="salesforce",
+        target_system="sap",
+        environment="prd",
+    )
+    acme = claims_for(first, user, "admin", "aal2")
+    varejo = claims_for(second, user, "admin", "aal2")
+
+    created = await repository.create(acme, new)
+    with pytest.raises(ApiError) as duplicated:
+        await repository.create(acme, new)
+    assert duplicated.value.code == "integration_exists"
+
+    assert await repository.list(varejo, include_archived=True) == []
+    await repository.create(varejo, new)
+    with pytest.raises(ApiError) as foreign:
+        await repository.archive(varejo, created.id)
+    assert foreign.value.status == 404
+
+    archived = await repository.archive(acme, created.id)
+    assert archived.archived_at is not None
+    assert await repository.list(acme, include_archived=False) == []
+    assert [item.id for item in await repository.list(acme, include_archived=True)] == [created.id]

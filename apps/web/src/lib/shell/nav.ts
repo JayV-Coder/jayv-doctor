@@ -19,6 +19,7 @@ const MORE = "/mais";
 
 const TITLES: Record<string, string> = {
   "/membros": "Membros",
+  "/integracoes": "Integrações",
 };
 
 function within(pathname: string, href: string): boolean {

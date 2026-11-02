@@ -25,6 +25,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"integrations": {
+                  Row: {
+                    "archived_at": string | null,"created_at": string,"created_by": string | null,"description": string | null,"environment": string,"id": string,"name": string,"owner_team": string | null,"source_system": string,"target_system": string,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "archived_at"?: string | null,"created_at"?: string,"created_by"?: string | null,"description"?: string | null,"environment": string,"id"?: string,"name": string,"owner_team"?: string | null,"source_system": string,"target_system": string,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "archived_at"?: string | null,"created_at"?: string,"created_by"?: string | null,"description"?: string | null,"environment"?: string,"id"?: string,"name"?: string,"owner_team"?: string | null,"source_system"?: string,"target_system"?: string,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "integrations_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"invitations": {
                   Row: {
                     "accepted_at": string | null,"created_at": string,"email": string,"expires_at": string,"id": string,"invited_by": string | null,"role": string,"tenant_id": string,"token_hash": string,"updated_at": string
@@ -144,6 +164,9 @@ isOneToOne: false
 { Args: { "email": string,"role": string,"token_hash": string }; Returns: {
               "id": string,"organization": string
             }[]
+                           },
+"is_manager":
+{ Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "list_invitations":
 { Args: Record<PropertyKey, never>; Returns: {

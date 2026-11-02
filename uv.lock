@@ -6,6 +6,7 @@ requires-python = "==3.12.*"
 members = [
     "aid-api",
     "aid-contracts",
+    "aid-security",
     "aid-worker",
     "jayv-doctor",
 ]
@@ -57,6 +58,11 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.12" },
     { name = "rfc3339-validator", specifier = ">=0.1.4" },
 ]
+
+[[package]]
+name = "aid-security"
+version = "0.1.0"
+source = { editable = "packages/security" }
 
 [[package]]
 name = "aid-worker"

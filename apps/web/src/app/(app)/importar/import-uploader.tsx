@@ -1,16 +1,25 @@
 "use client";
 
+import { createSHA256 } from "hash-wasm";
 import { useState, type ChangeEvent } from "react";
 import { FormMessage } from "@/components/auth-shell";
 import type { Integration } from "@/lib/api";
 import { environmentLabel } from "@/lib/integrations/labels";
-import { completeImport, createImport } from "./actions";
+import { completeImport, createImport, requestUploadUrl } from "./actions";
 
 const ACCEPT = ".json,.ndjson,.csv";
 
+const FAILED = "Não foi possível ler ou enviar o arquivo. Tente de novo.";
+
+// Em blocos: um arquivo de 50 MB não fica inteiro na memória de um celular.
 async function sha256(file: File): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const hasher = await createSHA256();
+  const reader = file.stream().getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return hasher.digest("hex");
+    hasher.update(value);
+  }
 }
 
 // O arquivo vai direto do navegador para o Storage, pela URL assinada: não passa pela API.
@@ -37,28 +46,33 @@ export function ImportUploader({ integrations }: { integrations: Integration[] }
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function send(file: File) {
-    setError(null);
-    setProgress(0);
-    const { created, error: refused } = await createImport({
+  // Devolve a mensagem de erro, ou `null`. Recusa (formato, tamanho, duplicada) não é erro aqui:
+  // a Importação aparece na lista com o motivo.
+  async function upload(file: File): Promise<string | null> {
+    const { created, error } = await createImport({
       integration_id: integrationId,
       filename: file.name,
       size_bytes: file.size,
       sha256: await sha256(file),
-    }).catch(() => ({ created: null, error: "Sem conexão. Tente de novo." }));
-    // Recusa (formato, tamanho, duplicada) já aparece na lista, com o motivo.
-    if (!created?.upload_url) {
-      setError(refused);
+    });
+    if (!created || created.status !== "pending") return error;
+    const { url, error: unsigned } = await requestUploadUrl(created.id);
+    if (!url) return unsigned;
+    if (!(await put(url, file, setProgress))) return "O envio do arquivo falhou. Tente de novo.";
+    return completeImport(created.id);
+  }
+
+  async function send(file: File) {
+    setError(null);
+    setProgress(0);
+    try {
+      setError(await upload(file));
+    } catch {
+      // Arquivo ilegível depois de escolhido, ou rede fora: o seletor volta a funcionar.
+      setError(FAILED);
+    } finally {
       setProgress(null);
-      return;
     }
-    const uploaded = await put(created.upload_url, file, setProgress);
-    setError(
-      uploaded
-        ? await completeImport(created.id).catch(() => "Sem conexão. Tente de novo.")
-        : "O envio do arquivo falhou. Tente de novo.",
-    );
-    setProgress(null);
   }
 
   function choose(event: ChangeEvent<HTMLInputElement>) {

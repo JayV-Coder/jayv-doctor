@@ -34,8 +34,11 @@ test("importa NDJSON, recusa formato errado e marca o arquivo repetido", async (
   );
   await expectNoHorizontalScroll(page);
 
-  await upload(page, "sap-orders.ndjson", NDJSON);
-  await expect(card(page, "sap-orders.ndjson")).toContainText("Na fila");
+  await upload(page, "relatório de pedidos.ndjson", NDJSON);
+  await expect(card(page, "relatório de pedidos.ndjson")).toContainText("Na fila");
+
+  await upload(page, "vazio.csv", Buffer.alloc(0));
+  await expect(card(page, "vazio.csv")).toContainText("Arquivo vazio");
 
   await upload(page, "export-old.xml", Buffer.from("<pedidos/>"));
   await expect(card(page, "export-old.xml")).toContainText("Recusada");

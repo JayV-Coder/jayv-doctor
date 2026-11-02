@@ -1189,6 +1189,63 @@
         }
       }
     },
+    "/api/v1/imports/{target}/upload-url": {
+      "post": {
+        "tags": ["imports"],
+        "summary": "Create Upload Url",
+        "operationId": "create_upload_url_api_v1_imports__target__upload_url_post",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadUrl"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/imports/{target}/complete": {
       "post": {
         "tags": ["imports"],
@@ -1322,21 +1379,10 @@
               }
             ],
             "title": "Duplicate Of"
-          },
-          "upload_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Upload Url"
           }
         },
         "type": "object",
-        "required": ["id", "status", "error", "duplicate_of", "upload_url"],
+        "required": ["id", "status", "error", "duplicate_of"],
         "title": "CreatedImport"
       },
       "CreatedInvitation": {
@@ -1991,6 +2037,17 @@
         "type": "object",
         "required": ["role"],
         "title": "RoleChange"
+      },
+      "UploadUrl": {
+        "properties": {
+          "upload_url": {
+            "type": "string",
+            "title": "Upload Url"
+          }
+        },
+        "type": "object",
+        "required": ["upload_url"],
+        "title": "UploadUrl"
       },
       "ValidationError": {
         "properties": {

@@ -263,6 +263,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/imports/{target}/upload-url": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create Upload Url */
+    post: operations["create_upload_url_api_v1_imports__target__upload_url_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/imports/{target}/complete": {
     parameters: {
       query?: never;
@@ -307,8 +324,6 @@ export interface components {
       error: string | null;
       /** Duplicate Of */
       duplicate_of: string | null;
-      /** Upload Url */
-      upload_url: string | null;
     };
     /** CreatedInvitation */
     CreatedInvitation: {
@@ -552,6 +567,11 @@ export interface components {
        * @enum {string}
        */
       role: "owner" | "admin" | "analyst" | "viewer";
+    };
+    /** UploadUrl */
+    UploadUrl: {
+      /** Upload Url */
+      upload_url: string;
     };
     /** ValidationError */
     ValidationError: {
@@ -1179,6 +1199,39 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["CreatedImport"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_upload_url_api_v1_imports__target__upload_url_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UploadUrl"];
         };
       };
       /** @description Validation Error */

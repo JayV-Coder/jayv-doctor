@@ -23,7 +23,6 @@ class CreatedRow:
     status: Status
     error: str | None
     duplicate_of: str | None
-    storage_path: str | None
 
 
 def not_found() -> ApiError:
@@ -42,15 +41,21 @@ ERRORS = {
 }
 
 
-async def fetch(connection: AsyncConnection, target: str) -> Import:
+async def fetch(connection: AsyncConnection, target: str) -> tuple[Import, str | None]:
     result = await connection.execute(
-        text(f"select {COLUMNS} from doctor.imports where id = cast(:t as uuid)"),  # noqa: S608
+        text(
+            f"select {COLUMNS},"  # noqa: S608
+            " doctor.import_storage_path(tenant_id, id, format) as storage_path"
+            " from doctor.imports where id = cast(:t as uuid)"
+        ),
         {"t": target},
     )
     row = result.mappings().first()
     if row is None:
         raise not_found()
-    return Import.model_validate(dict(row))
+    data = dict(row)
+    path = data.pop("storage_path")
+    return Import.model_validate(data), path
 
 
 class ImportRepository:
@@ -71,7 +76,7 @@ class ImportRepository:
         async with translated_tx(claims, ERRORS, self.engine) as connection:
             result = await connection.execute(
                 text(
-                    "select id::text, status, error, duplicate_of::text, storage_path"
+                    "select id::text, status, error, duplicate_of::text"
                     " from doctor.create_import(cast(:integration as uuid), :filename, :size, :sha)"
                 ),
                 {
@@ -83,33 +88,19 @@ class ImportRepository:
             )
             return CreatedRow(**result.mappings().one())
 
-    async def get(self, claims: Claims, target: str) -> tuple[Import, str]:
+    async def get(self, claims: Claims, target: str) -> tuple[Import, str | None]:
+        """A Importação e o caminho do objeto no bucket (`None` se recusada antes do upload)."""
         async with translated_tx(claims, ERRORS, self.engine) as connection:
-            current = await fetch(connection, target)
-            path = await connection.scalar(
-                text(
-                    "select tenant_id || '/imports/' || id || '/' || filename"
-                    " from doctor.imports where id = cast(:t as uuid)"
-                ),
-                {"t": target},
-            )
-            return current, str(path)
-
-    async def complete(self, claims: Claims, target: str, size: int) -> Import:
-        async with translated_tx(claims, ERRORS, self.engine) as connection:
-            await connection.execute(
-                text("select doctor.complete_import(cast(:t as uuid), :size)"),
-                {"t": target, "size": size},
-            )
             return await fetch(connection, target)
 
-    async def reject(self, claims: Claims, target: str, reason: str, size: int) -> Import:
+    async def finish(self, claims: Claims, target: str, size: int, reason: str | None) -> Import:
+        """`reason=None` conclui (`uploaded`); com motivo, recusa (`rejected`)."""
         async with translated_tx(claims, ERRORS, self.engine) as connection:
             await connection.execute(
-                text("select doctor.reject_import(cast(:t as uuid), :reason, :size)"),
-                {"t": target, "reason": reason, "size": size},
+                text("select doctor.finish_import(cast(:t as uuid), :size, :reason)"),
+                {"t": target, "size": size, "reason": reason},
             )
-            return await fetch(connection, target)
+            return (await fetch(connection, target))[0]
 
 
 def get_import_repository() -> ImportRepository:

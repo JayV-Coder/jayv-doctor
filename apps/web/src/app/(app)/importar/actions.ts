@@ -34,6 +34,17 @@ export async function createImport(input: {
   return { created: (await response.json()) as CreatedImport, error: null };
 }
 
+export async function requestUploadUrl(
+  id: string,
+): Promise<{ url: string | null; error: string | null }> {
+  const response = await apiFetch(`/imports/${encodeURIComponent(id)}/upload-url`, {
+    method: "POST",
+  }).catch(() => null);
+  if (!response?.ok) return { url: null, error: await failure(response) };
+  const { upload_url } = (await response.json()) as { upload_url: string };
+  return { url: upload_url, error: null };
+}
+
 export async function completeImport(id: string): Promise<string | null> {
   const response = await apiFetch(`/imports/${encodeURIComponent(id)}/complete`, {
     method: "POST",

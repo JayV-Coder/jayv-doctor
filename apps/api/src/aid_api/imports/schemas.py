@@ -26,8 +26,11 @@ class CreatedImport(BaseModel):
     status: Status
     error: str | None
     duplicate_of: str | None
-    # Só para Importação pendente: o navegador sobe o arquivo direto no Storage.
-    upload_url: str | None
+
+
+class UploadUrl(BaseModel):
+    # URL assinada do Storage: o navegador sobe o arquivo direto, com PUT, sem passar pela API.
+    upload_url: str
 
 
 class Import(BaseModel):

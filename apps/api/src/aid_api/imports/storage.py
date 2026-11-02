@@ -69,6 +69,9 @@ class SupabaseStorage(Storage):
             raise unavailable() from exc
         if response.status_code in (400, 404):
             return None
+        # Range fora do arquivo: o objeto existe e está vazio.
+        if response.status_code == 416:
+            return Head(data=b"", size=0)
         if response.status_code not in (200, 206):
             raise unavailable()
         # 206 traz o total em "bytes 0-65535/12345"; 200 é o arquivo inteiro.

@@ -15,7 +15,7 @@ USER_ID = "00000000-0000-4000-8000-0000000a0001"
 TENANT_ID = "00000000-0000-4000-8000-00000000ac01"
 INTEGRATION_ID = "00000000-0000-4000-8000-0000000001a1"
 IMPORT_ID = "00000000-0000-4000-8000-0000000000f1"
-PATH = f"{TENANT_ID}/imports/{IMPORT_ID}/sap-orders.ndjson"
+PATH = f"{TENANT_ID}/imports/{IMPORT_ID}/upload.ndjson"
 SHA = "a" * 64
 NEW = {
     "integration_id": INTEGRATION_ID,
@@ -49,11 +49,10 @@ def an_import(**overrides: Any) -> Import:
 class FakeRepository(ImportRepository):
     def __init__(self, created: CreatedRow | None = None, current: Import | None = None) -> None:
         self.created = created or CreatedRow(
-            id=IMPORT_ID, status="pending", error=None, duplicate_of=None, storage_path=PATH
+            id=IMPORT_ID, status="pending", error=None, duplicate_of=None
         )
         self.current = current or an_import()
-        self.completed: int | None = None
-        self.rejected_with: str | None = None
+        self.finished: tuple[int, str | None] | None = None
 
     async def list(self, claims: Claims) -> list[Import]:
         return [self.current]
@@ -61,16 +60,13 @@ class FakeRepository(ImportRepository):
     async def create(self, claims: Claims, new: NewImport) -> CreatedRow:
         return self.created
 
-    async def get(self, claims: Claims, target: str) -> tuple[Import, str]:
-        return self.current, PATH
+    async def get(self, claims: Claims, target: str) -> tuple[Import, str | None]:
+        return self.current, PATH if self.current.status == "pending" else None
 
-    async def complete(self, claims: Claims, target: str, size: int) -> Import:
-        self.completed = size
-        return an_import(status="uploaded", size_bytes=size)
-
-    async def reject(self, claims: Claims, target: str, reason: str, size: int) -> Import:
-        self.rejected_with = reason
-        return an_import(status="rejected", error=reason)
+    async def finish(self, claims: Claims, target: str, size: int, reason: str | None) -> Import:
+        self.finished = (size, reason)
+        status = "uploaded" if reason is None else "rejected"
+        return an_import(status=status, size_bytes=size, error=reason)
 
 
 class FakeStorage(Storage):
@@ -125,37 +121,43 @@ def test_todo_papel_lista_as_importacoes(role: str) -> None:
     assert response.json()[0]["filename"] == "sap-orders.ndjson"
 
 
-def test_importacao_pendente_recebe_url_assinada_com_o_jwt_do_usuario() -> None:
+def test_criar_nao_assina_url_dentro_da_transacao() -> None:
     storage = FakeStorage()
     response = client(claims("analyst"), storage=storage).post("/api/v1/imports", json=NEW)
     assert response.status_code == 201
-    body = response.json()
-    assert body["status"] == "pending"
-    assert body["upload_url"].startswith("https://storage.test/upload/")
+    assert response.json() == {
+        "id": IMPORT_ID,
+        "status": "pending",
+        "error": None,
+        "duplicate_of": None,
+    }
+    assert storage.signed == []
+
+
+def test_url_assinada_sai_com_o_jwt_do_usuario() -> None:
+    storage = FakeStorage()
+    response = client(claims("analyst"), storage=storage).post(
+        f"/api/v1/imports/{IMPORT_ID}/upload-url"
+    )
+    assert response.status_code == 200
+    assert response.json()["upload_url"].startswith("https://storage.test/upload/")
     assert storage.signed == [("jwt-do-usuario", PATH)]
 
 
 def test_importacao_recusada_nao_recebe_url() -> None:
-    rejected = CreatedRow(
-        id=IMPORT_ID,
-        status="rejected",
-        error="Formato não permitido",
-        duplicate_of=None,
-        storage_path=None,
-    )
+    rejected = an_import(status="rejected", error="Formato não permitido", format=None)
     storage = FakeStorage()
-    response = client(claims("analyst"), FakeRepository(created=rejected), storage).post(
-        "/api/v1/imports", json={**NEW, "filename": "pedidos.xml"}
+    response = client(claims("analyst"), FakeRepository(current=rejected), storage).post(
+        f"/api/v1/imports/{IMPORT_ID}/upload-url"
     )
-    assert response.status_code == 201
-    assert response.json() == {
-        "id": IMPORT_ID,
-        "status": "rejected",
-        "error": "Formato não permitido",
-        "duplicate_of": None,
-        "upload_url": None,
-    }
+    assert response.status_code == 409
+    assert response.json()["code"] == "import_not_pending"
     assert storage.signed == []
+
+
+def test_viewer_nao_pede_url_de_upload() -> None:
+    response = client(claims("viewer")).post(f"/api/v1/imports/{IMPORT_ID}/upload-url")
+    assert response.status_code == 403
 
 
 @pytest.mark.parametrize(
@@ -185,7 +187,7 @@ def test_concluir_confere_o_conteudo_e_registra_o_tamanho_do_storage() -> None:
     response = complete(repository, storage)
     assert response.status_code == 200
     assert response.json()["status"] == "uploaded"
-    assert repository.completed == 1180
+    assert repository.finished == (1180, None)
     assert storage.read == [PATH]
 
 
@@ -194,8 +196,7 @@ def test_conteudo_de_outro_formato_rejeita_a_importacao() -> None:
     response = complete(repository, FakeStorage(Head(data=b"<?xml version='1.0'?>", size=21)))
     assert response.status_code == 200
     assert response.json()["status"] == "rejected"
-    assert repository.rejected_with == MISMATCH
-    assert repository.completed is None
+    assert repository.finished == (21, MISMATCH)
 
 
 def test_concluir_sem_o_arquivo_no_storage_vira_409() -> None:
@@ -217,11 +218,20 @@ def test_viewer_nao_conclui() -> None:
     assert response.status_code == 403
 
 
+def test_arquivo_vazio_no_storage_e_recusado() -> None:
+    repository = FakeRepository()
+    response = complete(repository, FakeStorage(Head(data=b"", size=0)))
+    assert response.json()["status"] == "rejected"
+    assert repository.finished == (0, "Arquivo vazio")
+
+
 def test_erro_do_storage_vira_503() -> None:
     class Down(FakeStorage):
         async def sign_upload(self, token: str, path: str) -> str:
             raise ApiError(503, "storage_unavailable", "Armazenamento indisponível.")
 
-    response = client(claims("analyst"), storage=Down()).post("/api/v1/imports", json=NEW)
+    response = client(claims("analyst"), storage=Down()).post(
+        f"/api/v1/imports/{IMPORT_ID}/upload-url"
+    )
     assert response.status_code == 503
     assert response.json()["code"] == "storage_unavailable"

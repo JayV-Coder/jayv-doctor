@@ -85,6 +85,9 @@ create table doctor.outbox_messages (
 );
 comment on table doctor.outbox_messages is 'Mensagens a publicar no Pub/Sub; só a plataforma lê e escreve.';
 
+-- Tabela da plataforma, não de tenant: o relay drena em ordem de `id`, de todas as Organizações,
+-- por isso o índice de pendentes não começa por `tenant_id`. O `unique` segue a convenção.
+alter table doctor.outbox_messages add constraint outbox_messages_tenant_id_id_key unique (tenant_id, id);
 create index outbox_messages_pending_idx on doctor.outbox_messages (id) where published_at is null;
 
 alter table doctor.raw_log_objects enable row level security;
@@ -107,11 +110,25 @@ using (
   and (select doctor.has_member_role('owner', 'admin', 'analyst'))
 );
 
+-- Caminho do objeto no bucket: o nome original fica só no banco. Assim nenhum caractere do nome
+-- (acento, espaço) chega à chave do Storage, e o caminho é montado num lugar só.
+create function doctor.import_storage_path(tenant uuid, import_id uuid, format text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select tenant || '/imports/' || import_id || '/upload.' || format
+$$;
+
+grant execute on function doctor.import_storage_path(uuid, uuid, text) to authenticated;
+
 -- security definer: cria a Importação conferindo Papel (da tabela), Integração ativa, formato,
 -- tamanho e duplicidade. Formato e tamanho errados viram Importação `rejected`, com o motivo,
--- para o histórico mostrar a tentativa.
+-- para o histórico mostrar a tentativa. A pendente já nasce com Log bruto que vence em 1 dia:
+-- se o upload nunca for concluído, a retenção (ticket #29) apaga o que tiver chegado ao bucket.
 create function doctor.create_import(integration_id uuid, filename text, size_bytes bigint, sha256 text)
-returns table (id uuid, status text, format text, error text, duplicate_of uuid, storage_path text)
+returns table (id uuid, status text, format text, error text, duplicate_of uuid)
 language plpgsql
 security definer
 set search_path = ''
@@ -122,7 +139,8 @@ declare
   detected text;
   reason text;
   previous uuid;
-  new_id uuid;
+  new_id uuid := gen_random_uuid();
+  raw_id uuid;
 begin
   if tenant is null or not doctor.has_member_role('owner', 'admin', 'analyst') then
     raise insufficient_privilege using message = 'Papel não importa logs';
@@ -142,40 +160,68 @@ begin
   else
     reason := 'Formato não permitido';
   end if;
+  if reason is null and create_import.size_bytes = 0 then
+    reason := 'Arquivo vazio';
+  end if;
   if reason is null and create_import.size_bytes > 52428800 then
     reason := 'Arquivo acima de 50 MB';
   end if;
   if reason is null then
-    select i.id into previous from doctor.imports i
-    where i.tenant_id = tenant
-      and i.integration_id = create_import.integration_id
-      and i.sha256 = create_import.sha256
-      and i.status in ('uploaded', 'processing', 'done')
-    order by i.created_at
-    limit 1;
+    previous := doctor.imported_before(tenant, create_import.integration_id, create_import.sha256);
     if previous is not null then
       reason := 'Arquivo já importado nesta Integração';
     end if;
   end if;
 
-  insert into doctor.imports (tenant_id, integration_id, filename, size_bytes, sha256, format, status, error, duplicate_of)
-  values (
-    tenant, create_import.integration_id, create_import.filename, create_import.size_bytes,
-    create_import.sha256, detected, case when reason is null then 'pending' else 'rejected' end,
-    reason, previous
+  if reason is null then
+    insert into doctor.raw_log_objects (tenant_id, storage_path, sha256, size_bytes, source, expires_at)
+    values (
+      tenant, doctor.import_storage_path(tenant, new_id, detected), create_import.sha256,
+      create_import.size_bytes, 'import', now() + interval '1 day'
+    )
+    returning raw_log_objects.id into raw_id;
+  end if;
+
+  insert into doctor.imports (
+    id, tenant_id, integration_id, raw_log_object_id, filename, size_bytes, sha256, format,
+    status, error, duplicate_of
   )
-  returning imports.id into new_id;
+  values (
+    new_id, tenant, create_import.integration_id, raw_id, create_import.filename,
+    create_import.size_bytes, create_import.sha256, detected,
+    case when reason is null then 'pending' else 'rejected' end, reason, previous
+  );
 
   return query
-  select i.id, i.status, i.format, i.error, i.duplicate_of,
-    case when i.status = 'pending' then tenant || '/imports/' || i.id || '/' || i.filename end
-  from doctor.imports i where i.id = new_id;
+  select i.id, i.status, i.format, i.error, i.duplicate_of from doctor.imports i where i.id = new_id;
 end;
 $$;
 
--- security definer: marca o upload como concluído, registra o Log bruto e enfileira o
--- processamento na outbox, numa transação só. O tamanho é o que o Storage informou à API.
-create function doctor.complete_import(target uuid, stored_size bigint)
+-- A primeira Importação, já recebida, do mesmo arquivo na mesma Integração. A trava serializa
+-- duas Importações do mesmo arquivo (duas abas, clique duplo) até o fim da transação.
+create function doctor.imported_before(tenant uuid, integration uuid, sha text)
+returns uuid
+language plpgsql
+set search_path = ''
+as $$
+declare
+  previous uuid;
+begin
+  perform pg_advisory_xact_lock(hashtextextended(tenant::text || integration::text || sha, 0));
+  select i.id into previous from doctor.imports i
+  where i.tenant_id = tenant and i.integration_id = integration and i.sha256 = sha
+    and i.status in ('uploaded', 'processing', 'done')
+  order by i.created_at
+  limit 1;
+  return previous;
+end;
+$$;
+
+revoke all on function doctor.imported_before(uuid, uuid, text) from public, authenticated, service_role;
+
+-- Encerra uma pendente: `uploaded` (Log bruto passa a valer 30 dias e a mensagem vai para a
+-- outbox) ou `rejected` (Log bruto vence já, para a retenção apagar). Mesma transação sempre.
+create function doctor.finish_import(target uuid, stored_size bigint, reason text)
 returns void
 language plpgsql
 security definer
@@ -184,8 +230,7 @@ as $$
 declare
   tenant uuid := doctor.current_tenant_id();
   pending_import doctor.imports;
-  path text;
-  raw_id uuid;
+  previous uuid;
 begin
   if tenant is null or not doctor.has_member_role('owner', 'admin', 'analyst') then
     raise insufficient_privilege using message = 'Papel não importa logs';
@@ -197,66 +242,44 @@ begin
   if pending_import.status <> 'pending' then
     raise exception 'Importação não está pendente' using errcode = 'DR005';
   end if;
+  if reason is null then
+    -- De novo aqui: outra Importação do mesmo arquivo pode ter sido recebida enquanto esta subia.
+    previous := doctor.imported_before(tenant, pending_import.integration_id, pending_import.sha256);
+    if previous is not null then
+      reason := 'Arquivo já importado nesta Integração';
+    end if;
+  end if;
 
-  path := tenant || '/imports/' || pending_import.id || '/' || pending_import.filename;
-  insert into doctor.raw_log_objects (tenant_id, storage_path, sha256, size_bytes, source)
-  values (tenant, path, pending_import.sha256, stored_size, 'import')
-  returning id into raw_id;
+  update doctor.raw_log_objects
+  set size_bytes = least(stored_size, 52428800),
+      expires_at = case when reason is null then now() + interval '30 days' else now() end
+  where id = pending_import.raw_log_object_id;
 
   update doctor.imports
-  set status = 'uploaded', raw_log_object_id = raw_id, size_bytes = stored_size
+  set status = case when reason is null then 'uploaded' else 'rejected' end,
+      error = left(reason, 500),
+      duplicate_of = previous,
+      size_bytes = stored_size
   where id = pending_import.id;
 
-  insert into doctor.outbox_messages (tenant_id, topic, payload)
-  values (
-    tenant, 'ingestion.raw',
-    jsonb_build_object('import_id', pending_import.id, 'raw_log_object_id', raw_id, 'storage_path', path)
-  );
-end;
-$$;
-
--- security definer: recusa uma Importação pendente cujo conteúdo não bate com o formato. Se o
--- arquivo chegou ao Storage, ele vira Log bruto já vencido: a retenção (ticket #29) o apaga, e
--- nada fica no bucket sem registro.
-create function doctor.reject_import(target uuid, reason text, stored_size bigint default null)
-returns void
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  tenant uuid := doctor.current_tenant_id();
-  pending_import doctor.imports;
-  raw_id uuid;
-begin
-  if tenant is null or not doctor.has_member_role('owner', 'admin', 'analyst') then
-    raise insufficient_privilege using message = 'Papel não importa logs';
-  end if;
-  select * into pending_import from doctor.imports i
-  where i.id = target and i.tenant_id = tenant and i.status = 'pending' for update;
-  if not found then
-    raise no_data_found using message = 'Importação pendente não encontrada';
-  end if;
-  if stored_size is not null then
-    insert into doctor.raw_log_objects (tenant_id, storage_path, sha256, size_bytes, source, expires_at)
+  if reason is null then
+    insert into doctor.outbox_messages (tenant_id, topic, payload)
     values (
-      tenant, tenant || '/imports/' || pending_import.id || '/' || pending_import.filename,
-      pending_import.sha256, least(stored_size, 52428800), 'import', now()
-    )
-    returning id into raw_id;
+      tenant, 'ingestion.raw',
+      jsonb_build_object(
+        'import_id', pending_import.id,
+        'raw_log_object_id', pending_import.raw_log_object_id,
+        'storage_path', doctor.import_storage_path(tenant, pending_import.id, pending_import.format)
+      )
+    );
   end if;
-  update doctor.imports
-  set status = 'rejected', error = left(reason, 500), raw_log_object_id = raw_id
-  where id = pending_import.id;
 end;
 $$;
 
 revoke all on function doctor.create_import(uuid, text, bigint, text) from public, service_role;
-revoke all on function doctor.complete_import(uuid, bigint) from public, service_role;
-revoke all on function doctor.reject_import(uuid, text, bigint) from public, service_role;
+revoke all on function doctor.finish_import(uuid, bigint, text) from public, service_role;
 grant execute on function doctor.create_import(uuid, text, bigint, text) to authenticated;
-grant execute on function doctor.complete_import(uuid, bigint) to authenticated;
-grant execute on function doctor.reject_import(uuid, text, bigint) to authenticated;
+grant execute on function doctor.finish_import(uuid, bigint, text) to authenticated;
 
 -- Bucket privado do Doctor no Storage, que é do projeto inteiro (ADR-0009): nome com prefixo e
 -- políticas restritas a ele, sem efeito nos buckets do jayv-coder.
@@ -264,21 +287,19 @@ insert into storage.buckets (id, name, public, file_size_limit)
 values ('doctor-raw-logs', 'doctor-raw-logs', false, 52428800)
 on conflict (id) do nothing;
 
--- Caminho: {tenant_id}/imports/{import_id}/{arquivo}. Sobe só quem importa, só na pasta da
--- Organização ativa e só para uma Importação pendente dela.
+-- Sobe só quem importa, só na pasta da Organização ativa e só no caminho de uma Importação
+-- pendente dela.
 create policy doctor_raw_logs_insert on storage.objects
 for insert to authenticated
 with check (
   bucket_id = 'doctor-raw-logs'
   and (storage.foldername(name))[1] = (select doctor.current_tenant_id())::text
-  and (storage.foldername(name))[2] = 'imports'
   and (select doctor.has_member_role('owner', 'admin', 'analyst'))
   and exists (
     select 1 from doctor.imports i
     where i.tenant_id = (select doctor.current_tenant_id())
-      and i.id::text = (storage.foldername(name))[3]
       and i.status = 'pending'
-      and name = i.tenant_id || '/imports/' || i.id || '/' || i.filename
+      and name = doctor.import_storage_path(i.tenant_id, i.id, i.format)
   )
 );
 

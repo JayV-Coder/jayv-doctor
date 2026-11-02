@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(32);
+select plan(36);
 
 select has_table('doctor', 'imports', 'tabela doctor.imports existe');
 select has_table('doctor', 'raw_log_objects', 'tabela doctor.raw_log_objects existe');
@@ -39,10 +39,21 @@ select tests.authenticate_as(
 create temporary table created as
 select * from doctor.create_import('00000000-0000-4000-8000-0000000001a1', 'sap-orders.ndjson', 1200, tests.sha('a'));
 select results_eq(
-  $$select status, format, storage_path like '00000000-0000-4000-8000-00000000ac01/imports/' || id || '/sap-orders.ndjson'
-    from created$$,
-  $$values ('pending'::text, 'ndjson'::text, true)$$,
-  'cria a Importação pendente, com o caminho do tenant'
+  $$select c.status, c.format, r.storage_path = '00000000-0000-4000-8000-00000000ac01/imports/' || c.id || '/upload.ndjson',
+      r.expires_at < now() + interval '2 days'
+    from created c join doctor.imports i on i.id = c.id join doctor.raw_log_objects r on r.id = i.raw_log_object_id$$,
+  $$values ('pending'::text, 'ndjson'::text, true, true)$$,
+  'pendente nasce com Log bruto no caminho do tenant, vencendo em 1 dia se o upload não terminar'
+);
+select results_eq(
+  $$select status, error from doctor.create_import('00000000-0000-4000-8000-0000000001a1', 'relatório de pedidos.csv', 10, tests.sha('acento'))$$,
+  $$values ('pending'::text, null::text)$$,
+  'nome com acento e espaço vale: ele não entra na chave do Storage'
+);
+select results_eq(
+  $$select status, error from doctor.create_import('00000000-0000-4000-8000-0000000001a1', 'vazio.csv', 0, tests.sha(''))$$,
+  $$values ('rejected'::text, 'Arquivo vazio'::text)$$,
+  'arquivo vazio fica rejected'
 );
 select results_eq(
   $$select status, error from doctor.create_import('00000000-0000-4000-8000-0000000001a1', 'pedidos.xml', 10, tests.sha('x'))$$,
@@ -76,7 +87,7 @@ select throws_ok(
 select lives_ok(
   format(
     $$insert into storage.objects (bucket_id, name, owner_id) values ('doctor-raw-logs', %L, auth.uid()::text)$$,
-    (select storage_path from created)
+    (select doctor.import_storage_path('00000000-0000-4000-8000-00000000ac01', id, format) from created)
   ),
   'sobe o arquivo no caminho da Importação pendente'
 );
@@ -93,18 +104,23 @@ select throws_ok(
 
 -- Concluir: Log bruto registrado, mensagem na outbox, tudo numa transação.
 select lives_ok(
-  format($$select doctor.complete_import(%L, 1200)$$, (select id from created)),
+  format($$select doctor.finish_import(%L, 1200, null)$$, (select id from created)),
   'conclui o upload'
 );
 select results_eq(
   $$select i.status, r.source, r.size_bytes::int, r.expires_at > now() + interval '29 days'
-    from doctor.imports i join doctor.raw_log_objects r on r.id = i.raw_log_object_id$$,
+    from doctor.imports i join doctor.raw_log_objects r on r.id = i.raw_log_object_id
+    where i.id = (select id from created)$$,
   $$values ('uploaded'::text, 'import'::text, 1200, true)$$,
   'Importação uploaded aponta para o Log bruto, que expira em 30 dias'
 );
 select throws_ok(
-  format($$select doctor.complete_import(%L, 1200)$$, (select id from created)),
+  format($$select doctor.finish_import(%L, 1200, null)$$, (select id from created)),
   'DR005', null, 'concluir de novo é recusado'
+);
+select throws_ok(
+  format($$select doctor.finish_import(%L, 1200, 'Conteúdo não corresponde ao formato')$$, (select id from created)),
+  'DR005', null, 'recusar depois de concluída também é recusado, com o mesmo erro'
 );
 select throws_ok($$select 1 from doctor.outbox_messages$$, '42501', null, 'a outbox não é lida pelo cliente');
 select tests.clear_authentication();
@@ -126,15 +142,29 @@ select results_eq(
   format($$values ('rejected'::text, %L::text, 'Arquivo já importado nesta Integração'::text)$$, (select id from created)),
   'mesmo sha256 na mesma Integração vira duplicada'
 );
+-- Mesmo arquivo em duas abas: as duas ficam pendentes; a segunda a concluir vira duplicada.
+create temporary table twins as
+select 1 as n, * from doctor.create_import('00000000-0000-4000-8000-0000000001a1', 'aba1.ndjson', 30, tests.sha('par'))
+union all
+select 2, * from doctor.create_import('00000000-0000-4000-8000-0000000001a1', 'aba2.ndjson', 30, tests.sha('par'));
+select doctor.finish_import((select id from twins where n = 1), 30, null);
+select doctor.finish_import((select id from twins where n = 2), 30, null);
+select results_eq(
+  $$select i.status, i.duplicate_of = (select id from twins where n = 1), r.expires_at <= now()
+    from doctor.imports i join doctor.raw_log_objects r on r.id = i.raw_log_object_id
+    where i.id = (select id from twins where n = 2)$$,
+  $$values ('rejected'::text, true, true)$$,
+  'a segunda do mesmo arquivo vira duplicada ao concluir, sem segunda mensagem na outbox'
+);
 select is(
-  (select count(*)::int from doctor.imports), 4, 'o Analyst vê as Importações da Organização'
+  (select count(*)::int from doctor.imports), 8, 'o Analyst vê as Importações da Organização'
 );
 
 -- Conteúdo errado depois do upload: recusada, e o objeto vira Log bruto vencido para a retenção.
 create temporary table wrong as
 select * from doctor.create_import('00000000-0000-4000-8000-0000000001a1', 'imagem.csv', 16, tests.sha('png'));
 select lives_ok(
-  format($$select doctor.reject_import(%L, 'Conteúdo não corresponde ao formato', 16)$$, (select id from wrong)),
+  format($$select doctor.finish_import(%L, 16, 'Conteúdo não corresponde ao formato')$$, (select id from wrong)),
   'recusa pelo conteúdo'
 );
 select results_eq(
@@ -148,7 +178,7 @@ select results_eq(
 select tests.authenticate_as(
   '00000000-0000-4000-8000-0000000a0002', '00000000-0000-4000-8000-00000000ac01', 'viewer'
 );
-select is((select count(*)::int from doctor.imports), 5, 'Viewer vê as Importações');
+select is((select count(*)::int from doctor.imports), 9, 'Viewer vê as Importações');
 select throws_ok(
   $$select doctor.create_import('00000000-0000-4000-8000-0000000001a1', 'v.csv', 10, tests.sha('v'))$$,
   '42501', null, 'Viewer não importa'
@@ -176,7 +206,7 @@ select is_empty(
   $$select 1 from storage.objects where bucket_id = 'doctor-raw-logs'$$, 'outra Organização não lê o objeto'
 );
 select throws_ok(
-  format($$select doctor.complete_import(%L, 1200)$$, (select id from created)),
+  format($$select doctor.finish_import(%L, 1200, null)$$, (select id from created)),
   'P0002', null, 'outra Organização não conclui a Importação'
 );
 select tests.clear_authentication();

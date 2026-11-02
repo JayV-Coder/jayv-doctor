@@ -220,12 +220,9 @@ isOneToOne: false
             "accept_invitation":
 { Args: { "token_hash": string }; Returns: string
                            },
-"complete_import":
-{ Args: { "stored_size": number,"target": string }; Returns: undefined
-                           },
 "create_import":
 { Args: { "filename": string,"integration_id": string,"sha256": string,"size_bytes": number }; Returns: {
-              "duplicate_of": string,"error": string,"format": string,"id": string,"status": string,"storage_path": string
+              "duplicate_of": string,"error": string,"format": string,"id": string,"status": string
             }[]
                            },
 "create_organization":
@@ -243,11 +240,20 @@ isOneToOne: false
 "custom_access_token_hook":
 { Args: { "event": Json }; Returns: Json
                            },
+"finish_import":
+{ Args: { "reason": string,"stored_size": number,"target": string }; Returns: undefined
+                           },
 "has_member_role":
 { Args: { "roles": (string)[] }; Returns: boolean
                            },
 "has_role":
 { Args: { "roles": (string)[] }; Returns: boolean
+                           },
+"import_storage_path":
+{ Args: { "format": string,"import_id": string,"tenant": string }; Returns: string
+                           },
+"imported_before":
+{ Args: { "integration": string,"sha": string,"tenant": string }; Returns: string
                            },
 "invite_member":
 { Args: { "email": string,"role": string,"token_hash": string }; Returns: {
@@ -287,9 +293,6 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
-"reject_import":
-{ Args: { "reason": string,"target": string }; Returns: undefined
-                           },
 "remove_member":
 { Args: { "target": string }; Returns: undefined
                            },

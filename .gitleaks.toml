@@ -3,4 +3,10 @@ useDefault = true
 
 [allowlist]
 description = "Valores de exemplo, sem segredo real"
-paths = ['''\.env\.example$''', '''pnpm-lock\.yaml$''', '''uv\.lock$''']
+paths = [
+  '''\.env\.example$''',
+  '''pnpm-lock\.yaml$''',
+  '''uv\.lock$''',
+  # Corpus e testes do Sanitizer (ticket #13): chaves e tokens falsos de propósito.
+  '''^packages/security/(tests|scripts)/''',
+]

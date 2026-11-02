@@ -1,10 +1,18 @@
 import time
+from collections.abc import AsyncIterator
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from aid_api.core.auth import Claims, TokenVerifier, get_claims, get_verifier
-from aid_api.core.idempotency import IdempotencyStore, Stored, get_idempotency_store
+from aid_api.core.idempotency import (
+    IdempotencySession,
+    IdempotencyStore,
+    Stored,
+    get_idempotency_store,
+)
 from aid_api.core.rate_limit import TokenBucketLimiter, get_limiter
 from aid_api.core.telemetry import annotate_span
 from aid_api.health.router import get_readiness
@@ -26,22 +34,39 @@ OWNER = Claims(
 INVITE = {"email": "carla@acme.test", "role": "analyst"}
 
 
-class MemoryStore(IdempotencyStore):
-    def __init__(self) -> None:
-        self.rows: dict[str, dict[str, Any]] = {}
+class MemorySession(IdempotencySession):
+    """Como o Postgres: o que a requisição grava só vale se ela terminar sem erro."""
 
-    async def reserve(self, claims: Claims, key: str, request_hash: str) -> Stored | None:
-        row = self.rows.get(key)
+    def __init__(self, store: "MemoryStore", claims: Claims) -> None:
+        self.store = store
+        self.claims = claims
+        self.pending: dict[str, dict[str, Any]] = {}
+
+    async def reserve(self, key: str, request_hash: str) -> Stored | None:
+        row = self.store.rows.get(key)
         if row is None:
-            self.rows[key] = {"hash": request_hash, "status": None, "body": None}
+            self.pending[key] = {"hash": request_hash, "status": None, "body": None}
             return None
         return Stored(row["hash"], row["status"], row["body"])
 
-    async def remember(self, claims: Claims, key: str, status: int, body: str) -> None:
-        self.rows[key].update(status=status, body=body)
+    async def remember(self, key: str, status: int, body: str) -> None:
+        if self.store.fail_remember:
+            raise OSError
+        self.pending[key].update(status=status, body=body)
 
-    async def release(self, claims: Claims, key: str) -> None:
-        del self.rows[key]
+
+class MemoryStore(IdempotencyStore):
+    def __init__(self) -> None:
+        self.rows: dict[str, dict[str, Any]] = {}
+        self.opened = 0
+        self.fail_remember = False
+
+    @asynccontextmanager
+    async def session(self, claims: Claims) -> AsyncIterator[IdempotencySession]:
+        self.opened += 1
+        session = MemorySession(self, claims)
+        yield session
+        self.rows.update(session.pending)
 
 
 class CountingRepository(MemberRepository):
@@ -122,19 +147,44 @@ def test_mesma_chave_de_outro_usuario_nao_reaproveita_a_resposta() -> None:
     assert invite(target).status_code == 422
 
 
-def test_requisicao_em_andamento_responde_409() -> None:
-    target = harness()
-    invite(target, "k1")
-    target.store.rows["k2"] = {**target.store.rows["k1"], "status": None, "body": None}
-    response = invite(target, "k2")
-    assert response.status_code == 409
-    assert response.json()["code"] == "idempotency_in_progress"
-
-
-def test_erro_libera_a_chave_para_tentar_de_novo() -> None:
+def test_erro_nao_grava_a_chave() -> None:
     target = harness(fail=True)
     assert invite(target).status_code == 409
     assert target.store.rows == {}
+
+
+def test_falha_ao_gravar_a_resposta_desfaz_tudo_e_nao_prende_a_chave() -> None:
+    target = harness()
+    target.store.fail_remember = True
+    assert invite(target).status_code == 500
+    assert target.store.rows == {}
+    target.store.fail_remember = False
+    assert invite(target).status_code == 201
+
+
+def test_resposta_gravada_nao_dispensa_a_permissao() -> None:
+    target = harness()
+    invite(target)
+    target.client.app.dependency_overrides[get_claims] = lambda: Claims(  # type: ignore[attr-defined]
+        sub=USER_ID, email=None, aal="aal2", tenant_id=TENANT_ID, tenant_role="viewer"
+    )
+    response = invite(target)
+    assert response.status_code == 403
+    assert response.json()["code"] == "forbidden"
+
+
+def test_corpo_invalido_nao_reserva_a_chave() -> None:
+    target = harness()
+    response = invite(target, body={"email": "x"})
+    assert response.status_code == 422
+    assert target.store.opened == 0
+
+
+def test_chave_vazia_responde_422() -> None:
+    target = harness()
+    response = invite(target, key="")
+    assert response.status_code == 422
+    assert response.json()["code"] == "validation_error"
 
 
 def test_sem_chave_nada_e_gravado() -> None:
@@ -158,6 +208,13 @@ def test_rate_limit_responde_429_com_retry_after() -> None:
     assert response.json()["code"] == "rate_limited"
     assert int(response.headers["retry-after"]) >= 1
     assert response.headers["content-type"].startswith("application/problem+json")
+
+
+def test_rate_limit_resiste_a_rajada_concorrente() -> None:
+    limiter = TokenBucketLimiter(capacity=5, per_minute=60, clock=lambda: 0.0)
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        results = list(pool.map(lambda _: limiter.allow("k"), range(200)))
+    assert sum(1 for wait in results if wait == 0) == 5
 
 
 def test_rate_limit_separa_tenant_e_usuario() -> None:

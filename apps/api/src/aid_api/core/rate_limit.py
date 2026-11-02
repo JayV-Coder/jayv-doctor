@@ -57,7 +57,8 @@ def get_limiter() -> TokenBucketLimiter:
     return TokenBucketLimiter(per_minute, per_minute)
 
 
-def rate_limit(
+# `async`: roda no event loop, sem threads alternando no meio de `allow`.
+async def rate_limit(
     claims: Annotated[Claims, Depends(get_claims)],
     limiter: Annotated[TokenBucketLimiter, Depends(get_limiter)],
 ) -> None:

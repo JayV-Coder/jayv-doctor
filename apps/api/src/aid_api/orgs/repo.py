@@ -56,19 +56,23 @@ def sqlstate(exc: DBAPIError) -> str | None:
 
 
 @asynccontextmanager
-async def transaction(claims: Claims) -> AsyncIterator[AsyncConnection]:
+async def transaction(
+    claims: Claims, overrides: dict[str, Callable[[], ApiError]] | None = None
+) -> AsyncIterator[AsyncConnection]:
+    """`tenant_tx` que traduz o erro do banco em erro da API; `overrides` vale por rota."""
     try:
         async with tenant_tx(claims) as connection:
             yield connection
     except DBAPIError as exc:
-        error = translate(sqlstate(exc))
-        if error:
-            raise error from exc
+        state = sqlstate(exc) or ""
+        factory = (overrides or {}).get(state) or ERRORS.get(state)
+        if factory:
+            raise factory() from exc
         raise
 
 
 class MeRepository:
-    async def profile(self, claims: Claims) -> Profile | None:
+    async def me(self, claims: Claims) -> tuple[Profile | None, list[Organization]]:
         async with tenant_tx(claims) as connection:
             result = await connection.execute(
                 text(
@@ -77,47 +81,35 @@ class MeRepository:
                 )
             )
             row = result.mappings().first()
-        return Profile.model_validate(dict(row)) if row else None
-
-    async def organizations(self, claims: Claims) -> list[Organization]:
-        async with tenant_tx(claims) as connection:
-            result = await connection.execute(
+            organizations = await connection.execute(
                 text(
                     "select id::text, name, slug, role"
                     " from doctor.list_organizations() order by name"
                 )
             )
-            return [Organization.model_validate(dict(row)) for row in result.mappings()]
+            return (
+                Profile.model_validate(dict(row)) if row else None,
+                [Organization.model_validate(dict(item)) for item in organizations.mappings()],
+            )
 
 
 class OrganizationRepository:
     async def create(self, claims: Claims, organization: NewOrganization) -> str:
-        try:
-            async with tenant_tx(claims) as connection:
-                result = await connection.execute(
-                    text(
-                        "select doctor.create_organization("
-                        ":name, :slug, :segment, :llm_provider)::text"
-                    ),
-                    organization.model_dump(exclude={"dpa_accepted"}),
-                )
-                return str(result.scalar_one())
-        except DBAPIError as exc:
-            if sqlstate(exc) == "23505":
-                raise slug_taken() from exc
-            raise
+        async with transaction(claims, {"23505": slug_taken}) as connection:
+            result = await connection.execute(
+                text(
+                    "select doctor.create_organization(:name, :slug, :segment, :llm_provider)::text"
+                ),
+                organization.model_dump(exclude={"dpa_accepted"}),
+            )
+            return str(result.scalar_one())
 
     async def switch(self, claims: Claims, tenant_id: str) -> None:
-        try:
-            async with tenant_tx(claims) as connection:
-                await connection.execute(
-                    text("select doctor.switch_organization(cast(:tenant_id as uuid))"),
-                    {"tenant_id": tenant_id},
-                )
-        except DBAPIError as exc:
-            if sqlstate(exc) == "42501":
-                raise not_a_member() from exc
-            raise
+        async with transaction(claims, {"42501": not_a_member}) as connection:
+            await connection.execute(
+                text("select doctor.switch_organization(cast(:tenant_id as uuid))"),
+                {"tenant_id": tenant_id},
+            )
 
 
 class MemberRepository:

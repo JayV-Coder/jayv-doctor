@@ -7,14 +7,14 @@ export type Database = {
           Tables: {
             "idempotency_keys": {
                   Row: {
-                    "created_at": string,"key": string,"request_hash": string,"response_body": string | null,"response_status": number | null,"tenant_id": string
+                    "created_at": string,"id": string,"key": string,"request_hash": string,"response_body": string | null,"response_status": number | null,"tenant_id": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"key": string,"request_hash": string,"response_body"?: string | null,"response_status"?: number | null,"tenant_id": string
+                    "created_at"?: string,"id"?: string,"key": string,"request_hash": string,"response_body"?: string | null,"response_status"?: number | null,"tenant_id": string,"user_id"?: string
                   }
                   Update: {
-                    "created_at"?: string,"key"?: string,"request_hash"?: string,"response_body"?: string | null,"response_status"?: number | null,"tenant_id"?: string
+                    "created_at"?: string,"id"?: string,"key"?: string,"request_hash"?: string,"response_body"?: string | null,"response_status"?: number | null,"tenant_id"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {

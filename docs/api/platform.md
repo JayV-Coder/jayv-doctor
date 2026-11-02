@@ -8,13 +8,13 @@ Vale para toda rota em `/api/v1`.
 
 ## `Idempotency-Key`
 
-Em `POST`, `PATCH` e `DELETE`, dentro de uma Organização ativa:
+Em `POST`, `PATCH` e `DELETE`, dentro de uma Organização ativa, por Usuário:
 
-- mesma chave e mesmo corpo, do mesmo Usuário: devolve a resposta gravada, sem novo efeito;
-- mesma chave com outro corpo ou outro Usuário: `422 idempotency_key_reused`;
-- mesma chave ainda em execução: `409 idempotency_in_progress`.
+- mesma chave e mesmo corpo: devolve a resposta gravada, sem novo efeito;
+- mesma chave com outro corpo: `422 idempotency_key_reused`;
+- mesma chave em paralelo: a segunda espera a primeira terminar e devolve a resposta dela.
 
-Só respostas de sucesso ficam gravadas, por 24 h. Em erro, a chave é liberada e a próxima tentativa executa de verdade. Se a instância cair no meio, a chave fica presa por até 5 min, e o efeito pode se repetir depois disso.
+Reserva, efeito e resposta gravada ficam na mesma transação: em erro, nada é gravado, e a próxima tentativa executa de verdade. A permissão é conferida antes de devolver uma resposta gravada. Respostas ficam 24 h; a limpeza é feita pela própria API.
 
 ## Rate limit
 

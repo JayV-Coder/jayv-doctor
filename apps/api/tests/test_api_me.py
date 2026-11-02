@@ -13,11 +13,8 @@ ORGANIZATION = Organization(id=TENANT_ID, name="Acme", slug="acme", role="owner"
 
 
 class FakeRepository(MeRepository):
-    async def profile(self, claims: Claims) -> Profile | None:
-        return PROFILE
-
-    async def organizations(self, claims: Claims) -> list[Organization]:
-        return [ORGANIZATION] if claims.tenant_id else []
+    async def me(self, claims: Claims) -> tuple[Profile | None, list[Organization]]:
+        return PROFILE, [ORGANIZATION] if claims.tenant_id else []
 
 
 def get_me(claims: Claims) -> Any:

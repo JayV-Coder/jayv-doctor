@@ -1,5 +1,6 @@
 """Contra um Postgres real. Rodam só com INTEGRATION_DB_URL, no job de E2E do CI."""
 
+import asyncio
 import os
 from collections.abc import AsyncIterator
 from uuid import uuid4
@@ -8,6 +9,7 @@ import pytest
 import pytest_asyncio
 from aid_api.core.auth import Claims
 from aid_api.core.db import tenant_tx
+from aid_api.core.idempotency import IdempotencyStore
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -16,9 +18,9 @@ URL = os.environ.get("INTEGRATION_DB_URL")
 pytestmark = pytest.mark.skipif(URL is None, reason="sem INTEGRATION_DB_URL")
 
 
-def claims_for(tenant_id: str, role: str = "viewer") -> Claims:
+def claims_for(tenant_id: str, user_id: str, role: str = "viewer") -> Claims:
     raw = {
-        "sub": str(uuid4()),
+        "sub": user_id,
         "role": "authenticated",
         "aal": "aal1",
         "tenant_id": tenant_id,
@@ -37,6 +39,23 @@ async def engine() -> AsyncIterator[AsyncEngine]:
     )
     yield created
     await created.dispose()
+
+
+@pytest_asyncio.fixture
+async def user(engine: AsyncEngine) -> AsyncIterator[str]:
+    user_id = str(uuid4())
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "insert into auth.users (id, instance_id, aud, role, email)"
+                " values (:i, '00000000-0000-0000-0000-000000000000', 'authenticated',"
+                " 'authenticated', :e)"
+            ),
+            {"i": user_id, "e": f"{user_id}@integracao.test"},
+        )
+    yield user_id
+    async with engine.begin() as connection:
+        await connection.execute(text("delete from auth.users where id = :i"), {"i": user_id})
 
 
 @pytest_asyncio.fixture
@@ -74,21 +93,71 @@ async def assert_isolated(
 
 @pytest.mark.asyncio
 async def test_rls_age_dentro_da_api_sem_filtro_de_tenant(
-    engine: AsyncEngine, tenants: tuple[str, str]
+    engine: AsyncEngine, tenants: tuple[str, str], user: str
 ) -> None:
     first, second = tenants
-    await assert_isolated(engine, claims_for(first), "doctor.tenants", "id", first)
-    await assert_isolated(engine, claims_for(second), "doctor.tenants", "id", second)
+    await assert_isolated(engine, claims_for(first, user), "doctor.tenants", "id", first)
+    await assert_isolated(engine, claims_for(second, user), "doctor.tenants", "id", second)
 
 
 @pytest.mark.asyncio
 async def test_rota_de_usuario_nunca_usa_service_role(
-    engine: AsyncEngine, tenants: tuple[str, str]
+    engine: AsyncEngine, tenants: tuple[str, str], user: str
 ) -> None:
-    async with tenant_tx(claims_for(tenants[0]), engine) as connection:
+    async with tenant_tx(claims_for(tenants[0], user), engine) as connection:
         role = await connection.scalar(text("select current_user"))
         bypass = await connection.scalar(
             text("select rolbypassrls from pg_roles where rolname = current_user")
         )
     assert role == "authenticated"
     assert bypass is False
+
+
+@pytest.mark.asyncio
+async def test_mesma_chave_concorrente_espera_e_devolve_a_resposta_gravada(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str
+) -> None:
+    store = IdempotencyStore(engine)
+    claims = claims_for(tenants[0], user)
+    first_reserved = asyncio.Event()
+    release_first = asyncio.Event()
+
+    async def first() -> None:
+        async with store.session(claims) as session:
+            assert await session.reserve("k", "h") is None
+            first_reserved.set()
+            await release_first.wait()
+            await session.remember("k", 201, '{"id": "1"}')
+
+    async def second() -> object:
+        await first_reserved.wait()
+        async with store.session(claims) as session:
+            return await session.reserve("k", "h")
+
+    running = asyncio.create_task(first())
+    waiting = asyncio.create_task(second())
+    await asyncio.sleep(0.3)
+    assert not waiting.done(), "a segunda chamada precisa esperar a primeira"
+    release_first.set()
+    await running
+    stored = await waiting
+    assert stored is not None
+    assert stored.status == 201  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_chave_de_requisicao_que_falhou_fica_livre(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str
+) -> None:
+    store = IdempotencyStore(engine)
+    claims = claims_for(tenants[0], user)
+
+    async def failing_request() -> None:
+        async with store.session(claims) as session:
+            await session.reserve("k2", "h")
+            raise RuntimeError
+
+    with pytest.raises(RuntimeError):
+        await failing_request()
+    async with store.session(claims) as session:
+        assert await session.reserve("k2", "h") is None

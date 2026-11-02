@@ -4,6 +4,7 @@ import json
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from functools import lru_cache
 from uuid import uuid4
 
@@ -30,10 +31,20 @@ def get_engine() -> AsyncEngine:
     )
 
 
+# Transação da requisição, aberta pela idempotência: reserva, efeito e resposta gravada são uma
+# coisa só. Quem abre `tenant_tx` com as mesmas claims dentro dela ganha um savepoint.
+_request: ContextVar[tuple[Claims, AsyncConnection] | None] = ContextVar("request_tx", default=None)
+
+
 @asynccontextmanager
 async def tenant_tx(
     claims: Claims, engine: AsyncEngine | None = None
 ) -> AsyncIterator[AsyncConnection]:
+    current = _request.get()
+    if current is not None and current[0] == claims:
+        async with current[1].begin_nested():
+            yield current[1]
+        return
     async with (engine or get_engine()).begin() as connection:
         await connection.execute(text("set local role authenticated"))
         await connection.execute(
@@ -41,3 +52,15 @@ async def tenant_tx(
             {"claims": json.dumps(claims.raw)},
         )
         yield connection
+
+
+@asynccontextmanager
+async def request_tx(
+    claims: Claims, engine: AsyncEngine | None = None
+) -> AsyncIterator[AsyncConnection]:
+    async with tenant_tx(claims, engine) as connection:
+        token = _request.set((claims, connection))
+        try:
+            yield connection
+        finally:
+            _request.reset(token)

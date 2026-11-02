@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, status
 
 from aid_api.core.auth import Claims, get_claims, require_aal2_claims, require_role
-from aid_api.core.idempotency import IdempotentRoute, idempotency
+from aid_api.core.idempotency import Idempotent, IdempotentRoute
 from aid_api.core.permissions import MANAGE_MEMBERS
 from aid_api.core.rate_limit import rate_limit
 from aid_api.orgs import service
@@ -35,7 +35,7 @@ from aid_api.orgs.schemas import (
 router = APIRouter(
     prefix="/api/v1",
     route_class=IdempotentRoute,
-    dependencies=[Depends(rate_limit), Depends(idempotency)],
+    dependencies=[Depends(rate_limit)],
 )
 
 
@@ -56,12 +56,13 @@ MailerDep = Annotated[Mailer, Depends(get_mailer)]
 async def get_me(
     claims: CurrentClaims, repository: Annotated[MeRepository, Depends(get_me_repository)]
 ) -> Me:
+    profile, organizations = await repository.me(claims)
     return Me(
         id=claims.sub,
         email=claims.email,
         aal=claims.aal,
-        profile=await repository.profile(claims),
-        organizations=await repository.organizations(claims),
+        profile=profile,
+        organizations=organizations,
         active_tenant_id=claims.tenant_id,
         active_role=claims.tenant_role,
     )
@@ -74,14 +75,14 @@ async def get_me(
     tags=["orgs"],
 )
 async def create_organization(
-    organization: NewOrganization, claims: CurrentClaims, repository: Organizations
+    organization: NewOrganization, claims: CurrentClaims, repository: Organizations, _: Idempotent
 ) -> CreatedOrganization:
     return CreatedOrganization(id=await repository.create(claims, organization))
 
 
 @router.post("/orgs/{tenant_id}/switch", status_code=status.HTTP_204_NO_CONTENT, tags=["orgs"])
 async def switch_organization(
-    tenant_id: UUID, claims: CurrentClaims, repository: Organizations
+    tenant_id: UUID, claims: CurrentClaims, repository: Organizations, _: Idempotent
 ) -> None:
     await repository.switch(claims, str(tenant_id))
 
@@ -93,13 +94,15 @@ async def list_memberships(claims: Manager, repository: Members) -> list[Member]
 
 @router.patch("/memberships/{target}", status_code=status.HTTP_204_NO_CONTENT, tags=["members"])
 async def update_membership(
-    target: UUID, change: RoleChange, claims: Manager, repository: Members
+    target: UUID, change: RoleChange, claims: Manager, repository: Members, _: Idempotent
 ) -> None:
     await repository.update_role(claims, str(target), change.role)
 
 
 @router.delete("/memberships/{target}", status_code=status.HTTP_204_NO_CONTENT, tags=["members"])
-async def delete_membership(target: UUID, claims: Manager, repository: Members) -> None:
+async def delete_membership(
+    target: UUID, claims: Manager, repository: Members, _: Idempotent
+) -> None:
     await repository.remove(claims, str(target))
 
 
@@ -115,7 +118,11 @@ async def list_invitations(claims: Manager, repository: Members) -> list[Invitat
     tags=["members"],
 )
 async def create_invitation(
-    invitation: NewInvitation, claims: Manager, repository: Members, mailer: MailerDep
+    invitation: NewInvitation,
+    claims: Manager,
+    repository: Members,
+    mailer: MailerDep,
+    _: Idempotent,
 ) -> CreatedInvitation:
     token, token_hash = service.new_token()
     created, organization = await repository.invite(
@@ -127,7 +134,7 @@ async def create_invitation(
 
 @router.post("/invitations/accept", response_model=AcceptedInvitation, tags=["members"])
 async def accept_invitation(
-    acceptance: Acceptance, claims: CurrentClaims, repository: Members
+    acceptance: Acceptance, claims: CurrentClaims, repository: Members, _: Idempotent
 ) -> AcceptedInvitation:
     tenant_id = await repository.accept(claims, service.hash_token(acceptance.token))
     return AcceptedInvitation(tenant_id=tenant_id)
@@ -137,7 +144,7 @@ async def accept_invitation(
     "/invitations/{target}/resend", status_code=status.HTTP_204_NO_CONTENT, tags=["members"]
 )
 async def resend_invitation(
-    target: UUID, claims: Manager, repository: Members, mailer: MailerDep
+    target: UUID, claims: Manager, repository: Members, mailer: MailerDep, _: Idempotent
 ) -> None:
     token, token_hash = service.new_token()
 
@@ -148,5 +155,7 @@ async def resend_invitation(
 
 
 @router.delete("/invitations/{target}", status_code=status.HTTP_204_NO_CONTENT, tags=["members"])
-async def delete_invitation(target: UUID, claims: Manager, repository: Members) -> None:
+async def delete_invitation(
+    target: UUID, claims: Manager, repository: Members, _: Idempotent
+) -> None:
     await repository.revoke(claims, str(target))

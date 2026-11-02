@@ -393,7 +393,6 @@ export interface operations {
       query?: never;
       header?: {
         authorization?: string | null;
-        "idempotency-key"?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -493,7 +492,6 @@ export interface operations {
       query?: never;
       header?: {
         authorization?: string | null;
-        "idempotency-key"?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -593,7 +591,6 @@ export interface operations {
       query?: never;
       header?: {
         authorization?: string | null;
-        "idempotency-key"?: string | null;
       };
       path?: never;
       cookie?: never;

@@ -1,4 +1,5 @@
 import type { ApiComponents } from "@aid/contracts";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 
 const API_URL = process.env.API_URL ?? "http://127.0.0.1:8000";
@@ -24,11 +25,12 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   });
 }
 
-export async function getMe(): Promise<Me | null> {
+// `cache`: o layout do shell e a página pedem o mesmo `/me` na mesma requisição.
+export const getMe = cache(async (): Promise<Me | null> => {
   try {
     const response = await apiFetch("/me");
     return response.ok ? ((await response.json()) as Me) : null;
   } catch {
     return null;
   }
-}
+});

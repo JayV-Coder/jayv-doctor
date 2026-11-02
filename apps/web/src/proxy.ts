@@ -40,5 +40,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/|favicon.ico|.*\\.(?:svg|png|ico|webmanifest)$).*)"],
+  // O service worker fica fora: sem sessão, um desvio para o login quebraria o registro.
+  matcher: ["/((?!_next/|favicon.ico|sw\\.js$|.*\\.(?:svg|png|ico|webmanifest)$).*)"],
 };

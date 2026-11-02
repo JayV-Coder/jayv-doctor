@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { FormMessage } from "@/components/auth-shell";
-import { renewSession } from "@/app/membros/actions";
+import { renewSession } from "@/app/(app)/membros/actions";
 
 // O JWT leva até 1 h para trazer um Papel novo; quem acabou de ser promovido não precisa esperar.
 export function RenewSessionButton() {

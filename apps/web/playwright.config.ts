@@ -6,13 +6,21 @@ export default defineConfig({
   timeout: 60_000,
   workers: 1,
   reporter: "list",
-  use: { ...devices["Pixel 7"], baseURL: "http://127.0.0.1:3000", trace: "retain-on-failure" },
+  use: { baseURL: "http://127.0.0.1:3000", trace: "retain-on-failure" },
+  // Snapshots sem o nome do sistema: o CI e a máquina local rodam o mesmo Chromium no Linux.
+  snapshotPathTemplate: "{testDir}/__screenshots__/{testFilePath}/{projectName}/{arg}{ext}",
+  projects: [
+    { name: "mobile-chrome", use: { ...devices["Pixel 7"] } },
+    // No desktop, só o que muda de layout: o resto dos fluxos é igual.
+    { name: "desktop", use: { ...devices["Desktop Chrome"] }, testMatch: /shell\.spec\.ts/ },
+  ],
   webServer: [
     {
       command: "pnpm build && pnpm start --hostname 127.0.0.1",
       url: "http://127.0.0.1:3000/login",
       timeout: 180_000,
       reuseExistingServer: true,
+      env: { COMPONENT_CATALOG: "1" },
     },
     {
       command: "uv run uvicorn aid_api.main:app --host 127.0.0.1 --port 8000",

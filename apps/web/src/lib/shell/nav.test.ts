@@ -1,0 +1,47 @@
+import { describe, expect, it } from "vitest";
+import { activeTab, pageTitle, TABS } from "./nav";
+
+describe("TABS", () => {
+  it("segue a barra do mockup: Início, Incidentes, Execuções, Conectores e Mais", () => {
+    expect(TABS.map(({ label }) => label)).toEqual([
+      "Início",
+      "Incidentes",
+      "Execuções",
+      "Conectores",
+      "Mais",
+    ]);
+  });
+});
+
+describe("activeTab", () => {
+  it("destaca a aba da própria rota", () => {
+    expect(activeTab("/")).toBe("/");
+    expect(activeTab("/incidentes")).toBe("/incidentes");
+    expect(activeTab("/conectores")).toBe("/conectores");
+  });
+
+  it("mantém a aba nas telas de detalhe", () => {
+    expect(activeTab("/incidentes/inc-0142")).toBe("/incidentes");
+    expect(activeTab("/execucoes/abc/eventos")).toBe("/execucoes");
+  });
+
+  it("põe em Mais as telas que se abrem de lá", () => {
+    expect(activeTab("/membros")).toBe("/mais");
+  });
+
+  it("não confunde prefixo de palavra com subrota", () => {
+    expect(activeTab("/incidentesx")).toBe("/mais");
+  });
+});
+
+describe("pageTitle", () => {
+  it("usa o rótulo da aba ou o nome da tela", () => {
+    expect(pageTitle("/")).toBe("Início");
+    expect(pageTitle("/execucoes")).toBe("Execuções");
+    expect(pageTitle("/membros")).toBe("Membros");
+  });
+
+  it("cai no rótulo da aba nas subrotas sem título próprio", () => {
+    expect(pageTitle("/incidentes/inc-0142")).toBe("Incidentes");
+  });
+});

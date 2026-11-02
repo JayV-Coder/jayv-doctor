@@ -106,3 +106,36 @@ export async function expectNoHorizontalScroll(page: Page): Promise<void> {
   );
   expect(overflow).toBeLessThanOrEqual(0);
 }
+
+// Sem Organização, o portão leva direto ao cadastro dela.
+export async function fillOrganization(page: Page, name: string): Promise<void> {
+  await expect(page).toHaveURL(/\/organizacoes\/nova/);
+  await page.getByLabel("Nome da organização").fill(name);
+  await page.getByLabel("Segmento").selectOption("Varejo");
+  await page.getByLabel("Li e aceito o DPA").check();
+  await page.getByRole("button", { name: "Criar organização" }).click();
+}
+
+// Owner sem fator é levado ao cadastro assim que o JWT traz o Papel.
+export async function enrollFactor(page: Page): Promise<void> {
+  await expect(page).toHaveURL(/\/mfa\/cadastro/);
+  await page.getByRole("button", { name: "Gerar QR code" }).click();
+  const secret = await page.locator("code.secret").innerText();
+  await fillOtp(page, totp(secret));
+  await page.getByRole("button", { name: "Confirmar" }).click();
+  await expect(page).toHaveURL(/\/seguranca/);
+}
+
+export async function ownerWithOrganization(page: Page, name: string): Promise<string> {
+  const email = uniqueEmail();
+  await signUp(email);
+  await signInWithPassword(page, email);
+  await fillOrganization(page, name);
+  await enrollFactor(page);
+  return email;
+}
+
+// O seletor fica no topo do shell, com o nome da Organização ativa.
+export function activeOrganization(page: Page, name: string) {
+  return page.getByRole("button", { name: `Trocar de organização: ${name}` });
+}

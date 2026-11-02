@@ -71,6 +71,13 @@ jobs:
           } | tee apps/web/.env.local >> "$GITHUB_ENV"
       - run: pnpm --filter @aid/web exec playwright install --with-deps chromium
       - run: pnpm --filter @aid/web test:e2e
+      # Na falha, os prints e traces mostram a diferença (inclusive dos snapshots visuais).
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-test-results
+          path: apps/web/test-results
+          retention-days: 7
       - name: Testes de integração da API
         env:
           INTEGRATION_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres

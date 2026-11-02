@@ -9,7 +9,8 @@ from typing import Annotated, Any
 import jwt
 from fastapi import Depends, Header
 
-from aid_api.errors import ApiError
+from aid_api.core.errors import ApiError
+from aid_api.core.telemetry import annotate_span
 
 ALGORITHMS = ["ES256", "RS256"]
 AUDIENCE = "authenticated"
@@ -80,12 +81,14 @@ def get_claims(
     if scheme.lower() != "bearer" or not token:
         raise unauthorized()
     try:
-        return verifier.verify(token)
+        claims = verifier.verify(token)
     except jwt.PyJWKClientConnectionError as exc:
         # Falha nossa, não do token: o cliente deve tentar de novo, não voltar ao login.
         raise ApiError(503, "auth_unavailable", "Autenticação indisponível.") from exc
     except jwt.PyJWTError as exc:
         raise unauthorized() from exc
+    annotate_span(claims.tenant_id)
+    return claims
 
 
 def require_aal2_claims(claims: Claims) -> Claims:

@@ -1,33 +1,14 @@
+import type { ApiComponents } from "@aid/contracts";
 import { createClient } from "@/lib/supabase/server";
 
 const API_URL = process.env.API_URL ?? "http://127.0.0.1:8000";
 
-export interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  role: string;
-}
-
-export interface Member {
-  id: string;
-  display_name: string | null;
-  email: string;
-  role: string;
-  mfa_enabled: boolean;
-}
-
-export interface Invitation {
-  id: string;
-  email: string;
-  role: string;
-  expires_at: string;
-}
-
-interface Me {
-  organizations: Organization[];
-  active_tenant_id: string | null;
-}
+// Gerados do OpenAPI da API (`make contracts`): o contrato vem de lá, não daqui.
+type Schemas = ApiComponents["schemas"];
+export type Organization = Schemas["Organization"];
+export type Member = Schemas["Member"];
+export type Invitation = Schemas["Invitation"];
+type Me = Schemas["Me"];
 
 // Só no servidor: o token sai do cookie da sessão e a API o valida.
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {

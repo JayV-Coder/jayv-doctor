@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 
-from aid_api import __version__, me, members, orgs
-from aid_api.errors import ApiError, problem_handler
+from aid_api import __version__
+from aid_api.core import errors, telemetry
+from aid_api.health import router as health
+from aid_api.orgs import router as orgs
 
 
 def create_app() -> FastAPI:
@@ -10,10 +12,10 @@ def create_app() -> FastAPI:
         version=__version__,
         openapi_url="/api/v1/openapi.json",
     )
-    app.add_exception_handler(ApiError, problem_handler)
-    app.include_router(me.router)
+    errors.install(app)
+    app.include_router(health.router)
     app.include_router(orgs.router)
-    app.include_router(members.router)
+    telemetry.configure(app)
     return app
 
 

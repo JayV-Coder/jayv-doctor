@@ -11,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from aid_api.auth import Claims
+from aid_api.core.auth import Claims
 
 
 @lru_cache

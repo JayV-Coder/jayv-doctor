@@ -3,19 +3,9 @@ import ssl
 from typing import Any
 
 import pytest
-from aid_api.auth import Claims, get_claims
-from aid_api.errors import ApiError
-from aid_api.mailer import Mailer, SmtpMailer, get_mailer
-from aid_api.main import create_app
-from aid_api.members import (
-    Deliver,
-    Invitation,
-    Member,
-    MemberRepository,
-    get_member_repository,
-    last_owner,
-)
-from aid_api.permissions import (
+from aid_api.core.auth import Claims, get_claims
+from aid_api.core.errors import ApiError
+from aid_api.core.permissions import (
     GOVERN,
     IMPORT_LOGS,
     MANAGE_CONNECTORS,
@@ -23,6 +13,16 @@ from aid_api.permissions import (
     OPERATE,
     VIEW,
 )
+from aid_api.main import create_app
+from aid_api.orgs.mailer import Mailer, SmtpMailer, get_mailer
+from aid_api.orgs.repo import (
+    Deliver,
+    MemberRepository,
+    get_member_repository,
+    last_owner,
+    translate,
+)
+from aid_api.orgs.schemas import Invitation, Member
 from fastapi.testclient import TestClient
 
 USER_ID = "00000000-0000-4000-8000-0000000a0001"
@@ -292,8 +292,6 @@ def test_ultimo_owner_responde_409() -> None:
     ],
 )
 def test_erros_do_banco_viram_codigos_da_api(sqlstate: str, status: int, code: str) -> None:
-    from aid_api.members import translate
-
     error = translate(sqlstate)
     assert error is not None
     assert (error.status, error.code) == (status, code)

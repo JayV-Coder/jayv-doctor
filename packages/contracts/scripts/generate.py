@@ -3,6 +3,7 @@
 Rode via `make contracts`. O CI regenera e falha se houver diferença.
 """
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -11,6 +12,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SCHEMAS = ROOT / "schemas"
 PY_PACKAGE = ROOT / "python" / "aid_contracts"
 TS_GENERATED = ROOT / "src" / "generated"
+OPENAPI = ROOT / "openapi.json"
+API_TYPES = TS_GENERATED / "api.ts"
 BANNER = "Gerado a partir de schemas/{name}. Não edite: rode `make contracts`."
 
 
@@ -40,11 +43,22 @@ def generate(schema: Path) -> None:
     run("pnpm", "exec", "prettier", "--write", str(ts_out))
 
 
+def generate_api_client() -> None:
+    """O OpenAPI da API vira tipos TS: o cliente do app web nunca é escrito à mão."""
+    from aid_api.main import create_app
+
+    openapi = json.dumps(create_app().openapi(), ensure_ascii=False, indent=2)
+    OPENAPI.write_text(f"{openapi}\n", encoding="utf-8")
+    run("pnpm", "exec", "openapi-typescript", str(OPENAPI), "-o", str(API_TYPES))
+    run("pnpm", "exec", "prettier", "--write", str(OPENAPI), str(API_TYPES))
+
+
 def main() -> None:
     (PY_PACKAGE / "schemas").mkdir(exist_ok=True)
     TS_GENERATED.mkdir(exist_ok=True)
     for schema in sorted(SCHEMAS.glob("*.json")):
         generate(schema)
+    generate_api_client()
 
 
 if __name__ == "__main__":

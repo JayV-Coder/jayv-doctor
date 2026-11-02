@@ -6,6 +6,7 @@ locals {
   services = toset([
     "artifactregistry.googleapis.com",
     "certificatemanager.googleapis.com",
+    "cloudtrace.googleapis.com",
     "cloudresourcemanager.googleapis.com",
     "compute.googleapis.com",
     "iam.googleapis.com",

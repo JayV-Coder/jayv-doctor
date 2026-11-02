@@ -26,6 +26,12 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   });
 }
 
+// Integrações da Organização ativa, sem as arquivadas; `null` se a API não respondeu.
+export async function listIntegrations(): Promise<Integration[] | null> {
+  const response = await apiFetch("/integrations").catch(() => null);
+  return response?.ok ? ((await response.json()) as Integration[]) : null;
+}
+
 // `cache`: o layout do shell e a página pedem o mesmo `/me` na mesma requisição.
 export const getMe = cache(async (): Promise<Me | null> => {
   try {

@@ -36,12 +36,14 @@ create table doctor.integrations (
   created_by uuid default auth.uid() references auth.users (id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (tenant_id, id),
-  unique (tenant_id, name, environment)
+  unique (tenant_id, id)
 );
 comment on table doctor.integrations is 'Integração: fluxo de negócio monitorado entre origem e destino, em um Ambiente.';
 
-create index integrations_active_idx on doctor.integrations (tenant_id, name) where archived_at is null;
+-- Nome único por Ambiente entre as ativas: arquivar libera o nome para um novo cadastro, já que a
+-- arquivada não volta. Também atende à lista padrão (ativas, por nome).
+create unique index integrations_active_name_key
+  on doctor.integrations (tenant_id, name, environment) where archived_at is null;
 
 create trigger integrations_set_updated_at
 before update on doctor.integrations
@@ -64,7 +66,10 @@ create policy integrations_insert on doctor.integrations
 for insert to authenticated
 with check (tenant_id = (select doctor.current_tenant_id()) and (select doctor.is_manager()));
 
+-- Arquivada fica congelada: o `using` só alcança as ativas.
 create policy integrations_update on doctor.integrations
 for update to authenticated
-using (tenant_id = (select doctor.current_tenant_id()) and (select doctor.is_manager()))
+using (
+  tenant_id = (select doctor.current_tenant_id()) and archived_at is null and (select doctor.is_manager())
+)
 with check (tenant_id = (select doctor.current_tenant_id()) and (select doctor.is_manager()));

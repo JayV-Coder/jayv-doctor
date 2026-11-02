@@ -5,6 +5,7 @@ import { apiFetch } from "@/lib/api";
 
 const MESSAGES: Record<string, string> = {
   integration_exists: "Já existe uma Integração com este nome neste Ambiente.",
+  integration_archived: "Esta Integração está arquivada e não muda mais.",
   forbidden: "Seu papel não permite esta ação.",
   mfa_required: "Confirme a verificação em duas etapas para continuar.",
   not_found: "Integração não encontrada.",
@@ -16,8 +17,10 @@ const GENERIC = "Não foi possível concluir agora. Tente de novo.";
 async function change(path: string, init: RequestInit): Promise<string | null> {
   const response = await apiFetch(path, init).catch(() => null);
   if (!response) return GENERIC;
-  revalidatePath("/integracoes");
-  if (response.ok) return null;
+  if (response.ok) {
+    revalidatePath("/integracoes");
+    return null;
+  }
   const { code } = (await response.json().catch(() => ({}))) as { code?: string };
   return MESSAGES[code ?? ""] ?? GENERIC;
 }

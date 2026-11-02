@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(24);
+select plan(27);
 
 select has_table('doctor', 'integrations', 'tabela doctor.integrations existe');
 select is(
@@ -61,6 +61,20 @@ select throws_ok(
 select lives_ok(
   $$update doctor.integrations set archived_at = now() where environment = 'hml'$$, 'Admin arquiva'
 );
+select is_empty(
+  $$update doctor.integrations set name = 'Renomeada' where environment = 'hml' returning id$$,
+  'arquivada fica congelada'
+);
+select lives_ok(
+  $$insert into doctor.integrations (name, source_system, target_system, environment)
+    values ('Pedidos Salesforce → SAP', 'salesforce', 'sap', 'hml')$$,
+  'o nome da arquivada volta a ficar livre'
+);
+select throws_ok(
+  $$insert into doctor.integrations (name, source_system, target_system, environment)
+    values ('Pedidos Salesforce → SAP', 'salesforce', 'sap', 'hml')$$,
+  '23505', null, 'entre as ativas, nome e Ambiente seguem únicos'
+);
 select throws_ok(
   $$update doctor.integrations set tenant_id = '00000000-0000-4000-8000-00000000be01'$$,
   '42501', null, 'tenant não muda por update'
@@ -78,7 +92,7 @@ select throws_ok(
 select tests.authenticate_as(
   '00000000-0000-4000-8000-0000000a0002', '00000000-0000-4000-8000-00000000ac01', 'analyst', 'aal2'
 );
-select is((select count(*)::int from doctor.integrations), 2, 'Analyst lê as Integrações da Organização');
+select is((select count(*)::int from doctor.integrations), 3, 'Analyst lê as Integrações da Organização');
 select throws_ok(
   $$insert into doctor.integrations (name, source_system, target_system, environment)
     values ('Notas', 'sap', 'gcp', 'prd')$$,
@@ -134,7 +148,7 @@ select lives_ok(
 );
 
 select is(
-  (select archived_at is not null from doctor.integrations where environment = 'hml'), true,
+  (select count(*)::int from doctor.integrations where environment = 'hml' and archived_at is not null), 1,
   'a arquivada continua no banco'
 );
 select is(

@@ -10,10 +10,16 @@ export function ArchiveButton({ id, name }: { id: string; name: string }) {
   const [busy, startTransition] = useTransition();
 
   return (
-    <BottomSheet title="Arquivar integração" trigger="Arquivar">
+    <BottomSheet
+      title="Arquivar integração"
+      trigger="Arquivar"
+      onClose={() => {
+        setError(null);
+      }}
+    >
       <p className="muted small">
-        {name} sai das listas e seus Conectores param de coletar. Execuções e Incidentes já
-        registrados continuam guardados.
+        {name} sai das listas e não pode mais ser alterada. Execuções e Incidentes já registrados
+        continuam guardados, e o nome fica livre para um novo cadastro.
       </p>
       <FormMessage error={error} />
       <button

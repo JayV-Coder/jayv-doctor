@@ -3,7 +3,7 @@ import { Chip } from "@/components/ui/chip";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { ReloadButton } from "@/components/ui/reload-button";
-import { apiFetch, getMe, type Integration } from "@/lib/api";
+import { getMe, listIntegrations } from "@/lib/api";
 import {
   environmentLabel,
   environmentTone,
@@ -16,15 +16,11 @@ import { IntegrationForm } from "./integration-form";
 
 export const metadata = { title: "Integrações · Integration AI Doctor" };
 
-async function loadIntegrations(): Promise<Integration[] | null> {
-  const response = await apiFetch("/integrations").catch(() => null);
-  return response?.ok ? ((await response.json()) as Integration[]) : null;
-}
-
 // Tela 10: lista em cards; o cadastro abre numa folha inferior.
 export default async function IntegrationsPage() {
-  const [me, integrations] = await Promise.all([getMe(), loadIntegrations()]);
-  const manager = isManager(me?.active_role);
+  const [me, integrations] = await Promise.all([getMe(), listIntegrations()]);
+  // Toda escrita exige MFA: sem `aal2`, o formulário só levaria a um erro no fim.
+  const manager = isManager(me?.active_role) && me?.aal === "aal2";
 
   return (
     <>

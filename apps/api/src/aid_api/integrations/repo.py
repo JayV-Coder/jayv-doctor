@@ -3,7 +3,7 @@ Owner e Admin com MFA escreverem, com o Papel lido da tabela (`doctor.is_manager
 
 from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from aid_api.core.auth import Claims
 from aid_api.core.db import translated_tx
@@ -29,16 +29,39 @@ def not_found() -> ApiError:
     return ApiError(404, "not_found", "Integração não encontrada.")
 
 
-ERRORS = {
-    "23505": integration_exists,
-    "42501": lambda: ApiError(403, "forbidden", "Seu Papel não permite esta ação."),
-}
+def forbidden() -> ApiError:
+    return ApiError(403, "forbidden", "Seu Papel não permite esta ação.")
 
 
-def to_integration(row: RowMapping | None) -> Integration:
-    # Sem linha: não existe, ou é de outra Organização e o RLS a escondeu. Os dois casos são 404.
+def integration_archived() -> ApiError:
+    return ApiError(409, "integration_archived", "Integração arquivada não muda.")
+
+
+ERRORS = {"23505": integration_exists, "42501": forbidden}
+
+
+async def visible(connection: AsyncConnection, target: str) -> Integration:
+    """A linha como o RLS de leitura a mostra; `not_found` se não existe nesta Organização."""
+    result = await connection.execute(
+        text(f"select {COLUMNS} from doctor.integrations where id = cast(:target as uuid)"),  # noqa: S608
+        {"target": target},
+    )
+    row = result.mappings().first()
     if row is None:
         raise not_found()
+    return Integration.model_validate(dict(row))
+
+
+# Um update que não alcançou a linha pode ser falta de Papel (o RLS de escrita lê o Papel da
+# tabela, e a claim pode estar atrasada), Integração arquivada ou de outra Organização.
+async def missed(connection: AsyncConnection, target: str) -> Integration:
+    current = await visible(connection, target)
+    if current.archived_at is not None:
+        return current
+    raise forbidden()
+
+
+def to_integration(row: RowMapping) -> Integration:
     return Integration.model_validate(dict(row))
 
 
@@ -69,7 +92,10 @@ class IntegrationRepository:
                 ),
                 new.model_dump(),
             )
-            return to_integration(result.mappings().first())
+            row = result.mappings().first()
+            if row is None:
+                raise forbidden()
+            return to_integration(row)
 
     async def update(self, claims: Claims, target: str, change: IntegrationChange) -> Integration:
         values = {
@@ -86,20 +112,24 @@ class IntegrationRepository:
                 ),
                 {**values, "target": target},
             )
-            return to_integration(result.mappings().first())
+            row = result.mappings().first()
+            if row is None:
+                await missed(connection, target)
+                raise integration_archived()
+            return to_integration(row)
 
-    # Arquivar de novo mantém a data original: a operação é idempotente por natureza.
+    # Arquivar de novo devolve a arquivada, com a data original: a operação é idempotente.
     async def archive(self, claims: Claims, target: str) -> Integration:
         async with translated_tx(claims, ERRORS, self.engine) as connection:
             result = await connection.execute(
                 text(
-                    "update doctor.integrations"  # noqa: S608
-                    " set archived_at = coalesce(archived_at, now())"
+                    "update doctor.integrations set archived_at = now()"  # noqa: S608
                     f" where id = cast(:target as uuid) returning {COLUMNS}"
                 ),
                 {"target": target},
             )
-            return to_integration(result.mappings().first())
+            row = result.mappings().first()
+            return to_integration(row) if row else await missed(connection, target)
 
 
 def get_integration_repository() -> IntegrationRepository:

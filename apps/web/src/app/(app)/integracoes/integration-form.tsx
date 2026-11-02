@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type SubmitEvent } from "react";
+import { useEffect, useRef, useState, type SubmitEvent } from "react";
 import { FormMessage } from "@/components/auth-shell";
 import { ENVIRONMENTS, SYSTEMS } from "@/lib/integrations/labels";
 import { createIntegration } from "./actions";
@@ -8,6 +8,20 @@ import { createIntegration } from "./actions";
 export function IntegrationForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // A folha que contém o formulário vem do servidor: o fechamento é ouvido aqui, para a próxima
+  // abertura começar limpa, sem o erro da tentativa anterior.
+  useEffect(() => {
+    const form = formRef.current;
+    const dialog = form?.closest("dialog");
+    function clear() {
+      setError(null);
+      form?.reset();
+    }
+    dialog?.addEventListener("close", clear);
+    return () => dialog?.removeEventListener("close", clear);
+  }, []);
 
   async function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -18,14 +32,11 @@ export function IntegrationForm() {
     );
     setBusy(false);
     setError(failure);
-    if (failure === null) {
-      form.reset();
-      form.closest("dialog")?.close();
-    }
+    if (failure === null) form.closest("dialog")?.close();
   }
 
   return (
-    <form className="stack" onSubmit={(event) => void submit(event)}>
+    <form ref={formRef} className="stack" onSubmit={(event) => void submit(event)}>
       <label className="field">
         Nome
         <input name="name" required minLength={2} maxLength={80} />

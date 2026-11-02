@@ -1,23 +1,19 @@
 import Link from "next/link";
 import { PendingInvitationNotice } from "@/components/pending-invitation-notice";
 import { EmptyState } from "@/components/ui/empty-state";
-import { apiFetch, getMe, type Integration } from "@/lib/api";
+import { getMe, listIntegrations } from "@/lib/api";
 import { isManager } from "@/lib/orgs/labels";
 
-async function hasIntegrations(): Promise<boolean> {
-  const response = await apiFetch("/integrations").catch(() => null);
-  // Na dúvida, não sugere cadastro: a falha aparece na tela de Integrações.
-  if (!response?.ok) return true;
-  return ((await response.json()) as Integration[]).length > 0;
-}
-
 export default async function HomePage() {
-  const [me, ready] = await Promise.all([getMe(), hasIntegrations()]);
+  const me = await getMe();
+  // Só quem pode cadastrar recebe a sugestão; na dúvida (API fora), ela não aparece.
+  const integrations = isManager(me?.active_role) ? await listIntegrations() : null;
+  const suggest = integrations?.length === 0;
 
   return (
     <>
       <PendingInvitationNotice />
-      {!ready && isManager(me?.active_role) ? (
+      {suggest ? (
         // Fim do onboarding: Organização criada, falta o primeiro fluxo monitorado.
         <EmptyState
           title="Cadastre a primeira Integração"

@@ -12,7 +12,7 @@ from aid_api.core.db import tenant_tx
 from aid_api.core.errors import ApiError
 from aid_api.core.idempotency import IdempotencyStore
 from aid_api.integrations.repo import IntegrationRepository
-from aid_api.integrations.schemas import NewIntegration
+from aid_api.integrations.schemas import IntegrationChange, NewIntegration
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -213,5 +213,41 @@ async def test_integracoes_isoladas_com_nome_unico_por_organizacao(
 
     archived = await repository.archive(acme, created.id)
     assert archived.archived_at is not None
+    assert (await repository.archive(acme, created.id)).archived_at == archived.archived_at
     assert await repository.list(acme, include_archived=False) == []
     assert [item.id for item in await repository.list(acme, include_archived=True)] == [created.id]
+
+    with pytest.raises(ApiError) as frozen:
+        await repository.update(acme, created.id, IntegrationChange(name="Renomeada"))
+    assert frozen.value.code == "integration_archived"
+    recreated = await repository.create(acme, new)
+    assert recreated.id != created.id
+
+
+@pytest.mark.asyncio
+async def test_admin_rebaixado_com_jwt_antigo_recebe_403_e_nao_404(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str
+) -> None:
+    first, _ = tenants
+    await add_admin(engine, first, user)
+    repository = IntegrationRepository(engine)
+    admin = claims_for(first, user, "admin", "aal2")
+    created = await repository.create(
+        admin,
+        NewIntegration(name="Notas", source_system="sap", target_system="gcp", environment="prd"),
+    )
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "update doctor.memberships set role = 'analyst'"
+                " where tenant_id = :t and user_id = :u"
+            ),
+            {"t": first, "u": user},
+        )
+    for attempt in (
+        repository.update(admin, created.id, IntegrationChange(name="Outra")),
+        repository.archive(admin, created.id),
+    ):
+        with pytest.raises(ApiError) as denied:
+            await attempt
+        assert denied.value.status == 403

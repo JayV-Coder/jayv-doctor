@@ -48,4 +48,8 @@ test("Owner cadastra, recebe erro na repetida e arquiva", async ({ page }) => {
   await confirm.getByRole("button", { name: "Arquivar Pedidos Salesforce → SAP" }).click();
   await expect(card).toHaveCount(0);
   await expect(page.getByText("Nenhuma Integração cadastrada")).toBeVisible();
+
+  // Arquivar libera o nome para um novo cadastro.
+  await createIntegration(page, "Pedidos Salesforce → SAP");
+  await expect(page.getByRole("article", { name: "Pedidos Salesforce → SAP" })).toBeVisible();
 });

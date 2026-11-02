@@ -8,12 +8,15 @@ export function BottomSheet({
   trigger,
   triggerLabel,
   triggerClassName = "btn",
+  onClose,
   children,
 }: {
   title: string;
   trigger: ReactNode;
   triggerLabel?: string;
   triggerClassName?: string;
+  // Ao fechar, por botão, Esc ou toque no fundo: limpa erros para a próxima abertura.
+  onClose?: () => void;
   children: ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -40,6 +43,7 @@ export function BottomSheet({
         ref={dialog}
         className="sheet"
         aria-label={title}
+        onClose={onClose}
         onClick={(event) => {
           // Toque no fundo escurecido fecha, como nos apps nativos.
           if (event.target === event.currentTarget) event.currentTarget.close();

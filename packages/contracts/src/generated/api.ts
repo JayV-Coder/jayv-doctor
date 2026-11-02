@@ -193,6 +193,58 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/integrations": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Integrations */
+    get: operations["list_integrations_api_v1_integrations_get"];
+    put?: never;
+    /** Create Integration */
+    post: operations["create_integration_api_v1_integrations_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/integrations/{target}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update Integration */
+    patch: operations["update_integration_api_v1_integrations__target__patch"];
+    trace?: never;
+  };
+  "/api/v1/integrations/{target}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Archive Integration */
+    post: operations["archive_integration_api_v1_integrations__target__archive_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -221,6 +273,59 @@ export interface components {
     HTTPValidationError: {
       /** Detail */
       detail?: components["schemas"]["ValidationError"][];
+    };
+    /** Integration */
+    Integration: {
+      /** Id */
+      id: string;
+      /** Name */
+      name: string;
+      /** Description */
+      description: string | null;
+      /**
+       * Source System
+       * @enum {string}
+       */
+      source_system: "sap" | "salesforce" | "gcp" | "other";
+      /**
+       * Target System
+       * @enum {string}
+       */
+      target_system: "sap" | "salesforce" | "gcp" | "other";
+      /** Owner Team */
+      owner_team: string | null;
+      /**
+       * Environment
+       * @enum {string}
+       */
+      environment: "dev" | "hml" | "prd";
+      /** Archived At */
+      archived_at: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Error Rate 24H */
+      error_rate_24h?: number | null;
+    };
+    /**
+     * IntegrationChange
+     * @description Só os campos enviados mudam; `description` e `owner_team` aceitam `null` para limpar.
+     */
+    IntegrationChange: {
+      /** Name */
+      name?: string | null;
+      /** Description */
+      description?: string | null;
+      /** Source System */
+      source_system?: ("sap" | "salesforce" | "gcp" | "other") | null;
+      /** Target System */
+      target_system?: ("sap" | "salesforce" | "gcp" | "other") | null;
+      /** Owner Team */
+      owner_team?: string | null;
+      /** Environment */
+      environment?: ("dev" | "hml" | "prd") | null;
     };
     /** Invitation */
     Invitation: {
@@ -264,6 +369,30 @@ export interface components {
       role: string;
       /** Mfa Enabled */
       mfa_enabled: boolean;
+    };
+    /** NewIntegration */
+    NewIntegration: {
+      /** Name */
+      name: string;
+      /** Description */
+      description?: string | null;
+      /**
+       * Source System
+       * @enum {string}
+       */
+      source_system: "sap" | "salesforce" | "gcp" | "other";
+      /**
+       * Target System
+       * @enum {string}
+       */
+      target_system: "sap" | "salesforce" | "gcp" | "other";
+      /** Owner Team */
+      owner_team?: string | null;
+      /**
+       * Environment
+       * @enum {string}
+       */
+      environment: "dev" | "hml" | "prd";
     };
     /** NewInvitation */
     NewInvitation: {
@@ -741,6 +870,147 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_integrations_api_v1_integrations_get: {
+    parameters: {
+      query?: {
+        include_archived?: boolean;
+      };
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Integration"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_integration_api_v1_integrations_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NewIntegration"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Integration"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_integration_api_v1_integrations__target__patch: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IntegrationChange"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Integration"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  archive_integration_api_v1_integrations__target__archive_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Integration"];
+        };
       };
       /** @description Validation Error */
       422: {

@@ -3,6 +3,6 @@
 VIEW = ("owner", "admin", "analyst", "viewer")
 OPERATE = ("owner", "admin", "analyst")
 IMPORT_LOGS = ("owner", "admin", "analyst")
-MANAGE_CONNECTORS = ("owner", "admin")
+MANAGE_CONNECTORS = ("owner", "admin")  # "Gerenciar integrações e conectores"
 MANAGE_MEMBERS = ("owner", "admin")
 GOVERN = ("owner",)

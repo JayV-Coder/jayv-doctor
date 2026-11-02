@@ -14,6 +14,7 @@ Base: [ADR-0004](../docs/adr/0004-isolamento-multi-tenant-rls-e-fks-compostas.md
 | `doctor.list_organizations()` | Organizações ativas do Usuário, com o Papel: só para o seletor |
 | `doctor.switch_organization(target)` | troca a Organização ativa; `42501` sem Vínculo |
 | `doctor.require_manager()` | só para funções: exige Owner ou Admin com `aal2`, com o Papel **lido da tabela**, não do JWT |
+| `doctor.is_manager()` | `true` para Owner ou Admin com `aal2`, com o Papel **lido da tabela**: para políticas de escrita |
 | `doctor.set_updated_at()` | trigger `before update` que define `updated_at = now()` |
 
 Nas políticas, envolva os helpers em `(select …)` para o Postgres avaliar uma vez por consulta, não por linha:

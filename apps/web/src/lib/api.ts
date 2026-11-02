@@ -9,6 +9,7 @@ type Schemas = ApiComponents["schemas"];
 export type Organization = Schemas["Organization"];
 export type Member = Schemas["Member"];
 export type Invitation = Schemas["Invitation"];
+export type Integration = Schemas["Integration"];
 type Me = Schemas["Me"];
 
 // Só no servidor: o token sai do cookie da sessão e a API o valida.
@@ -23,6 +24,12 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
       authorization: `Bearer ${data.session?.access_token ?? ""}`,
     },
   });
+}
+
+// Integrações da Organização ativa, sem as arquivadas; `null` se a API não respondeu.
+export async function listIntegrations(): Promise<Integration[] | null> {
+  const response = await apiFetch("/integrations").catch(() => null);
+  return response?.ok ? ((await response.json()) as Integration[]) : null;
 }
 
 // `cache`: o layout do shell e a página pedem o mesmo `/me` na mesma requisição.

@@ -2,17 +2,19 @@
 
 import json
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from functools import lru_cache
 from uuid import uuid4
 
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from aid_api.core.auth import Claims
+from aid_api.core.errors import ApiError
 
 
 @lru_cache
@@ -64,3 +66,24 @@ async def request_tx(
             yield connection
         finally:
             _request.reset(token)
+
+
+def sqlstate(exc: DBAPIError) -> str | None:
+    return getattr(exc.orig, "sqlstate", None)
+
+
+@asynccontextmanager
+async def translated_tx(
+    claims: Claims,
+    errors: Mapping[str, Callable[[], ApiError]],
+    engine: AsyncEngine | None = None,
+) -> AsyncIterator[AsyncConnection]:
+    """`tenant_tx` que traduz o SQLSTATE do banco no erro da API de cada módulo."""
+    try:
+        async with tenant_tx(claims, engine) as connection:
+            yield connection
+    except DBAPIError as exc:
+        factory = errors.get(sqlstate(exc) or "")
+        if factory:
+            raise factory() from exc
+        raise

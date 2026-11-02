@@ -5,6 +5,7 @@ import { NavBar } from "@/components/shell/nav-bar";
 import { SessionFooter } from "@/components/shell/session-footer";
 import { TopBar } from "@/components/shell/top-bar";
 import { ErrorState } from "@/components/ui/error-state";
+import { ReloadButton } from "@/components/ui/reload-button";
 import { getMe } from "@/lib/api";
 
 // O proxy cuida de sessão e MFA; aqui entra o que só a API sabe: há Organização, e qual está ativa.
@@ -13,14 +14,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if (me === null) {
     return (
       <AuthShell>
-        <ErrorState
-          title="Não foi possível carregar suas organizações"
-          action={
-            <a className="btn" href="/">
-              Tentar de novo
-            </a>
-          }
-        >
+        <ErrorState title="Não foi possível carregar suas organizações" action={<ReloadButton />}>
           O serviço não respondeu. Seus dados continuam seguros.
         </ErrorState>
         <SessionFooter />

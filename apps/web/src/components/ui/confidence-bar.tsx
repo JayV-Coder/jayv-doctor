@@ -1,9 +1,8 @@
-import { confidenceText } from "@/lib/format";
+import { confidence } from "@/lib/format";
 
 // Confiança é heurística, nunca probabilidade: o rótulo vai junto da barra, sempre.
 export function ConfidenceBar({ value }: { value: number }) {
-  const percent = Math.round(Math.min(Math.max(value, 0), 1) * 100);
-  const text = confidenceText(value);
+  const { percent, text } = confidence(value);
   return (
     <div
       className="confidence"

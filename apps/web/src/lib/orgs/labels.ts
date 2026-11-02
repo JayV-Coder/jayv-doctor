@@ -16,3 +16,10 @@ export function initials(name: string): string {
     .map((word) => word.charAt(0).toUpperCase())
     .join("");
 }
+
+// Owner e Admin administram a Organização: Membros, Convites e, por isso, MFA obrigatório.
+const MANAGER_ROLES = ["owner", "admin"];
+
+export function isManager(role: string | null | undefined): boolean {
+  return role != null && MANAGER_ROLES.includes(role);
+}

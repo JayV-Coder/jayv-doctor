@@ -33,7 +33,7 @@ make check       # lint + typecheck + testes (o mesmo que o CI)
 | `infrastructure/terraform` | GCP |
 | `tests/*` | integração, segurança, avaliação, carga |
 
-Testes E2E do app web (`apps/web`): com a stack local de pé (`supabase start`), `pnpm --filter @aid/web test:e2e` roda os projetos `mobile-chrome` (Pixel 7, todos os fluxos) e `desktop` (só o shell). Mudou um componente base de propósito? Regere os snapshots com `pnpm --filter @aid/web exec playwright test e2e/components.spec.ts --update-snapshots` e confira as imagens no diff. Os ícones do PWA saem de `apps/web/scripts/icons.mjs`.
+Testes E2E do app web (`apps/web`): com a stack local de pé (`supabase start`), `pnpm --filter @aid/web test:e2e` roda os projetos `mobile-chrome` (Pixel 7, todos os fluxos) e `desktop` (só o shell). O Playwright reaproveita um `pnpm start` que já esteja de pé; nesse caso, suba-o com `COMPONENT_CATALOG=1`, ou o catálogo dos snapshots (`/componentes`) responde 404. Mudou um componente base de propósito? Regere os snapshots com `pnpm --filter @aid/web exec playwright test e2e/components.spec.ts --update-snapshots` e confira as imagens no diff. Os ícones do PWA saem de `apps/web/scripts/icons.mjs`.
 
 Pacotes TS são workspaces pnpm (orquestrados pelo Turborepo). Pacotes Python são membros do workspace uv em `pyproject.toml`; nomes de arquivos de teste Python são únicos no repositório.
 

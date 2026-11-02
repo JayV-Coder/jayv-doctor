@@ -90,8 +90,11 @@ describe("redirectPath", () => {
 });
 
 describe("telas do PWA", () => {
-  it("abre a tela offline e o catálogo sem sessão: nenhuma traz dado de tenant", () => {
+  it("abre a tela offline sem sessão: ela não traz dado de tenant", () => {
     expect(decideRedirect("/offline", anonymous)).toBeNull();
-    expect(decideRedirect("/componentes", anonymous)).toBeNull();
+  });
+
+  it("o catálogo de componentes exige sessão, como qualquer tela", () => {
+    expect(decideRedirect("/componentes", anonymous)).toBe("/login");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { confidenceText, formatDateTime, formatNumber, formatPercent } from "./format";
+import { confidence, formatDateTime, formatNumber, formatPercent } from "./format";
 
 describe("formatos pt-BR", () => {
   it("separa milhar com ponto", () => {
@@ -18,13 +18,17 @@ describe("formatos pt-BR", () => {
   });
 });
 
-describe("confidenceText", () => {
+describe("confidence", () => {
   it("rotula a confiança sempre como heurística", () => {
-    expect(confidenceText(0.82)).toBe("82% · heurística");
+    expect(confidence(0.82)).toEqual({ percent: 82, text: "82% · heurística" });
   });
 
   it("limita a escala entre 0 e 100%", () => {
-    expect(confidenceText(1.4)).toBe("100% · heurística");
-    expect(confidenceText(-0.2)).toBe("0% · heurística");
+    expect(confidence(1.4)).toEqual({ percent: 100, text: "100% · heurística" });
+    expect(confidence(-0.2)).toEqual({ percent: 0, text: "0% · heurística" });
+  });
+
+  it("arredonda a barra e o texto do mesmo jeito", () => {
+    expect(confidence(0.825)).toEqual({ percent: 83, text: "83% · heurística" });
   });
 });

@@ -1,5 +1,13 @@
 import { expect, test } from "@playwright/test";
-import { expectNoHorizontalScroll } from "./helpers";
+import { expectNoHorizontalScroll, signInWithPassword, signUp, uniqueEmail } from "./helpers";
+
+// O catálogo exige sessão como qualquer tela; não precisa de Organização.
+test.beforeEach(async ({ page }) => {
+  const email = uniqueEmail();
+  await signUp(email);
+  await signInWithPassword(page, email);
+  await expect(page).toHaveURL(/\/organizacoes\/nova/);
+});
 
 for (const colorScheme of ["light", "dark"] as const) {
   test(`componentes base no tema ${colorScheme === "light" ? "claro" : "escuro"}`, async ({

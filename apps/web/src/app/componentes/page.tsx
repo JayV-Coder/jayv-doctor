@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
@@ -12,8 +13,10 @@ import { formatNumber, formatPercent } from "@/lib/format";
 
 export const metadata = { title: "Componentes base · Integration AI Doctor", robots: "noindex" };
 
-// Catálogo para os snapshots visuais do E2E. Fora dos testes, a rota não existe.
-export default function ComponentsPage() {
+// Catálogo para os snapshots visuais do E2E. Fora dos testes, a rota não existe. `connection()`:
+// a variável é lida a cada requisição, não congelada no build.
+export default async function ComponentsPage() {
+  await connection();
   if (process.env.COMPONENT_CATALOG !== "1") notFound();
 
   return (

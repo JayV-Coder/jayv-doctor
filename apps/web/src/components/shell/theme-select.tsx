@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { themeCookie, type Theme } from "@/lib/shell/theme";
+import { applyTheme, themeCookie, type Theme } from "@/lib/shell/theme";
 
 const OPTIONS: { value: Theme; label: string }[] = [
   { value: "system", label: "Sistema" },
@@ -15,9 +15,7 @@ export function ThemeSelect({ initial }: { initial: Theme }) {
   function choose(next: Theme) {
     setTheme(next);
     document.cookie = themeCookie(next);
-    const root = document.documentElement;
-    if (next === "system") delete root.dataset.theme;
-    else root.dataset.theme = next;
+    applyTheme(next);
   }
 
   return (

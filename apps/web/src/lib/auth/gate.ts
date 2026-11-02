@@ -1,3 +1,5 @@
+import { isManager } from "../orgs/labels";
+
 export interface SessionState {
   hasSession: boolean;
   role: string | null;
@@ -6,11 +8,10 @@ export interface SessionState {
 }
 
 const PUBLIC_PATHS = ["/login", "/esqueci-senha"];
-// Sem dado de tenant: a tela offline fica no cache do PWA, e o catálogo só mostra componentes.
-const OPEN_PATHS = ["/privacidade", "/offline", "/componentes"];
+// Sem dado de tenant: a tela offline fica no cache do PWA e abre mesmo depois do logout.
+const OPEN_PATHS = ["/privacidade", "/offline"];
 const ENTRY_PATHS = ["/login", "/esqueci-senha", "/mfa", "/mfa/cadastro"];
 const ACCEPT_INVITATION_PATH = "/convites/aceitar";
-const ADMIN_ROLES = ["owner", "admin"];
 
 // Decide para onde mandar o Usuário antes de abrir `path`; `null` deixa passar.
 export function decideRedirect(path: string, state: SessionState): string | null {
@@ -22,8 +23,7 @@ export function decideRedirect(path: string, state: SessionState): string | null
   if (state.currentLevel !== "aal2" && state.nextLevel === "aal2") {
     return path === "/mfa" ? null : "/mfa";
   }
-  const mustEnroll =
-    state.role !== null && ADMIN_ROLES.includes(state.role) && state.nextLevel !== "aal2";
+  const mustEnroll = isManager(state.role) && state.nextLevel !== "aal2";
   if (mustEnroll) return path === "/mfa/cadastro" ? null : "/mfa/cadastro";
 
   return ENTRY_PATHS.includes(path) ? "/" : null;

@@ -4,11 +4,10 @@ import { SessionFooter } from "@/components/shell/session-footer";
 import { ThemeSelect } from "@/components/shell/theme-select";
 import { ListItem } from "@/components/ui/list-item";
 import { getMe } from "@/lib/api";
+import { isManager } from "@/lib/orgs/labels";
 import { parseTheme, THEME_COOKIE } from "@/lib/shell/theme";
 
 export const metadata = { title: "Mais · Integration AI Doctor" };
-
-const MANAGERS = ["owner", "admin"];
 
 export default async function MorePage() {
   const [me, store] = await Promise.all([getMe(), cookies()]);
@@ -16,7 +15,7 @@ export default async function MorePage() {
 
   return (
     <>
-      {role && MANAGERS.includes(role) && (
+      {isManager(role) && (
         <ul className="list">
           <ListItem href="/membros" title="Membros e convites" />
         </ul>

@@ -1,7 +1,10 @@
 // Service worker do PWA. Guarda só o shell: a tela offline e os arquivos estáticos do build, que
 // não carregam dado nenhum de tenant. Navegações e chamadas de dados vão sempre à rede; sem rede,
 // a navegação recebe a tela offline. Assim, depois do logout nada de outra Organização aparece.
-const CACHE = "shell-v1";
+// A versão vem do build (`?v=` no registro): cada deploy instala um worker novo, que refaz o
+// cache e apaga o anterior, então os estáticos de builds velhos não se acumulam.
+const VERSION = new URL(self.location.href).searchParams.get("v") || "dev";
+const CACHE = `shell-${VERSION}`;
 const OFFLINE = "/offline";
 const ICONS = ["/icons/icon-192.png", "/icons/icon-512.png"];
 
@@ -14,6 +17,18 @@ async function precache() {
   // CSS, fontes e scripts da própria tela offline, para ela abrir com o visual certo.
   const assets = new Set(html.match(/\/_next\/static\/[^"'\s)\\]+/g) ?? []);
   await Promise.all([...assets, ...ICONS].map((url) => cache.add(url).catch(() => undefined)));
+}
+
+// Se o navegador tiver despejado o cache, ainda assim responde "Sem conexão", e não um erro de rede.
+async function offline() {
+  const page = await caches.match(OFFLINE);
+  return (
+    page ??
+    new Response('<!doctype html><html lang="pt-BR"><meta charset="utf-8"><h1>Sem conexão</h1>', {
+      status: 503,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    })
+  );
 }
 
 self.addEventListener("install", (event) => {
@@ -38,7 +53,7 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => caches.match(OFFLINE)));
+    event.respondWith(fetch(request).catch(offline));
     return;
   }
   // Nome com hash do build: o conteúdo nunca muda, e é igual para todo mundo.

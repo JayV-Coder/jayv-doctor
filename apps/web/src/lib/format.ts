@@ -20,8 +20,9 @@ export function formatDateTime(instant: Date, timeZone: string): string {
   }).format(instant);
 }
 
-// A confiança é uma heurística, não uma probabilidade calibrada: o rótulo nunca sai.
-export function confidenceText(value: number): string {
-  const clamped = Math.min(Math.max(value, 0), 1);
-  return `${percents.format(Math.round(clamped * 100) / 100)} · heurística`;
+// A confiança é uma heurística, não uma probabilidade calibrada: o rótulo nunca sai. A barra e o
+// texto saem do mesmo número, para nunca discordarem.
+export function confidence(value: number): { percent: number; text: string } {
+  const percent = Math.round(Math.min(Math.max(value, 0), 1) * 100);
+  return { percent, text: `${percents.format(percent / 100)} · heurística` };
 }

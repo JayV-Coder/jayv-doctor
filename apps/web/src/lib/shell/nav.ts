@@ -20,7 +20,11 @@ const MORE = "/mais";
 const TITLES: Record<string, string> = {
   "/membros": "Membros",
   "/integracoes": "Integrações",
+  "/importar": "Importar logs",
 };
+
+// Telas que não são abas, mas pertencem a uma (o mockup abre Importar logs a partir de Conectores).
+const PARENTS: Record<string, string> = { "/importar": "/conectores" };
 
 function within(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -28,6 +32,8 @@ function within(pathname: string, href: string): boolean {
 
 export function activeTab(pathname: string): string {
   if (pathname === "/") return "/";
+  const parent = Object.entries(PARENTS).find(([href]) => within(pathname, href));
+  if (parent) return parent[1];
   return TABS.find(({ href }) => href !== "/" && within(pathname, href))?.href ?? MORE;
 }
 

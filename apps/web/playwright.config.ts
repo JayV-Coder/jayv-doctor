@@ -1,4 +1,14 @@
+import { existsSync, readFileSync } from "node:fs";
 import { defineConfig, devices } from "@playwright/test";
+
+// O .env.local do app web (URL e chave pública da stack local) vale também para os testes e para a
+// API que eles sobem; no CI as variáveis já vêm do ambiente.
+if (existsSync(".env.local")) {
+  for (const line of readFileSync(".env.local", "utf8").split("\n")) {
+    const [key, ...value] = line.split("=");
+    if (key && value.length > 0 && !(key in process.env)) process.env[key] = value.join("=");
+  }
+}
 
 // Exige a stack local (`supabase start`), o .env.local do app web e o `uv` para subir a API.
 export default defineConfig({
@@ -32,6 +42,8 @@ export default defineConfig({
         SUPABASE_DB_URL: "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
         SUPABASE_JWT_ISSUER: "http://127.0.0.1:54321/auth/v1",
         SMTP_URL: "smtp://127.0.0.1:54325",
+        SUPABASE_URL: "http://127.0.0.1:54321",
+        SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "",
         APP_URL: "http://127.0.0.1:3000",
       },
     },

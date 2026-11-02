@@ -245,6 +245,58 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/imports": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Imports */
+    get: operations["list_imports_api_v1_imports_get"];
+    put?: never;
+    /** Create Import */
+    post: operations["create_import_api_v1_imports_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/imports/{target}/upload-url": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create Upload Url */
+    post: operations["create_upload_url_api_v1_imports__target__upload_url_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/imports/{target}/complete": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Complete Import */
+    post: operations["complete_import_api_v1_imports__target__complete_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -258,6 +310,20 @@ export interface components {
     AcceptedInvitation: {
       /** Tenant Id */
       tenant_id: string;
+    };
+    /** CreatedImport */
+    CreatedImport: {
+      /** Id */
+      id: string;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "pending" | "uploaded" | "processing" | "done" | "failed" | "rejected";
+      /** Error */
+      error: string | null;
+      /** Duplicate Of */
+      duplicate_of: string | null;
     };
     /** CreatedInvitation */
     CreatedInvitation: {
@@ -273,6 +339,43 @@ export interface components {
     HTTPValidationError: {
       /** Detail */
       detail?: components["schemas"]["ValidationError"][];
+    };
+    /** Import */
+    Import: {
+      /** Id */
+      id: string;
+      /** Integration Id */
+      integration_id: string;
+      /** Filename */
+      filename: string;
+      /** Size Bytes */
+      size_bytes: number;
+      /** Format */
+      format: ("json" | "ndjson" | "csv") | null;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "pending" | "uploaded" | "processing" | "done" | "failed" | "rejected";
+      /** Duplicate Of */
+      duplicate_of: string | null;
+      /** Total Lines */
+      total_lines: number;
+      /** Accepted */
+      accepted: number;
+      /** Rejected */
+      rejected: number;
+      /** Duplicates */
+      duplicates: number;
+      /** Secrets Removed */
+      secrets_removed: number;
+      /** Error */
+      error: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
     };
     /** Integration */
     Integration: {
@@ -370,6 +473,20 @@ export interface components {
       /** Mfa Enabled */
       mfa_enabled: boolean;
     };
+    /** NewImport */
+    NewImport: {
+      /**
+       * Integration Id
+       * Format: uuid
+       */
+      integration_id: string;
+      /** Filename */
+      filename: string;
+      /** Size Bytes */
+      size_bytes: number;
+      /** Sha256 */
+      sha256: string;
+    };
     /** NewIntegration */
     NewIntegration: {
       /** Name */
@@ -450,6 +567,11 @@ export interface components {
        * @enum {string}
        */
       role: "owner" | "admin" | "analyst" | "viewer";
+    };
+    /** UploadUrl */
+    UploadUrl: {
+      /** Upload Url */
+      upload_url: string;
     };
     /** ValidationError */
     ValidationError: {
@@ -1010,6 +1132,140 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Integration"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_imports_api_v1_imports_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Import"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_import_api_v1_imports_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NewImport"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreatedImport"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_upload_url_api_v1_imports__target__upload_url_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["UploadUrl"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  complete_import_api_v1_imports__target__complete_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Import"];
         };
       };
       /** @description Validation Error */

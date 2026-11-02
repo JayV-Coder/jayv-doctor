@@ -139,3 +139,14 @@ export async function ownerWithOrganization(page: Page, name: string): Promise<s
 export function activeOrganization(page: Page, name: string) {
   return page.getByRole("button", { name: `Trocar de organização: ${name}` });
 }
+
+// Na tela de Integrações, pela folha "Nova integração".
+export async function createIntegration(page: Page, name: string): Promise<void> {
+  await page.getByRole("button", { name: "Nova", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Nova integração" });
+  await sheet.getByLabel("Nome").fill(name);
+  await sheet.getByLabel("Origem").selectOption("Salesforce");
+  await sheet.getByLabel("Destino").selectOption("SAP");
+  await sheet.getByLabel("Ambiente").selectOption("Produção");
+  await sheet.getByRole("button", { name: "Salvar integração" }).click();
+}

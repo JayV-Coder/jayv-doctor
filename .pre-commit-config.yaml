@@ -3,11 +3,13 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: \.md$
+        exclude: (\.md$|^apps/api/tests/fixtures/)
       - id: end-of-file-fixer
+        exclude: ^apps/api/tests/fixtures/
       - id: check-yaml
       - id: check-toml
       - id: check-json
+        exclude: ^apps/api/tests/fixtures/
       - id: check-merge-conflict
       - id: check-added-large-files
   - repo: https://github.com/astral-sh/ruff-pre-commit

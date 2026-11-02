@@ -16,6 +16,7 @@
     "@aid/contracts": "workspace:*",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
+    "hash-wasm": "4.12.0",
     "next": "^16.4.3",
     "qrcode.react": "^4.2.0",
     "react": "^19.3.1",

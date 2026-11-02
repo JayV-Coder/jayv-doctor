@@ -25,6 +25,44 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"imports": {
+                  Row: {
+                    "accepted": number,"created_at": string,"created_by": string | null,"duplicate_of": string | null,"duplicates": number,"error": string | null,"filename": string,"format": string | null,"id": string,"integration_id": string,"raw_log_object_id": string | null,"rejected": number,"secrets_removed": number,"sha256": string,"size_bytes": number,"status": string,"tenant_id": string,"total_lines": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accepted"?: number,"created_at"?: string,"created_by"?: string | null,"duplicate_of"?: string | null,"duplicates"?: number,"error"?: string | null,"filename": string,"format"?: string | null,"id"?: string,"integration_id": string,"raw_log_object_id"?: string | null,"rejected"?: number,"secrets_removed"?: number,"sha256": string,"size_bytes": number,"status"?: string,"tenant_id": string,"total_lines"?: number,"updated_at"?: string
+                  }
+                  Update: {
+                    "accepted"?: number,"created_at"?: string,"created_by"?: string | null,"duplicate_of"?: string | null,"duplicates"?: number,"error"?: string | null,"filename"?: string,"format"?: string | null,"id"?: string,"integration_id"?: string,"raw_log_object_id"?: string | null,"rejected"?: number,"secrets_removed"?: number,"sha256"?: string,"size_bytes"?: number,"status"?: string,"tenant_id"?: string,"total_lines"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "imports_tenant_id_duplicate_of_fkey"
+      columns: ["tenant_id","duplicate_of"]
+isOneToOne: false
+      referencedRelation: "imports"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "imports_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "imports_tenant_id_integration_id_fkey"
+      columns: ["tenant_id","integration_id"]
+isOneToOne: false
+      referencedRelation: "integrations"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "imports_tenant_id_raw_log_object_id_fkey"
+      columns: ["tenant_id","raw_log_object_id"]
+isOneToOne: false
+      referencedRelation: "raw_log_objects"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
                 },"integrations": {
                   Row: {
                     "archived_at": string | null,"created_at": string,"created_by": string | null,"description": string | null,"environment": string,"id": string,"name": string,"owner_team": string | null,"source_system": string,"target_system": string,"tenant_id": string,"updated_at": string
@@ -79,6 +117,46 @@ isOneToOne: false
                   Relationships: [
                     {
       foreignKeyName: "memberships_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"outbox_messages": {
+                  Row: {
+                    "attempts": number,"created_at": string,"id": number,"payload": NonNullable<Json>,"published_at": string | null,"tenant_id": string,"topic": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attempts"?: number,"created_at"?: string,"id"?: never,"payload": NonNullable<Json>,"published_at"?: string | null,"tenant_id": string,"topic": string
+                  }
+                  Update: {
+                    "attempts"?: number,"created_at"?: string,"id"?: never,"payload"?: NonNullable<Json>,"published_at"?: string | null,"tenant_id"?: string,"topic"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "outbox_messages_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"raw_log_objects": {
+                  Row: {
+                    "created_at": string,"expires_at": string,"id": string,"sha256": string,"size_bytes": number,"source": string,"storage_path": string,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"expires_at"?: string,"id"?: string,"sha256": string,"size_bytes": number,"source": string,"storage_path": string,"tenant_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"expires_at"?: string,"id"?: string,"sha256"?: string,"size_bytes"?: number,"source"?: string,"storage_path"?: string,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "raw_log_objects_tenant_id_fkey"
       columns: ["tenant_id"]
 isOneToOne: false
       referencedRelation: "tenants"
@@ -142,6 +220,11 @@ isOneToOne: false
             "accept_invitation":
 { Args: { "token_hash": string }; Returns: string
                            },
+"create_import":
+{ Args: { "filename": string,"integration_id": string,"sha256": string,"size_bytes": number }; Returns: {
+              "duplicate_of": string,"error": string,"format": string,"id": string,"status": string
+            }[]
+                           },
 "create_organization":
 { Args: { "llm_provider": string,"name": string,"segment": string,"slug": string }; Returns: string
                            },
@@ -157,8 +240,20 @@ isOneToOne: false
 "custom_access_token_hook":
 { Args: { "event": Json }; Returns: Json
                            },
+"finish_import":
+{ Args: { "reason": string,"stored_size": number,"target": string }; Returns: undefined
+                           },
+"has_member_role":
+{ Args: { "roles": (string)[] }; Returns: boolean
+                           },
 "has_role":
 { Args: { "roles": (string)[] }; Returns: boolean
+                           },
+"import_storage_path":
+{ Args: { "format": string,"import_id": string,"tenant": string }; Returns: string
+                           },
+"imported_before":
+{ Args: { "integration": string,"sha": string,"tenant": string }; Returns: string
                            },
 "invite_member":
 { Args: { "email": string,"role": string,"token_hash": string }; Returns: {

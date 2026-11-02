@@ -994,3 +994,42 @@ p {
 .card > .btn {
   align-self: flex-start;
 }
+
+.drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 22px;
+  border: 1px dashed var(--faint);
+  border-radius: 5px;
+  color: var(--mu);
+  text-align: center;
+  cursor: pointer;
+}
+
+.drop strong {
+  color: var(--fg);
+}
+
+.drop:has(input:focus-visible) {
+  outline: 2px solid var(--go);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.ell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

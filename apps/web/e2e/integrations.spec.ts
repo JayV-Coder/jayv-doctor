@@ -1,16 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
-import { expectNoHorizontalScroll, ownerWithOrganization } from "./helpers";
-
-async function createIntegration(page: Page, name: string): Promise<void> {
-  await page.getByRole("button", { name: "Nova", exact: true }).click();
-  const sheet = page.getByRole("dialog", { name: "Nova integração" });
-  await sheet.getByLabel("Nome").fill(name);
-  await sheet.getByLabel("Origem").selectOption("Salesforce");
-  await sheet.getByLabel("Destino").selectOption("SAP");
-  await sheet.getByLabel("Ambiente").selectOption("Produção");
-  await sheet.getByRole("button", { name: "Salvar integração" }).click();
-}
+import { expect, test } from "@playwright/test";
+import { createIntegration, expectNoHorizontalScroll, ownerWithOrganization } from "./helpers";
 
 test("o onboarding termina sugerindo a primeira Integração", async ({ page }) => {
   await ownerWithOrganization(page, `Primeira ${randomUUID().slice(0, 8)}`);

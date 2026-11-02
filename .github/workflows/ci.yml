@@ -60,7 +60,8 @@ jobs:
           version: latest
       - run: pnpm install --frozen-lockfile
       - run: uv sync --all-packages --locked
-      - run: supabase start -x realtime,storage-api,imgproxy,studio,postgres-meta,edge-runtime,logflare,vector,supavisor
+      # Storage entra a partir do ticket #11 (Importação manual).
+      - run: supabase start -x realtime,imgproxy,studio,postgres-meta,edge-runtime,logflare,vector,supavisor
       - name: Configurar app web com a stack local
         run: |
           key="$(supabase status -o json | jq -r .PUBLISHABLE_KEY)"

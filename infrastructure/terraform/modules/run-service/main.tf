@@ -140,6 +140,10 @@ output "ingress" {
   value = google_cloud_run_v2_service.this.ingress
 }
 
+output "env" {
+  value = var.env
+}
+
 output "public_invoker" {
   value = google_cloud_run_v2_service.this.invoker_iam_disabled
 }

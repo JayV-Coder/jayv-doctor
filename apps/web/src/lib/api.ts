@@ -10,6 +10,8 @@ export type Organization = Schemas["Organization"];
 export type Member = Schemas["Member"];
 export type Invitation = Schemas["Invitation"];
 export type Integration = Schemas["Integration"];
+export type Import = Schemas["Import"];
+export type CreatedImport = Schemas["CreatedImport"];
 type Me = Schemas["Me"];
 
 // Só no servidor: o token sai do cookie da sessão e a API o valida.
@@ -30,6 +32,12 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
 export async function listIntegrations(): Promise<Integration[] | null> {
   const response = await apiFetch("/integrations").catch(() => null);
   return response?.ok ? ((await response.json()) as Integration[]) : null;
+}
+
+// Últimas Importações da Organização ativa; `null` se a API não respondeu.
+export async function listImports(): Promise<Import[] | null> {
+  const response = await apiFetch("/imports").catch(() => null);
+  return response?.ok ? ((await response.json()) as Import[]) : null;
 }
 
 // `cache`: o layout do shell e a página pedem o mesmo `/me` na mesma requisição.

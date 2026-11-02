@@ -15,6 +15,7 @@ Criar uma Organização passa por `public.create_organization`, para manter as r
 - **Apagar uma Organização habilitada no Doctor é recusado** no jayv-coder (`on delete restrict`), com erro de FK, até haver desprovisionamento. Diagnósticos são imutáveis e o aceite do DPA é evidência.
 - **Stack local:** `00000000000000_shared_public_stub.sql` copia o mínimo de `public` e nunca vai para o projeto hospedado. Mudanças do jayv-coder nessas tabelas precisam ser refletidas nele à mão.
 - **Auth é um só:** hook de JWT, templates de e-mail, URLs de redirecionamento e política de senha valem para os dois produtos. O hook não pode derrubar o login: em erro de banco, devolve o token sem claims de tenant, e o RLS do Doctor nega tudo. O Supabase aceita um hook por projeto: se o jayv-coder passar a precisar de outro, os dois terão de virar um.
+- **Storage é um só:** os buckets do Doctor têm prefixo `doctor-` (o primeiro é `doctor-raw-logs`, do ticket #11), e as políticas em `storage.objects` filtram pelo `bucket_id` deles. Políticas permissivas só somam acesso, então não mudam nada nos buckets do jayv-coder. O bucket nasce na migração, com `on conflict do nothing`.
 - **Ambientes:** dev, staging e prod do GCP apontam para o mesmo banco enquanto não houver outro projeto Supabase.
 
 ## Considered Options

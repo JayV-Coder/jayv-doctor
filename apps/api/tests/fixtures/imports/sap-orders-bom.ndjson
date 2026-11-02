@@ -1,0 +1,3 @@
+﻿{"timestamp":"2026-11-02T14:05:00Z","operation":"BAPI_SALESORDER_CREATEFROMDAT2","severity":"error","message":"Timeout"}
+{"timestamp":"2026-11-02T14:05:01Z","operation":"BAPI_SALESORDER_CREATEFROMDAT2","severity":"info"}
+nao-e-json

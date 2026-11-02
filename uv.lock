@@ -17,6 +17,7 @@ source = { editable = "apps/api" }
 dependencies = [
     { name = "asyncpg" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "opentelemetry-exporter-gcp-monitoring" },
     { name = "opentelemetry-exporter-gcp-trace" },
     { name = "opentelemetry-instrumentation-fastapi" },
@@ -30,6 +31,7 @@ dependencies = [
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "fastapi", specifier = ">=0.162" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "opentelemetry-exporter-gcp-monitoring", specifier = ">=1.9.0a0" },
     { name = "opentelemetry-exporter-gcp-trace", specifier = ">=1.9" },
     { name = "opentelemetry-instrumentation-fastapi", specifier = ">=0.50b0" },

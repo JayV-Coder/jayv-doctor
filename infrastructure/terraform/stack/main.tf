@@ -121,9 +121,11 @@ module "api" {
   min_instances       = var.api_min_instances
   deletion_protection = var.environment == "prod"
   env = {
-    SUPABASE_JWT_ISSUER = var.supabase_jwt_issuer
-    APP_URL             = var.app_url
-    OTEL_ENABLED        = "true"
+    SUPABASE_JWT_ISSUER      = var.supabase_jwt_issuer
+    SUPABASE_URL             = trimsuffix(var.supabase_jwt_issuer, "/auth/v1")
+    SUPABASE_PUBLISHABLE_KEY = var.supabase_publishable_key
+    APP_URL                  = var.app_url
+    OTEL_ENABLED             = "true"
   }
   secret_env = { for secret in local.api_secrets : local.secret_env[secret] => secret }
   depends_on = [module.secrets]

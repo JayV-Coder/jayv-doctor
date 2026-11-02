@@ -6,13 +6,14 @@ mock_provider "google" {
 }
 
 variables {
-  app_url             = "https://app.exemplo.test"
-  project_id          = "aid-test"
-  environment         = "staging"
-  supabase_jwt_issuer = "https://exemplo.supabase.co/auth/v1"
-  github_repository   = "JayV-Coder/jayv-doctor"
-  github_environment  = "staging"
-  api_domain          = "api.exemplo.test"
+  app_url                  = "https://app.exemplo.test"
+  project_id               = "aid-test"
+  environment              = "staging"
+  supabase_jwt_issuer      = "https://exemplo.supabase.co/auth/v1"
+  supabase_publishable_key = "sb_publishable_teste"
+  github_repository        = "JayV-Coder/jayv-doctor"
+  github_environment       = "staging"
+  api_domain               = "api.exemplo.test"
 }
 
 run "topicos_tem_push_autenticado_e_dlq_apos_5_tentativas" {
@@ -134,6 +135,28 @@ run "wif_aceita_so_este_repositorio_e_ambiente" {
     condition     = strcontains(module.deploy.attribute_condition, "JayV-Coder/jayv-doctor") && strcontains(module.deploy.attribute_condition, "staging")
     error_message = "O WIF precisa restringir repositório e GitHub Environment."
   }
+}
+
+run "api_chama_o_storage_do_mesmo_projeto_com_a_chave_publicavel" {
+  command = plan
+
+  assert {
+    condition     = module.api.env["SUPABASE_URL"] == "https://exemplo.supabase.co"
+    error_message = "A URL do Supabase sai do emissor do JWT: o Storage é do mesmo projeto do Auth."
+  }
+  assert {
+    condition     = module.api.env["SUPABASE_PUBLISHABLE_KEY"] == "sb_publishable_teste"
+    error_message = "A API usa a chave publicável no Storage."
+  }
+}
+
+run "chave_secreta_do_supabase_e_recusada" {
+  command = plan
+
+  variables {
+    supabase_publishable_key = "sb_secret_vazada"
+  }
+  expect_failures = [var.supabase_publishable_key]
 }
 
 run "ambiente_invalido_e_recusado" {

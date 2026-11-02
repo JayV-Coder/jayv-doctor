@@ -91,6 +91,15 @@ def get_claims(
     return claims
 
 
+# O JWT em si, para chamar o Storage em nome do Usuário (as políticas do bucket valem).
+# Só depois de `get_claims`, que já o validou.
+def get_bearer_token(
+    claims: Annotated[Claims, Depends(get_claims)],
+    authorization: Annotated[str | None, Header()] = None,
+) -> str:
+    return (authorization or "").partition(" ")[2]
+
+
 def require_aal2_claims(claims: Claims) -> Claims:
     if claims.aal != "aal2":
         raise ApiError(403, "mfa_required", "Esta ação exige verificação em duas etapas.")

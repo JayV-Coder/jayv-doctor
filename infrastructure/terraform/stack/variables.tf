@@ -31,6 +31,16 @@ variable "supabase_jwt_issuer" {
   type        = string
 }
 
+variable "supabase_publishable_key" {
+  description = "Chave publicável do Supabase (a mesma do app web). Não é segredo: a API a usa no Storage junto com o JWT do Usuário."
+  type        = string
+
+  validation {
+    condition     = startswith(var.supabase_publishable_key, "sb_publishable_")
+    error_message = "Use a chave publicável (sb_publishable_…), nunca a secreta."
+  }
+}
+
 variable "github_repository" {
   type = string
 }

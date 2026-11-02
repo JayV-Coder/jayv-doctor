@@ -13,6 +13,7 @@ dependencies = [
     "pyjwt[crypto]>=2.15",
     "sqlalchemy[asyncio]>=2.0",
     "uvicorn>=0.54",
+    "httpx>=0.28",
 ]
 
 [build-system]

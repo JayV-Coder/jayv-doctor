@@ -18,6 +18,7 @@ SECRETS = {
     "password",
     "authorization",
     "cookie",
+    "token",
 }
 
 cases = [json.loads(line) for line in CORPUS.read_text().splitlines()]

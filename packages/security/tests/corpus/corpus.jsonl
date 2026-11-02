@@ -115,132 +115,150 @@
 {"id": "password-114", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: \"password\": \"hunter22\" rejeitado", "expect": {"password": 1}}
 {"id": "password-115", "text": "[sf-sync] payload {\"campo\": \"\"password\": \"hunter22\"\", \"status\": \"erro\"}", "expect": {"password": 1}}
 {"id": "password-116", "text": "\"password\": \"hunter22\"", "expect": {"password": 1}}
-{"id": "authorization-117", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: Authorization: Basic dXNlcjpzZW5oYQ== rejeitado", "expect": {"authorization": 1}}
-{"id": "authorization-118", "text": "[sf-sync] payload {\"campo\": \"Authorization: Basic dXNlcjpzZW5oYQ==\", \"status\": \"erro\"}", "expect": {"authorization": 1}}
-{"id": "authorization-119", "text": "Authorization: Basic dXNlcjpzZW5oYQ==", "expect": {"authorization": 1}}
-{"id": "cookie-120", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: Cookie: sid=31d4d96e407aad42; lang=pt-BR rejeitado", "expect": {"cookie": 1}}
-{"id": "cookie-121", "text": "[sf-sync] payload {\"campo\": \"Cookie: sid=31d4d96e407aad42; lang=pt-BR\", \"status\": \"erro\"}", "expect": {"cookie": 1}}
-{"id": "cookie-122", "text": "Cookie: sid=31d4d96e407aad42; lang=pt-BR", "expect": {"cookie": 1}}
-{"id": "private_key-123", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: -----BEGIN PRIVATE KEY-----\\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\\n-----END PRIVATE KEY----- rejeitado", "expect": {"private_key": 1}}
-{"id": "private_key-124", "text": "[sf-sync] payload {\"campo\": \"-----BEGIN PRIVATE KEY-----\\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\\n-----END PRIVATE KEY-----\", \"status\": \"erro\"}", "expect": {"private_key": 1}}
-{"id": "private_key-125", "text": "-----BEGIN PRIVATE KEY-----\\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\\n-----END PRIVATE KEY-----", "expect": {"private_key": 1}}
-{"id": "neg-126", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: pedido 4500012345 criado rejeitado", "expect": {}}
-{"id": "neg-127", "text": "[sf-sync] payload {\"campo\": \"pedido 4500012345 criado\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-128", "text": "pedido 4500012345 criado", "expect": {}}
-{"id": "neg-129", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: documento SAP 0080001234 lançado rejeitado", "expect": {}}
-{"id": "neg-130", "text": "[sf-sync] payload {\"campo\": \"documento SAP 0080001234 lançado\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-131", "text": "documento SAP 0080001234 lançado", "expect": {}}
-{"id": "neg-132", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: IDoc 0000000001234567 status 51 rejeitado", "expect": {}}
-{"id": "neg-133", "text": "[sf-sync] payload {\"campo\": \"IDoc 0000000001234567 status 51\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-134", "text": "IDoc 0000000001234567 status 51", "expect": {}}
-{"id": "neg-135", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: CPF 529.982.247-24 inválido no cadastro rejeitado", "expect": {}}
-{"id": "neg-136", "text": "[sf-sync] payload {\"campo\": \"CPF 529.982.247-24 inválido no cadastro\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-137", "text": "CPF 529.982.247-24 inválido no cadastro", "expect": {}}
-{"id": "neg-138", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: CNPJ 11.222.333/0001-80 recusado rejeitado", "expect": {}}
-{"id": "neg-139", "text": "[sf-sync] payload {\"campo\": \"CNPJ 11.222.333/0001-80 recusado\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-140", "text": "CNPJ 11.222.333/0001-80 recusado", "expect": {}}
-{"id": "neg-141", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: cartão 4111 1111 1111 1112 recusado pela adquirente rejeitado", "expect": {}}
-{"id": "neg-142", "text": "[sf-sync] payload {\"campo\": \"cartão 4111 1111 1111 1112 recusado pela adquirente\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-143", "text": "cartão 4111 1111 1111 1112 recusado pela adquirente", "expect": {}}
-{"id": "neg-144", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: timestamp 2026-11-02T14:05:00.123Z rejeitado", "expect": {}}
-{"id": "neg-145", "text": "[sf-sync] payload {\"campo\": \"timestamp 2026-11-02T14:05:00.123Z\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-146", "text": "timestamp 2026-11-02T14:05:00.123Z", "expect": {}}
-{"id": "neg-147", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: data 02/11/2026 14:05 rejeitado", "expect": {}}
-{"id": "neg-148", "text": "[sf-sync] payload {\"campo\": \"data 02/11/2026 14:05\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-149", "text": "data 02/11/2026 14:05", "expect": {}}
-{"id": "neg-150", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: trace 4bf92f3577b34da6a3ce929d0e0e4736 rejeitado", "expect": {}}
-{"id": "neg-151", "text": "[sf-sync] payload {\"campo\": \"trace 4bf92f3577b34da6a3ce929d0e0e4736\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-152", "text": "trace 4bf92f3577b34da6a3ce929d0e0e4736", "expect": {}}
-{"id": "neg-153", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: id 3f2504e0-4f89-41d3-9a0c-0305e82c3301 rejeitado", "expect": {}}
-{"id": "neg-154", "text": "[sf-sync] payload {\"campo\": \"id 3f2504e0-4f89-41d3-9a0c-0305e82c3301\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-155", "text": "id 3f2504e0-4f89-41d3-9a0c-0305e82c3301", "expect": {}}
-{"id": "neg-156", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: sha256 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08 rejeitado", "expect": {}}
-{"id": "neg-157", "text": "[sf-sync] payload {\"campo\": \"sha256 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-158", "text": "sha256 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", "expect": {}}
-{"id": "neg-159", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: HTTP 504 Gateway Timeout após 30000 ms rejeitado", "expect": {}}
-{"id": "neg-160", "text": "[sf-sync] payload {\"campo\": \"HTTP 504 Gateway Timeout após 30000 ms\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-161", "text": "HTTP 504 Gateway Timeout após 30000 ms", "expect": {}}
-{"id": "neg-162", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: valor R$ 1.234,56 em 3 parcelas rejeitado", "expect": {}}
-{"id": "neg-163", "text": "[sf-sync] payload {\"campo\": \"valor R$ 1.234,56 em 3 parcelas\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-164", "text": "valor R$ 1.234,56 em 3 parcelas", "expect": {}}
-{"id": "neg-165", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: Bearer token missing rejeitado", "expect": {}}
-{"id": "neg-166", "text": "[sf-sync] payload {\"campo\": \"Bearer token missing\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-167", "text": "Bearer token missing", "expect": {}}
-{"id": "neg-168", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: password expired for user SAPUSER rejeitado", "expect": {}}
-{"id": "neg-169", "text": "[sf-sync] payload {\"campo\": \"password expired for user SAPUSER\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-170", "text": "password expired for user SAPUSER", "expect": {}}
-{"id": "neg-171", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: token expirado, renovando sessão rejeitado", "expect": {}}
-{"id": "neg-172", "text": "[sf-sync] payload {\"campo\": \"token expirado, renovando sessão\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-173", "text": "token expirado, renovando sessão", "expect": {}}
-{"id": "neg-174", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: cookie de sessão ausente rejeitado", "expect": {}}
-{"id": "neg-175", "text": "[sf-sync] payload {\"campo\": \"cookie de sessão ausente\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-176", "text": "cookie de sessão ausente", "expect": {}}
-{"id": "neg-177", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: authorization failed: escopo insuficiente rejeitado", "expect": {}}
-{"id": "neg-178", "text": "[sf-sync] payload {\"campo\": \"authorization failed: escopo insuficiente\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-179", "text": "authorization failed: escopo insuficiente", "expect": {}}
-{"id": "neg-180", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: BAPI_SALESORDER_CREATEFROMDAT2 retornou TYPE=E NUMBER=219 rejeitado", "expect": {}}
-{"id": "neg-181", "text": "[sf-sync] payload {\"campo\": \"BAPI_SALESORDER_CREATEFROMDAT2 retornou TYPE=E NUMBER=219\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-182", "text": "BAPI_SALESORDER_CREATEFROMDAT2 retornou TYPE=E NUMBER=219", "expect": {}}
-{"id": "neg-183", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: material 000000000000100234 sem estoque rejeitado", "expect": {}}
-{"id": "neg-184", "text": "[sf-sync] payload {\"campo\": \"material 000000000000100234 sem estoque\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-185", "text": "material 000000000000100234 sem estoque", "expect": {}}
-{"id": "neg-186", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: quantidade 12 unidade PC centro 1000 rejeitado", "expect": {}}
-{"id": "neg-187", "text": "[sf-sync] payload {\"campo\": \"quantidade 12 unidade PC centro 1000\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-188", "text": "quantidade 12 unidade PC centro 1000", "expect": {}}
-{"id": "neg-189", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: lote 2026110201 expedido rejeitado", "expect": {}}
-{"id": "neg-190", "text": "[sf-sync] payload {\"campo\": \"lote 2026110201 expedido\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-191", "text": "lote 2026110201 expedido", "expect": {}}
-{"id": "neg-192", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: versão do conector 1.4.2 rejeitado", "expect": {}}
-{"id": "neg-193", "text": "[sf-sync] payload {\"campo\": \"versão do conector 1.4.2\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-194", "text": "versão do conector 1.4.2", "expect": {}}
-{"id": "neg-195", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: porta 8443 recusou conexão rejeitado", "expect": {}}
-{"id": "neg-196", "text": "[sf-sync] payload {\"campo\": \"porta 8443 recusou conexão\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-197", "text": "porta 8443 recusou conexão", "expect": {}}
-{"id": "neg-198", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: Opportunity 0065g00000AbCdE atualizada rejeitado", "expect": {}}
-{"id": "neg-199", "text": "[sf-sync] payload {\"campo\": \"Opportunity 0065g00000AbCdE atualizada\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-200", "text": "Opportunity 0065g00000AbCdE atualizada", "expect": {}}
-{"id": "neg-201", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: Account 0015g00000XyZ12 sincronizada rejeitado", "expect": {}}
-{"id": "neg-202", "text": "[sf-sync] payload {\"campo\": \"Account 0015g00000XyZ12 sincronizada\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-203", "text": "Account 0015g00000XyZ12 sincronizada", "expect": {}}
-{"id": "neg-204", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: chave de partição 202611 rejeitado", "expect": {}}
-{"id": "neg-205", "text": "[sf-sync] payload {\"campo\": \"chave de partição 202611\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-206", "text": "chave de partição 202611", "expect": {}}
-{"id": "neg-207", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: fila sap-orders com 1532 mensagens rejeitado", "expect": {}}
-{"id": "neg-208", "text": "[sf-sync] payload {\"campo\": \"fila sap-orders com 1532 mensagens\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-209", "text": "fila sap-orders com 1532 mensagens", "expect": {}}
-{"id": "neg-210", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: retry 3/5 em 2000 ms rejeitado", "expect": {}}
-{"id": "neg-211", "text": "[sf-sync] payload {\"campo\": \"retry 3/5 em 2000 ms\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-212", "text": "retry 3/5 em 2000 ms", "expect": {}}
-{"id": "neg-213", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: user agent Mozilla/5.0 (X11; Linux x86_64) rejeitado", "expect": {}}
-{"id": "neg-214", "text": "[sf-sync] payload {\"campo\": \"user agent Mozilla/5.0 (X11; Linux x86_64)\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-215", "text": "user agent Mozilla/5.0 (X11; Linux x86_64)", "expect": {}}
-{"id": "neg-216", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: SKU 7891234567895 sem preço rejeitado", "expect": {}}
-{"id": "neg-217", "text": "[sf-sync] payload {\"campo\": \"SKU 7891234567895 sem preço\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-218", "text": "SKU 7891234567895 sem preço", "expect": {}}
-{"id": "neg-219", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: nota fiscal 000123456 série 1 rejeitado", "expect": {}}
-{"id": "neg-220", "text": "[sf-sync] payload {\"campo\": \"nota fiscal 000123456 série 1\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-221", "text": "nota fiscal 000123456 série 1", "expect": {}}
-{"id": "neg-222", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: duração 00:01:23.456 rejeitado", "expect": {}}
-{"id": "neg-223", "text": "[sf-sync] payload {\"campo\": \"duração 00:01:23.456\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-224", "text": "duração 00:01:23.456", "expect": {}}
-{"id": "neg-225", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: processo 12345 PID 6789 rejeitado", "expect": {}}
-{"id": "neg-226", "text": "[sf-sync] payload {\"campo\": \"processo 12345 PID 6789\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-227", "text": "processo 12345 PID 6789", "expect": {}}
-{"id": "neg-228", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: CEP 01310-100 inválido rejeitado", "expect": {}}
-{"id": "neg-229", "text": "[sf-sync] payload {\"campo\": \"CEP 01310-100 inválido\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-230", "text": "CEP 01310-100 inválido", "expect": {}}
-{"id": "neg-231", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: status code 422 Unprocessable Entity rejeitado", "expect": {}}
-{"id": "neg-232", "text": "[sf-sync] payload {\"campo\": \"status code 422 Unprocessable Entity\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-233", "text": "status code 422 Unprocessable Entity", "expect": {}}
-{"id": "neg-234", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: endpoint /api/v1/orders/4500012345 rejeitado", "expect": {}}
-{"id": "neg-235", "text": "[sf-sync] payload {\"campo\": \"endpoint /api/v1/orders/4500012345\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-236", "text": "endpoint /api/v1/orders/4500012345", "expect": {}}
-{"id": "neg-237", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: região southamerica-east1 rejeitado", "expect": {}}
-{"id": "neg-238", "text": "[sf-sync] payload {\"campo\": \"região southamerica-east1\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-239", "text": "região southamerica-east1", "expect": {}}
-{"id": "neg-240", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: AIza curto não é chave rejeitado", "expect": {}}
-{"id": "neg-241", "text": "[sf-sync] payload {\"campo\": \"AIza curto não é chave\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-242", "text": "AIza curto não é chave", "expect": {}}
-{"id": "neg-243", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: AKIA sozinho não é chave rejeitado", "expect": {}}
-{"id": "neg-244", "text": "[sf-sync] payload {\"campo\": \"AKIA sozinho não é chave\", \"status\": \"erro\"}", "expect": {}}
-{"id": "neg-245", "text": "AKIA sozinho não é chave", "expect": {}}
+{"id": "password-117", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: DB_PASSWORD=hunter2xyz rejeitado", "expect": {"password": 1}}
+{"id": "password-118", "text": "[sf-sync] payload {\"campo\": \"DB_PASSWORD=hunter2xyz\", \"status\": \"erro\"}", "expect": {"password": 1}}
+{"id": "password-119", "text": "DB_PASSWORD=hunter2xyz", "expect": {"password": 1}}
+{"id": "password-120", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: x-api-key: abcdef123456 rejeitado", "expect": {"password": 1}}
+{"id": "password-121", "text": "[sf-sync] payload {\"campo\": \"x-api-key: abcdef123456\", \"status\": \"erro\"}", "expect": {"password": 1}}
+{"id": "password-122", "text": "x-api-key: abcdef123456", "expect": {"password": 1}}
+{"id": "token-123", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: access_token=opaqueABC123xyz rejeitado", "expect": {"token": 1}}
+{"id": "token-124", "text": "[sf-sync] payload {\"campo\": \"access_token=opaqueABC123xyz\", \"status\": \"erro\"}", "expect": {"token": 1}}
+{"id": "token-125", "text": "access_token=opaqueABC123xyz", "expect": {"token": 1}}
+{"id": "token-126", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: refresh_token: 1//0gAbCdEf rejeitado", "expect": {"token": 1}}
+{"id": "token-127", "text": "[sf-sync] payload {\"campo\": \"refresh_token: 1//0gAbCdEf\", \"status\": \"erro\"}", "expect": {"token": 1}}
+{"id": "token-128", "text": "refresh_token: 1//0gAbCdEf", "expect": {"token": 1}}
+{"id": "authorization-129", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: Authorization: Basic dXNlcjpzZW5oYQ== rejeitado", "expect": {"authorization": 1}}
+{"id": "authorization-130", "text": "[sf-sync] payload {\"campo\": \"Authorization: Basic dXNlcjpzZW5oYQ==\", \"status\": \"erro\"}", "expect": {"authorization": 1}}
+{"id": "authorization-131", "text": "Authorization: Basic dXNlcjpzZW5oYQ==", "expect": {"authorization": 1}}
+{"id": "cookie-132", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: Cookie: sid=31d4d96e407aad42; lang=pt-BR rejeitado", "expect": {"cookie": 1}}
+{"id": "cookie-133", "text": "[sf-sync] payload {\"campo\": \"Cookie: sid=31d4d96e407aad42; lang=pt-BR\", \"status\": \"erro\"}", "expect": {"cookie": 1}}
+{"id": "cookie-134", "text": "Cookie: sid=31d4d96e407aad42; lang=pt-BR", "expect": {"cookie": 1}}
+{"id": "private_key-135", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: -----BEGIN PRIVATE KEY-----\\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\\n-----END PRIVATE KEY----- rejeitado", "expect": {"private_key": 1}}
+{"id": "private_key-136", "text": "[sf-sync] payload {\"campo\": \"-----BEGIN PRIVATE KEY-----\\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\\n-----END PRIVATE KEY-----\", \"status\": \"erro\"}", "expect": {"private_key": 1}}
+{"id": "private_key-137", "text": "-----BEGIN PRIVATE KEY-----\\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\\n-----END PRIVATE KEY-----", "expect": {"private_key": 1}}
+{"id": "neg-138", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: pedido 4500012345 criado rejeitado", "expect": {}}
+{"id": "neg-139", "text": "[sf-sync] payload {\"campo\": \"pedido 4500012345 criado\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-140", "text": "pedido 4500012345 criado", "expect": {}}
+{"id": "neg-141", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: documento SAP 0080001234 lançado rejeitado", "expect": {}}
+{"id": "neg-142", "text": "[sf-sync] payload {\"campo\": \"documento SAP 0080001234 lançado\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-143", "text": "documento SAP 0080001234 lançado", "expect": {}}
+{"id": "neg-144", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: IDoc 0000000001234567 status 51 rejeitado", "expect": {}}
+{"id": "neg-145", "text": "[sf-sync] payload {\"campo\": \"IDoc 0000000001234567 status 51\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-146", "text": "IDoc 0000000001234567 status 51", "expect": {}}
+{"id": "neg-147", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: CPF 529.982.247-24 inválido no cadastro rejeitado", "expect": {}}
+{"id": "neg-148", "text": "[sf-sync] payload {\"campo\": \"CPF 529.982.247-24 inválido no cadastro\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-149", "text": "CPF 529.982.247-24 inválido no cadastro", "expect": {}}
+{"id": "neg-150", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: CNPJ 11.222.333/0001-80 recusado rejeitado", "expect": {}}
+{"id": "neg-151", "text": "[sf-sync] payload {\"campo\": \"CNPJ 11.222.333/0001-80 recusado\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-152", "text": "CNPJ 11.222.333/0001-80 recusado", "expect": {}}
+{"id": "neg-153", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: cartão 4111 1111 1111 1112 recusado pela adquirente rejeitado", "expect": {}}
+{"id": "neg-154", "text": "[sf-sync] payload {\"campo\": \"cartão 4111 1111 1111 1112 recusado pela adquirente\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-155", "text": "cartão 4111 1111 1111 1112 recusado pela adquirente", "expect": {}}
+{"id": "neg-156", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: timestamp 2026-11-02T14:05:00.123Z rejeitado", "expect": {}}
+{"id": "neg-157", "text": "[sf-sync] payload {\"campo\": \"timestamp 2026-11-02T14:05:00.123Z\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-158", "text": "timestamp 2026-11-02T14:05:00.123Z", "expect": {}}
+{"id": "neg-159", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: data 02/11/2026 14:05 rejeitado", "expect": {}}
+{"id": "neg-160", "text": "[sf-sync] payload {\"campo\": \"data 02/11/2026 14:05\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-161", "text": "data 02/11/2026 14:05", "expect": {}}
+{"id": "neg-162", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: trace 4bf92f3577b34da6a3ce929d0e0e4736 rejeitado", "expect": {}}
+{"id": "neg-163", "text": "[sf-sync] payload {\"campo\": \"trace 4bf92f3577b34da6a3ce929d0e0e4736\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-164", "text": "trace 4bf92f3577b34da6a3ce929d0e0e4736", "expect": {}}
+{"id": "neg-165", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: id 3f2504e0-4f89-41d3-9a0c-0305e82c3301 rejeitado", "expect": {}}
+{"id": "neg-166", "text": "[sf-sync] payload {\"campo\": \"id 3f2504e0-4f89-41d3-9a0c-0305e82c3301\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-167", "text": "id 3f2504e0-4f89-41d3-9a0c-0305e82c3301", "expect": {}}
+{"id": "neg-168", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: sha256 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08 rejeitado", "expect": {}}
+{"id": "neg-169", "text": "[sf-sync] payload {\"campo\": \"sha256 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-170", "text": "sha256 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", "expect": {}}
+{"id": "neg-171", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: HTTP 504 Gateway Timeout após 30000 ms rejeitado", "expect": {}}
+{"id": "neg-172", "text": "[sf-sync] payload {\"campo\": \"HTTP 504 Gateway Timeout após 30000 ms\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-173", "text": "HTTP 504 Gateway Timeout após 30000 ms", "expect": {}}
+{"id": "neg-174", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: valor R$ 1.234,56 em 3 parcelas rejeitado", "expect": {}}
+{"id": "neg-175", "text": "[sf-sync] payload {\"campo\": \"valor R$ 1.234,56 em 3 parcelas\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-176", "text": "valor R$ 1.234,56 em 3 parcelas", "expect": {}}
+{"id": "neg-177", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: Bearer token missing rejeitado", "expect": {}}
+{"id": "neg-178", "text": "[sf-sync] payload {\"campo\": \"Bearer token missing\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-179", "text": "Bearer token missing", "expect": {}}
+{"id": "neg-180", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: password expired for user SAPUSER rejeitado", "expect": {}}
+{"id": "neg-181", "text": "[sf-sync] payload {\"campo\": \"password expired for user SAPUSER\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-182", "text": "password expired for user SAPUSER", "expect": {}}
+{"id": "neg-183", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: token expirado, renovando sessão rejeitado", "expect": {}}
+{"id": "neg-184", "text": "[sf-sync] payload {\"campo\": \"token expirado, renovando sessão\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-185", "text": "token expirado, renovando sessão", "expect": {}}
+{"id": "neg-186", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: cookie de sessão ausente rejeitado", "expect": {}}
+{"id": "neg-187", "text": "[sf-sync] payload {\"campo\": \"cookie de sessão ausente\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-188", "text": "cookie de sessão ausente", "expect": {}}
+{"id": "neg-189", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: authorization failed: escopo insuficiente rejeitado", "expect": {}}
+{"id": "neg-190", "text": "[sf-sync] payload {\"campo\": \"authorization failed: escopo insuficiente\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-191", "text": "authorization failed: escopo insuficiente", "expect": {}}
+{"id": "neg-192", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: BAPI_SALESORDER_CREATEFROMDAT2 retornou TYPE=E NUMBER=219 rejeitado", "expect": {}}
+{"id": "neg-193", "text": "[sf-sync] payload {\"campo\": \"BAPI_SALESORDER_CREATEFROMDAT2 retornou TYPE=E NUMBER=219\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-194", "text": "BAPI_SALESORDER_CREATEFROMDAT2 retornou TYPE=E NUMBER=219", "expect": {}}
+{"id": "neg-195", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: material 000000000000100234 sem estoque rejeitado", "expect": {}}
+{"id": "neg-196", "text": "[sf-sync] payload {\"campo\": \"material 000000000000100234 sem estoque\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-197", "text": "material 000000000000100234 sem estoque", "expect": {}}
+{"id": "neg-198", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: quantidade 12 unidade PC centro 1000 rejeitado", "expect": {}}
+{"id": "neg-199", "text": "[sf-sync] payload {\"campo\": \"quantidade 12 unidade PC centro 1000\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-200", "text": "quantidade 12 unidade PC centro 1000", "expect": {}}
+{"id": "neg-201", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: lote 2026110201 expedido rejeitado", "expect": {}}
+{"id": "neg-202", "text": "[sf-sync] payload {\"campo\": \"lote 2026110201 expedido\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-203", "text": "lote 2026110201 expedido", "expect": {}}
+{"id": "neg-204", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: versão do conector 1.4.2 rejeitado", "expect": {}}
+{"id": "neg-205", "text": "[sf-sync] payload {\"campo\": \"versão do conector 1.4.2\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-206", "text": "versão do conector 1.4.2", "expect": {}}
+{"id": "neg-207", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: porta 8443 recusou conexão rejeitado", "expect": {}}
+{"id": "neg-208", "text": "[sf-sync] payload {\"campo\": \"porta 8443 recusou conexão\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-209", "text": "porta 8443 recusou conexão", "expect": {}}
+{"id": "neg-210", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: Opportunity 0065g00000AbCdE atualizada rejeitado", "expect": {}}
+{"id": "neg-211", "text": "[sf-sync] payload {\"campo\": \"Opportunity 0065g00000AbCdE atualizada\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-212", "text": "Opportunity 0065g00000AbCdE atualizada", "expect": {}}
+{"id": "neg-213", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: Account 0015g00000XyZ12 sincronizada rejeitado", "expect": {}}
+{"id": "neg-214", "text": "[sf-sync] payload {\"campo\": \"Account 0015g00000XyZ12 sincronizada\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-215", "text": "Account 0015g00000XyZ12 sincronizada", "expect": {}}
+{"id": "neg-216", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: chave de partição 202611 rejeitado", "expect": {}}
+{"id": "neg-217", "text": "[sf-sync] payload {\"campo\": \"chave de partição 202611\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-218", "text": "chave de partição 202611", "expect": {}}
+{"id": "neg-219", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: fila sap-orders com 1532 mensagens rejeitado", "expect": {}}
+{"id": "neg-220", "text": "[sf-sync] payload {\"campo\": \"fila sap-orders com 1532 mensagens\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-221", "text": "fila sap-orders com 1532 mensagens", "expect": {}}
+{"id": "neg-222", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: retry 3/5 em 2000 ms rejeitado", "expect": {}}
+{"id": "neg-223", "text": "[sf-sync] payload {\"campo\": \"retry 3/5 em 2000 ms\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-224", "text": "retry 3/5 em 2000 ms", "expect": {}}
+{"id": "neg-225", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: user agent Mozilla/5.0 (X11; Linux x86_64) rejeitado", "expect": {}}
+{"id": "neg-226", "text": "[sf-sync] payload {\"campo\": \"user agent Mozilla/5.0 (X11; Linux x86_64)\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-227", "text": "user agent Mozilla/5.0 (X11; Linux x86_64)", "expect": {}}
+{"id": "neg-228", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: SKU 7891234567895 sem preço rejeitado", "expect": {}}
+{"id": "neg-229", "text": "[sf-sync] payload {\"campo\": \"SKU 7891234567895 sem preço\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-230", "text": "SKU 7891234567895 sem preço", "expect": {}}
+{"id": "neg-231", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: nota fiscal 000123456 série 1 rejeitado", "expect": {}}
+{"id": "neg-232", "text": "[sf-sync] payload {\"campo\": \"nota fiscal 000123456 série 1\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-233", "text": "nota fiscal 000123456 série 1", "expect": {}}
+{"id": "neg-234", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: duração 00:01:23.456 rejeitado", "expect": {}}
+{"id": "neg-235", "text": "[sf-sync] payload {\"campo\": \"duração 00:01:23.456\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-236", "text": "duração 00:01:23.456", "expect": {}}
+{"id": "neg-237", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: processo 12345 PID 6789 rejeitado", "expect": {}}
+{"id": "neg-238", "text": "[sf-sync] payload {\"campo\": \"processo 12345 PID 6789\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-239", "text": "processo 12345 PID 6789", "expect": {}}
+{"id": "neg-240", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: CEP 01310-100 inválido rejeitado", "expect": {}}
+{"id": "neg-241", "text": "[sf-sync] payload {\"campo\": \"CEP 01310-100 inválido\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-242", "text": "CEP 01310-100 inválido", "expect": {}}
+{"id": "neg-243", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: status code 422 Unprocessable Entity rejeitado", "expect": {}}
+{"id": "neg-244", "text": "[sf-sync] payload {\"campo\": \"status code 422 Unprocessable Entity\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-245", "text": "status code 422 Unprocessable Entity", "expect": {}}
+{"id": "neg-246", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: endpoint /api/v1/orders/4500012345 rejeitado", "expect": {}}
+{"id": "neg-247", "text": "[sf-sync] payload {\"campo\": \"endpoint /api/v1/orders/4500012345\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-248", "text": "endpoint /api/v1/orders/4500012345", "expect": {}}
+{"id": "neg-249", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: região southamerica-east1 rejeitado", "expect": {}}
+{"id": "neg-250", "text": "[sf-sync] payload {\"campo\": \"região southamerica-east1\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-251", "text": "região southamerica-east1", "expect": {}}
+{"id": "neg-252", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: AIza curto não é chave rejeitado", "expect": {}}
+{"id": "neg-253", "text": "[sf-sync] payload {\"campo\": \"AIza curto não é chave\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-254", "text": "AIza curto não é chave", "expect": {}}
+{"id": "neg-255", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: AKIA sozinho não é chave rejeitado", "expect": {}}
+{"id": "neg-256", "text": "[sf-sync] payload {\"campo\": \"AKIA sozinho não é chave\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-257", "text": "AKIA sozinho não é chave", "expect": {}}
+{"id": "neg-258", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: tokenType=Bearer rejeitado", "expect": {}}
+{"id": "neg-259", "text": "[sf-sync] payload {\"campo\": \"tokenType=Bearer\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-260", "text": "tokenType=Bearer", "expect": {}}
+{"id": "neg-261", "text": "ERROR BAPI_SALESORDER_CREATEFROMDAT2 retorno E: password_expires_at=2026-12-01 rejeitado", "expect": {}}
+{"id": "neg-262", "text": "[sf-sync] payload {\"campo\": \"password_expires_at=2026-12-01\", \"status\": \"erro\"}", "expect": {}}
+{"id": "neg-263", "text": "password_expires_at=2026-12-01", "expect": {}}

@@ -122,3 +122,70 @@ def test_json_profundo_e_cortado_no_nivel_10() -> None:
     assert depth == 10
     assert node == "[TRUNCADO:profundidade]"
     assert report.truncated == 1
+
+
+# Casos da revisão do ticket #13: cada um vazava antes.
+LEAKS = [
+    ("card 4111 1111 1111 1111 12/28", "cartao"),
+    ("card 4111 1111 1111 1111 123", "cartao"),
+    ("DB_PASSWORD=hunter2xyz", "password"),
+    ("smtp_password: Init1234", "password"),
+    ("access_token=opaqueABC123xyz", "token"),
+    ("x-api-key: abcdef123456", "password"),
+    ('{\\"password\\": \\"hunter2\\"}', "password"),
+    ('"Authorization": "Basic dXNlcjpwYXNz"', "authorization"),
+    ("-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg", "private_key"),
+]
+
+
+def test_vazamentos_achados_na_revisao() -> None:
+    for text, kind in LEAKS:
+        result, counts = clean(text)
+        assert counts.get(kind) == 1, (text, result, counts)
+
+
+def test_valor_entre_aspas_sai_inteiro() -> None:
+    result, _ = clean('{"password": "duas palavras"}')
+    assert result == '{"password": "[REMOVIDO:password]"}'
+
+
+def test_nomes_de_campo_em_camel_case_e_com_prefixo() -> None:
+    record = {
+        "pwd": "hunter2",
+        "accessToken": "opaque123",
+        "clientSecret": "zzz",
+        "privateKey": "abc",
+        "db_password": "x",
+        "tokenType": "Bearer",
+        "password_expires_at": "2026-12-01",
+    }
+    result, _ = clean(record)
+    assert result == {
+        "pwd": "[REMOVIDO:password]",
+        "accessToken": "[REMOVIDO:token]",
+        "clientSecret": "[REMOVIDO:password]",
+        "privateKey": "[REMOVIDO:private_key]",
+        "db_password": "[REMOVIDO:password]",
+        "tokenType": "Bearer",
+        "password_expires_at": "2026-12-01",
+    }
+
+
+def test_chaves_do_json_tambem_sao_sanitizadas_sem_perder_valores() -> None:
+    result, counts = clean({"ana@x.com": 1, "bia@y.com": 2, "status": "ok"})
+    assert result == {"[REMOVIDO:email]": 1, "[REMOVIDO:email]#2": 2, "status": "ok"}
+    assert counts == {"email": 2}
+
+
+def test_cpf_inteiro_que_perdeu_o_zero_a_esquerda() -> None:
+    result, counts = clean({"documento": 1234567890})
+    assert result == {"documento": "[REMOVIDO:cpf]"}
+    assert counts == {"cpf": 1}
+
+
+def test_regras_do_tenant_invalidas_sao_recusadas_na_configuracao() -> None:
+    import pytest
+
+    for pattern in ["(", r"\d*", "(a+)+$", "x" * 300]:
+        with pytest.raises(ValueError, match="padrão"):
+            Sanitizer(Rules(extra_patterns={"x": pattern}))

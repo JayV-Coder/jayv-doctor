@@ -53,3 +53,19 @@ def test_campos_de_referencia_viram_hmac_antes_da_deteccao() -> None:
 def test_campos_de_referencia_exigem_chave() -> None:
     with pytest.raises(ValueError, match="chave"):
         Sanitizer(reference_fields=("order_id",))
+
+
+def test_chave_vazia_e_recusada() -> None:
+    with pytest.raises(ValueError, match="chave"):
+        Sanitizer(reference_fields=("order_id",), reference_key=b"")
+
+
+def test_referencia_numerica_ou_aninhada_nunca_sai_em_claro() -> None:
+    key = derive_tenant_key(MASTER, TENANT_A)
+    sanitizer = Sanitizer(reference_fields=("order_id",), reference_key=key)
+    assert sanitizer.sanitize({"order_id": 4500012345.0})[0] == {
+        "order_id": reference_hmac(key, "4500012345")
+    }
+    assert sanitizer.sanitize({"order_id": {"numero": "4500012345"}})[0] == {
+        "order_id": "[REMOVIDO:referencia]"
+    }

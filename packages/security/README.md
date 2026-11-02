@@ -19,16 +19,19 @@ record, report = sanitizer.sanitize(raw)  # report.as_dict() vai para sanitizati
 | Tipo | Como é achado |
 |---|---|
 | `bearer`, `jwt`, `aws_key`, `gcp_key`, `gcp_token`, `salesforce_session`, `private_key` | Padrão do provedor; Bearer só com 16+ caracteres |
-| `password` | `password=`, `senha:`, `"client_secret": "…"` e parecidos (só o valor) |
+| `password`, `token` | `password=`, `senha:`, `DB_PASSWORD=`, `x-api-key:`, `access_token=`, `"client_secret": "…"`, inclusive em JSON escapado (só o valor) |
 | `authorization`, `cookie` | Cabeçalho em texto, ou campo com esse nome |
 | `cartao` | 13 a 19 dígitos com Luhn válido |
 | `cpf`, `cnpj` | Com dígito verificador válido: número parecido fica |
 | `email`, `telefone` | Telefone só com formato (`+55`, DDD entre parênteses ou separador): pedido de 10 dígitos fica |
 | `ip` | IPv4; `Rules(detect_ips=False)` desliga, `allow_private_ips=True` mantém os internos |
 
-- Campos com nome sensível (`password`, `token`, `authorization`, `cookie`, `api_key` e outros) somem inteiros, em qualquer nível.
-- Números também são conferidos: um CPF guardado como inteiro vira marcador.
+- Campos com nome sensível somem inteiros, em qualquer nível e grafia: `password`, `pwd`, `db_password`, `clientSecret`, `accessToken`, `privateKey`, `authorization`, `cookie`, `x-api-key` e parecidos. Chaves de objeto que não são identificadores simples também passam pelos detectores (um mapa por e-mail vira `[REMOVIDO:email]`, `[REMOVIDO:email]#2`).
+- Campo de Referência que não é texto nem número vira `[REMOVIDO:referencia]`: a Referência nunca sai em claro.
+- Números também são conferidos, com os zeros à esquerda de volta: um CPF guardado como inteiro vira marcador. O custo é cerca de 1% de inteiros de 9 a 10 dígitos (ou 12 a 13) que, completados com zeros, passam no dígito verificador e saem como documento.
 - Todos os detectores olham o texto original. Em trechos sobrepostos vale o primeiro da ordem: segredos antes de PII, e cartão e CNPJ antes de CPF e telefone.
+- Padrões extras do tenant são conferidos na configuração: regex inválida, que casa com texto vazio, com quantificador aninhado ou com mais de 200 caracteres é recusada.
+- Cada detector tem pistas literais (`bearer`, `@`, `eyj`…) e, quando nenhuma aparece no texto, nem roda.
 - Limites: 8 KB por string (o resto é cortado, com `[TRUNCADO]`) e profundidade 10 (`[TRUNCADO:profundidade]`).
 
 ## Referência de negócio
@@ -37,9 +40,9 @@ record, report = sanitizer.sanitize(raw)  # report.as_dict() vai para sanitizati
 
 ## Medição
 
-- `tests/test_corpus.py`: o corpus `tests/corpus/corpus.jsonl` (246 casos, gerados por `scripts/build_corpus.py` a partir de listas com valores públicos de exemplo) passa nas três metas:
+- `tests/test_corpus.py`: o corpus `tests/corpus/corpus.jsonl` (264 casos, gerados por `scripts/build_corpus.py` a partir de listas com valores públicos de exemplo) passa nas três metas:
   - precisão de 100% e recall de 100% nos segredos;
   - recall ≥ 99% em PII;
   - negativos intactos.
 - `tests/test_fuzz.py` (Hypothesis): nunca lança exceção, e a saída só cresce o tamanho dos marcadores.
-- `uv run python packages/security/scripts/benchmark.py` mede um registro típico. Nesta máquina deu cerca de 14 mil registros/s por núcleo; a meta é 10 mil.
+- `uv run python packages/security/scripts/benchmark.py` mede um registro típico. Nesta máquina deu cerca de 13 mil registros/s por núcleo; a meta é 10 mil.

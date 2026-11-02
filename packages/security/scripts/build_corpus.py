@@ -50,7 +50,10 @@ POSITIVES: dict[str, list[str]] = {
         "senha: Sap@2026",
         "pwd='segredo-forte'",
         '"password": "hunter22"',
+        "DB_PASSWORD=hunter2xyz",
+        "x-api-key: abcdef123456",
     ],
+    "token": ["access_token=opaqueABC123xyz", "refresh_token: 1//0gAbCdEf"],
     "authorization": ["Authorization: Basic dXNlcjpzZW5oYQ=="],
     "cookie": ["Cookie: sid=31d4d96e407aad42; lang=pt-BR"],
     "private_key": [
@@ -99,6 +102,8 @@ NEGATIVES = [
     "região southamerica-east1",
     "AIza curto não é chave",
     "AKIA sozinho não é chave",
+    "tokenType=Bearer",
+    "password_expires_at=2026-12-01",
 ]
 
 

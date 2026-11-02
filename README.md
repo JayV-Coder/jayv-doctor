@@ -13,7 +13,7 @@ Plataforma SaaS B2B que coleta, correlaciona e diagnostica falhas em integraçõ
 | [docs/backlog/](docs/backlog/) | 53 tickets em 10 milestones (Sprint 1 → v1.0) |
 
 ## Stack
-Supabase (Postgres + pgvector, Auth, Storage, Realtime, Vault) · Python 3.12 + FastAPI · Cloud Run + Pub/Sub · Next.js + TypeScript + Tailwind + shadcn/ui (PWA) · Claude / Vertex AI · Terraform.
+Supabase (Postgres + pgvector, Auth, Storage, Realtime, Vault) · Python 3.12 + FastAPI · Cloud Run + Pub/Sub · Next.js + TypeScript (PWA, kit CSS do mockup — ADR-0010) · Claude / Vertex AI · Terraform.
 
 ## Desenvolvimento
 Requisitos: Node 22 com pnpm 9 (`corepack enable`), [uv](https://docs.astral.sh/uv/) e GNU make. Docker e Supabase CLI são necessários a partir do ticket #2.
@@ -32,6 +32,8 @@ make check       # lint + typecheck + testes (o mesmo que o CI)
 | `supabase/` | migrações, seed e testes pgTAP |
 | `infrastructure/terraform` | GCP |
 | `tests/*` | integração, segurança, avaliação, carga |
+
+Testes E2E do app web (`apps/web`): com a stack local de pé (`supabase start`), `pnpm --filter @aid/web test:e2e` roda os projetos `mobile-chrome` (Pixel 7, todos os fluxos) e `desktop` (só o shell). Mudou um componente base de propósito? Regere os snapshots com `pnpm --filter @aid/web exec playwright test e2e/components.spec.ts --update-snapshots` e confira as imagens no diff. Os ícones do PWA saem de `apps/web/scripts/icons.mjs`.
 
 Pacotes TS são workspaces pnpm (orquestrados pelo Turborepo). Pacotes Python são membros do workspace uv em `pyproject.toml`; nomes de arquivos de teste Python são únicos no repositório.
 

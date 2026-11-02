@@ -2,7 +2,7 @@
 
 Canvas com as 26 telas: **[Integration AI Doctor — Mockups mobile first](https://claude.ai/artifact/KJnu4pFdbtiZgkuayGRpXz)**. O link é privado até ser compartilhado pelo menu Share do canvas.
 
-Base: 390 × 844 (celular), com variantes desktop (≥ 1280 px) do Dashboard e do Incidente. Tema escuro mostrado; tema claro equivalente é exigido no ticket 09.
+Base: 390 × 844 (celular), com variantes desktop (≥ 1280 px) do Dashboard e do Incidente. Cada tela tem a opção de tema escuro; o app segue o sistema ou a escolha em Mais.
 
 | # | Tela | Tickets |
 |---|---|---|
@@ -30,4 +30,4 @@ Base: 390 × 844 (celular), com variantes desktop (≥ 1280 px) do Dashboard e d
 | 22 | Planos e cobrança (v1.0) | 50 |
 | 23 | SSO corporativo (v1.0) | 48, 49 |
 
-Tokens visuais: fundo `#0E1413`, superfície `#162019`, borda `#2A3A36`, texto `#E9F0EE`, secundário `#A3B5AF`, acento `#2FBFAE`, alerta `#F29A4A`, info `#6EA8F5`, atenção `#E8C15A`. Fontes Inter e JetBrains Mono. Alvos de toque ≥ 44 px.
+Tokens visuais (kit v2, linguagem JayV): fundo `#f4f4f0`, superfície `#ffffff`, secundária `#eaeae5`, borda `#d8d8d2`, texto `#161616`, secundário `#63635f` (mais escuro que o `#6c6c68` do kit, para passar no contraste AA), acento `#dfff5f`, ok `#23874a`, atenção `#b07a06`, erro `#d13a26`, info `#2f5f9e`. Tema escuro: fundo `#111210`, superfície `#1b1c19`, texto `#f4f4f0`. Fonte IBM Plex Mono. Alvos de toque ≥ 44 px. No código, os tokens ficam em `apps/web/src/app/globals.css` e os componentes base em `apps/web/src/components/ui` ([ADR-0010](../adr/0010-kit-css-do-mockup-e-dados-no-servidor.md)).

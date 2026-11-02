@@ -1,40 +1,27 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import {
+  activeOrganization,
   expectNoHorizontalScroll,
-  fillOtp,
   lastEmailLink,
   lastInvitationLink,
   openEmailLink,
+  ownerWithOrganization,
   PASSWORD,
-  signInWithPassword,
   signUp,
-  totp,
   uniqueEmail,
 } from "./helpers";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
-async function ownerWithOrganization(page: Page, name: string): Promise<void> {
-  const email = uniqueEmail();
-  await signUp(email);
-  await signInWithPassword(page, email);
-  await page.getByRole("link", { name: "Criar organização" }).click();
-  await page.getByLabel("Nome da organização").fill(name);
-  await page.getByLabel("Segmento").selectOption("Varejo");
-  await page.getByLabel("Li e aceito o DPA").check();
-  await page.getByRole("button", { name: "Criar organização" }).click();
-  await page.getByRole("button", { name: "Gerar QR code" }).click();
-  const secret = await page.locator("code.secret").innerText();
-  await fillOtp(page, totp(secret));
-  await page.getByRole("button", { name: "Confirmar" }).click();
-  await expect(page).toHaveURL(/\/seguranca/);
+async function ownerOnMembers(page: Page, name: string): Promise<void> {
+  await ownerWithOrganization(page, name);
   await page.goto("/membros");
 }
 
 test("convida, a pessoa entra pelo link e cai na Organização", async ({ page, context }) => {
   const organization = `Acme ${randomUUID().slice(0, 8)}`;
-  await ownerWithOrganization(page, organization);
+  await ownerOnMembers(page, organization);
   await expectNoHorizontalScroll(page);
 
   const invited = uniqueEmail();
@@ -57,8 +44,9 @@ test("convida, a pessoa entra pelo link e cai na Organização", async ({ page, 
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await page.getByRole("button", { name: "Aceitar convite" }).click();
 
-  await expect(page.getByRole("heading", { name: organization })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Membros" })).toHaveCount(0);
+  await expect(activeOrganization(page, organization)).toBeVisible();
+  await page.goto("/mais");
+  await expect(page.getByRole("link", { name: "Membros e convites" })).toHaveCount(0);
 
   await page.goto("/membros");
   await expect(page.locator("p[role=alert]")).toContainText("Só Owner e Admin");
@@ -66,7 +54,7 @@ test("convida, a pessoa entra pelo link e cai na Organização", async ({ page, 
 
 test("quem entra por link mágico retoma o convite na tela inicial", async ({ page, context }) => {
   const organization = `Link ${randomUUID().slice(0, 8)}`;
-  await ownerWithOrganization(page, organization);
+  await ownerOnMembers(page, organization);
   const invited = uniqueEmail();
   await page.getByLabel("E-mail", { exact: true }).fill(invited);
   await page.getByRole("button", { name: "Enviar convite" }).click();
@@ -83,17 +71,17 @@ test("quem entra por link mágico retoma o convite na tela inicial", async ({ pa
 
   await page.getByRole("link", { name: "Ver convite pendente" }).click();
   await page.getByRole("button", { name: "Aceitar convite" }).click();
-  await expect(page.getByRole("heading", { name: organization })).toBeVisible();
+  await expect(activeOrganization(page, organization)).toBeVisible();
 });
 
 test("o único Owner não se rebaixa", async ({ page }) => {
-  await ownerWithOrganization(page, `Solo ${randomUUID().slice(0, 8)}`);
+  await ownerOnMembers(page, `Solo ${randomUUID().slice(0, 8)}`);
   await page.getByLabel(/^Papel de /).selectOption("admin");
   await expect(page.locator("p[role=alert]")).toContainText("ao menos um Owner");
 });
 
 test("convite revogado some da lista", async ({ page }) => {
-  await ownerWithOrganization(page, `Revoga ${randomUUID().slice(0, 8)}`);
+  await ownerOnMembers(page, `Revoga ${randomUUID().slice(0, 8)}`);
   const invited = uniqueEmail();
   await page.getByLabel("E-mail", { exact: true }).fill(invited);
   await page.getByRole("button", { name: "Enviar convite" }).click();

@@ -88,3 +88,10 @@ describe("redirectPath", () => {
     expect(redirectPath("/", "/mfa")).toBe("/");
   });
 });
+
+describe("telas do PWA", () => {
+  it("abre a tela offline e o catálogo sem sessão: nenhuma traz dado de tenant", () => {
+    expect(decideRedirect("/offline", anonymous)).toBeNull();
+    expect(decideRedirect("/componentes", anonymous)).toBeNull();
+  });
+});

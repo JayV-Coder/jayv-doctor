@@ -25,4 +25,11 @@ export default tseslint.config(
     files: ["**/*.{js,mjs,cjs}"],
     ...tseslint.configs.disableTypeChecked,
   },
+  {
+    files: ["apps/web/public/sw.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: { self: "readonly", caches: "readonly", fetch: "readonly", URL: "readonly" },
+    },
+  },
 );

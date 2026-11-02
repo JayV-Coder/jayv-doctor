@@ -1,33 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import {
+  activeOrganization,
+  enrollFactor,
   expectNoHorizontalScroll,
-  fillOtp,
+  fillOrganization,
   signInWithPassword,
   signUp,
-  totp,
   uniqueEmail,
 } from "./helpers";
 
 test.use({ viewport: { width: 390, height: 844 } });
-
-async function fillOrganization(page: Page, name: string): Promise<void> {
-  await page.getByLabel("Nome da organização").fill(name);
-  await page.getByLabel("Segmento").selectOption("Varejo");
-  await page.getByLabel("Li e aceito o DPA").check();
-  await page.getByRole("button", { name: "Criar organização" }).click();
-}
-
-// Owner sem fator é levado ao cadastro assim que o JWT traz o Papel.
-async function enrollFactor(page: Page): Promise<void> {
-  await expect(page).toHaveURL(/\/mfa\/cadastro/);
-  await page.getByRole("button", { name: "Gerar QR code" }).click();
-  const secret = await page.locator("code.secret").innerText();
-  await fillOtp(page, totp(secret));
-  await page.getByRole("button", { name: "Confirmar" }).click();
-  await expect(page).toHaveURL(/\/seguranca/);
-  await page.goto("/");
-}
 
 test("cria Organizações, troca entre elas e a tela muda junto", async ({ page }) => {
   const email = uniqueEmail();
@@ -35,17 +18,17 @@ test("cria Organizações, troca entre elas e a tela muda junto", async ({ page 
   await signUp(email);
   await signInWithPassword(page, email);
 
-  await page.getByRole("link", { name: "Criar organização" }).click();
   await expectNoHorizontalScroll(page);
   await fillOrganization(page, `Acme ${suffix}`);
   await enrollFactor(page);
-  await expect(page.getByRole("heading", { name: `Acme ${suffix}` })).toBeVisible();
+  await page.goto("/");
+  await expect(activeOrganization(page, `Acme ${suffix}`)).toBeVisible();
 
   await page.getByRole("button", { name: `Acme ${suffix}` }).click();
   await expectNoHorizontalScroll(page);
   await page.getByRole("link", { name: "Criar nova organização" }).click();
   await fillOrganization(page, `Varejo ${suffix}`);
-  await expect(page.getByRole("heading", { name: `Varejo ${suffix}` })).toBeVisible();
+  await expect(activeOrganization(page, `Varejo ${suffix}`)).toBeVisible();
 
   await page.getByRole("button", { name: `Varejo ${suffix}` }).click();
   await page.getByLabel("Buscar organização").fill("acme");
@@ -54,9 +37,9 @@ test("cria Organizações, troca entre elas e a tela muda junto", async ({ page 
   ).toBeHidden();
   await page.getByRole("button", { name: new RegExp(`Acme ${suffix}.*Owner`) }).click();
 
-  await expect(page.getByRole("heading", { name: `Acme ${suffix}` })).toBeVisible();
+  await expect(activeOrganization(page, `Acme ${suffix}`)).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("heading", { name: `Acme ${suffix}` })).toBeVisible();
+  await expect(activeOrganization(page, `Acme ${suffix}`)).toBeVisible();
 });
 
 test("identificador repetido mostra erro em pt-BR", async ({ page }) => {
@@ -64,7 +47,6 @@ test("identificador repetido mostra erro em pt-BR", async ({ page }) => {
   const first = uniqueEmail();
   await signUp(first);
   await signInWithPassword(page, first);
-  await page.getByRole("link", { name: "Criar organização" }).click();
   await fillOrganization(page, name);
   await expect(page).toHaveURL(/\/mfa\/cadastro/);
   await page.context().clearCookies();
@@ -72,7 +54,6 @@ test("identificador repetido mostra erro em pt-BR", async ({ page }) => {
   const second = uniqueEmail();
   await signUp(second);
   await signInWithPassword(page, second);
-  await page.getByRole("link", { name: "Criar organização" }).click();
   await page.getByLabel("Vertex AI").check();
   await fillOrganization(page, name);
   await expect(page.locator("p[role=alert]")).toContainText("identificador já está em uso");

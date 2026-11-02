@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { FormMessage } from "@/components/auth-shell";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { switchOrganization } from "@/app/organizacoes/actions";
 import type { Organization } from "@/lib/api";
 import { initials, roleLabel } from "@/lib/orgs/labels";
@@ -81,33 +82,22 @@ export function OrgSwitcher({
   organizations: Organization[];
   active: Organization;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-
   return (
-    <>
-      <div className="org-top">
-        <h2 className="title">{active.name}</h2>
-        <button
-          type="button"
-          className="btn"
-          aria-label={`Trocar de organização: ${active.name}`}
-          onClick={() => dialog.current?.showModal()}
-        >
-          Trocar ▾
-        </button>
-      </div>
-      <dialog ref={dialog} className="sheet" aria-label="Trocar de organização">
-        <div className="stack">
-          <p className="title">Trocar de organização</p>
-          <p className="muted small">
-            Ao trocar, sua sessão é renovada e você vê apenas os dados da organização escolhida.
-          </p>
-          <OrgList organizations={organizations} activeId={active.id} />
-          <button type="button" className="btn" onClick={() => dialog.current?.close()}>
-            Fechar
-          </button>
-        </div>
-      </dialog>
-    </>
+    <BottomSheet
+      title="Trocar de organização"
+      triggerClassName="org"
+      triggerLabel={`Trocar de organização: ${active.name}`}
+      trigger={
+        <>
+          <span>{active.name}</span>
+          <span aria-hidden="true">▾</span>
+        </>
+      }
+    >
+      <p className="muted small">
+        Ao trocar, sua sessão é renovada e você vê apenas os dados da organização escolhida.
+      </p>
+      <OrgList organizations={organizations} activeId={active.id} />
+    </BottomSheet>
   );
 }

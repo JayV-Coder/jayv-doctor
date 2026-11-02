@@ -10,7 +10,7 @@ O vocabulário segue o [GLOSSARY.md](../GLOSSARY.md).
 | Dados e identidade | **Supabase** (Postgres, Auth, Storage, Realtime, Vault), região São Paulo |
 | Computação | Google Cloud (`southamerica-east1`): Cloud Run, Pub/Sub |
 | Backend | Python 3.12 + FastAPI (API e workers) |
-| Frontend | Next.js (App Router) + TypeScript + Tailwind + shadcn/ui · PWA · **mobile first** |
+| Frontend | Next.js (App Router) + TypeScript · kit CSS do mockup ([ADR-0010](adr/0010-kit-css-do-mockup-e-dados-no-servidor.md)) · PWA · **mobile first** |
 | Diagnóstico | Regras + RAG (pgvector) + LLM (Claude por padrão, Vertex Gemini como alternativa) |
 
 ## 1. Resumo executivo

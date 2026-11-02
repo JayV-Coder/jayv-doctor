@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AuthShell, FormMessage } from "@/components/auth-shell";
-import { acceptInvitation } from "@/app/membros/actions";
+import { acceptInvitation } from "@/app/(app)/membros/actions";
 import {
   forgetPendingInvitation,
   pendingInvitation,

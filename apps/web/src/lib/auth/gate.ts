@@ -5,7 +5,9 @@ export interface SessionState {
   nextLevel: string | null;
 }
 
-const PUBLIC_PATHS = ["/login", "/esqueci-senha", "/privacidade"];
+const PUBLIC_PATHS = ["/login", "/esqueci-senha"];
+// Sem dado de tenant: a tela offline fica no cache do PWA, e o catálogo só mostra componentes.
+const OPEN_PATHS = ["/privacidade", "/offline", "/componentes"];
 const ENTRY_PATHS = ["/login", "/esqueci-senha", "/mfa", "/mfa/cadastro"];
 const ACCEPT_INVITATION_PATH = "/convites/aceitar";
 const ADMIN_ROLES = ["owner", "admin"];
@@ -14,9 +16,8 @@ const ADMIN_ROLES = ["owner", "admin"];
 export function decideRedirect(path: string, state: SessionState): string | null {
   // O aceite decide sozinho o que mostrar: um desvio aqui perderia o token, que vem no fragmento.
   if (path.startsWith("/auth/") || path === ACCEPT_INVITATION_PATH) return null;
-  const isPublic = PUBLIC_PATHS.includes(path);
-  if (!state.hasSession) return isPublic ? null : "/login";
-  if (path === "/privacidade") return null;
+  if (OPEN_PATHS.includes(path)) return null;
+  if (!state.hasSession) return PUBLIC_PATHS.includes(path) ? null : "/login";
 
   if (state.currentLevel !== "aal2" && state.nextLevel === "aal2") {
     return path === "/mfa" ? null : "/mfa";

@@ -8,7 +8,7 @@ import {
   removeMember,
   resendInvitation,
   revokeInvitation,
-} from "@/app/membros/actions";
+} from "@/app/(app)/membros/actions";
 import type { Invitation, Member } from "@/lib/api";
 import { initials, roleLabel } from "@/lib/orgs/labels";
 import { matchesSearch } from "@/lib/orgs/slug";

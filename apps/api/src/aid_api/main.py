@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from aid_api import __version__, me, orgs
+from aid_api import __version__, me, members, orgs
 from aid_api.errors import ApiError, problem_handler
 
 
@@ -13,6 +13,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(ApiError, problem_handler)
     app.include_router(me.router)
     app.include_router(orgs.router)
+    app.include_router(members.router)
     return app
 
 

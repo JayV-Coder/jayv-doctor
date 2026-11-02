@@ -21,6 +21,11 @@ variable "api_domain" {
   type        = string
 }
 
+variable "app_url" {
+  description = "URL do app web, usada nos links de convite."
+  type        = string
+}
+
 variable "supabase_jwt_issuer" {
   description = "Emissor dos JWTs do Supabase Auth. Não é segredo: as chaves vêm do JWKS público."
   type        = string

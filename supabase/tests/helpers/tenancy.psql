@@ -10,8 +10,8 @@ returns uuid
 language plpgsql
 as $$
 begin
-  insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
-  values (user_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', email, '{}', metadata, now(), now());
+  insert into auth.users (id, instance_id, aud, role, email, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+  values (user_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', email, now(), '{}', metadata, now(), now());
   return user_id;
 end;
 $$;

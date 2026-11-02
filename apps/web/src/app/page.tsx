@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AuthShell, FormMessage } from "@/components/auth-shell";
 import { OrgList, OrgSwitcher } from "@/components/org-switcher";
+import { PendingInvitationNotice } from "@/components/pending-invitation-notice";
 import { getMe } from "@/lib/api";
 import { createClient } from "@/lib/supabase/server";
 
@@ -14,6 +15,7 @@ export default async function HomePage() {
   return (
     <AuthShell>
       <section className="stack">
+        <PendingInvitationNotice />
         {me === null && <FormMessage error="Não foi possível carregar suas organizações." />}
         {active && <OrgSwitcher organizations={organizations} active={active} />}
         {me !== null && !active && organizations.length > 0 && (
@@ -27,6 +29,11 @@ export default async function HomePage() {
         <p>
           Sessão ativa: <strong>{data?.claims.email}</strong>
         </p>
+        {active && ["owner", "admin"].includes(active.role) && (
+          <Link className="btn" href="/membros">
+            Membros
+          </Link>
+        )}
         <Link className="btn" href="/seguranca">
           Segurança da conta
         </Link>

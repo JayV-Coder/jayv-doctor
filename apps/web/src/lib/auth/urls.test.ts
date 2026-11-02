@@ -11,4 +11,8 @@ describe("callbackUrl", () => {
       "https://app.test/auth/callback?next=%2Fredefinir-senha",
     );
   });
+
+  it("não acrescenta next para a tela inicial", () => {
+    expect(callbackUrl("http://app.test", "/")).toBe("http://app.test/auth/callback");
+  });
 });

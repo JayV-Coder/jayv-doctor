@@ -6,6 +6,7 @@ mock_provider "google" {
 }
 
 variables {
+  app_url             = "https://app.exemplo.test"
   project_id          = "aid-test"
   environment         = "staging"
   supabase_jwt_issuer = "https://exemplo.supabase.co/auth/v1"
@@ -81,6 +82,10 @@ run "segredos_ficam_no_brasil_e_cada_servico_le_so_o_seu" {
   assert {
     condition     = contains(keys(module.secrets.accessors), "hmac-master-key/api") && !contains(keys(module.secrets.accessors), "hmac-master-key/correlation")
     error_message = "A chave HMAC mestre vai para quem calcula a Referência: API e ingestão."
+  }
+  assert {
+    condition     = contains(keys(module.secrets.accessors), "smtp-url/api") && !contains(keys(module.secrets.accessors), "smtp-url/diagnosis")
+    error_message = "Só a API envia e-mail."
   }
   assert {
     condition     = contains(keys(module.secrets.accessors), "anthropic-api-key/diagnosis")

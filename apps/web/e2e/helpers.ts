@@ -45,6 +45,26 @@ export async function lastEmailLink(email: string): Promise<string> {
   return link ?? "";
 }
 
+// Link do convite: o token vem no fragmento, que aparece só no texto do e-mail.
+export async function lastInvitationLink(email: string): Promise<string> {
+  let link: string | undefined;
+  await expect
+    .poll(async () => {
+      const search = await fetch(
+        `${MAILPIT_URL}/api/v1/search?query=${encodeURIComponent(`to:"${email}"`)}`,
+      );
+      const { messages } = (await search.json()) as { messages: { ID: string }[] };
+      const id = messages[0]?.ID;
+      if (!id) return false;
+      const message = await fetch(`${MAILPIT_URL}/api/v1/message/${id}`);
+      const { Text } = (await message.json()) as { Text: string };
+      link = /(http\S+\/convites\/aceitar#\S+)/.exec(Text)?.[1];
+      return link !== undefined;
+    })
+    .toBe(true);
+  return link ?? "";
+}
+
 // A verificação só acontece no clique: um scanner de e-mail que abre o link não gasta o token.
 export async function openEmailLink(page: Page, link: string): Promise<void> {
   await page.goto(link);

@@ -29,7 +29,7 @@ Exemplo com staging. Requer um projeto com billing e `gcloud auth login` + `gclo
    printf %s "$VALOR" | gcloud secrets versions add supabase-db-url --project <projeto> --data-file=-
    ```
 
-   Repita para `anthropic-api-key` e `hmac-master-key`. Se os segredos existirem sem valor, o passo 5 falha.
+   Repita para `anthropic-api-key`, `hmac-master-key` e `smtp-url` (`smtps://usuario:senha@host:465`, que envia os convites). Se os segredos existirem sem valor, o passo 5 falha.
 
 5. `make tf:apply ENV=staging`.
 6. Aponte o DNS de `api_domain` para a saída `api_ip`. O certificado gerenciado só ativa depois disso e pode levar até 1 h.

@@ -5,11 +5,31 @@ export type Database = {
 
   "doctor": {
           Tables: {
-            "memberships": {
+            "invitations": {
                   Row: {
-                    "created_at": string,"id": string,"role": string,"tenant_id": string,"updated_at": string,"user_id": string
+                    "accepted_at": string | null,"created_at": string,"email": string,"expires_at": string,"id": string,"invited_by": string | null,"role": string,"tenant_id": string,"token_hash": string,"updated_at": string
                   }
                   ComputedFields: never
+                  Insert: {
+                    "accepted_at"?: string | null,"created_at"?: string,"email": string,"expires_at"?: string,"id"?: string,"invited_by"?: string | null,"role": string,"tenant_id": string,"token_hash": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "accepted_at"?: string | null,"created_at"?: string,"email"?: string,"expires_at"?: string,"id"?: string,"invited_by"?: string | null,"role"?: string,"tenant_id"?: string,"token_hash"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "invitations_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"memberships": {
+                  Row: {
+                    "created_at": string,"id": string,"role": string,"tenant_id": string,"updated_at": string,"user_id": string,"require_other_owner": undefined | null
+                  }
+                  ComputedFields: "require_other_owner"
                   Insert: {
                     "created_at"?: string,"id"?: string,"role": string,"tenant_id": string,"updated_at"?: string,"user_id": string
                   }
@@ -79,7 +99,10 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "create_organization":
+            "accept_invitation":
+{ Args: { "token_hash": string }; Returns: string
+                           },
+"create_organization":
 { Args: { "llm_provider": string,"name": string,"segment": string,"slug": string }; Returns: string
                            },
 "current_aal":
@@ -97,13 +120,63 @@ isOneToOne: false
 "has_role":
 { Args: { "roles": (string)[] }; Returns: boolean
                            },
+"invite_member":
+{ Args: { "email": string,"role": string,"token_hash": string }; Returns: {
+              "id": string,"organization": string
+            }[]
+                           },
+"list_invitations":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "email": string,"expires_at": string,"id": string,"role": string
+            }[]
+                           },
+"list_members":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "display_name": string,"email": string,"id": string,"mfa_enabled": boolean,"role": string
+            }[]
+                           },
 "list_organizations":
 { Args: Record<PropertyKey, never>; Returns: {
               "id": string,"name": string,"role": string,"slug": string
             }[]
                            },
+"locked_target":
+{ Args: { "actor_role": string,"target": string }; Returns: {
+              "created_at": string,
+"id": string,
+"role": string,
+"tenant_id": string,
+"updated_at": string,
+"user_id": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "memberships"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"remove_member":
+{ Args: { "target": string }; Returns: undefined
+                           },
+"require_manager":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"require_other_owner":
+{ Args: { "membership": Omit<Database["doctor"]['Tables']["memberships"]['Row'], Database["doctor"]['Tables']["memberships"]['ComputedFields']> }; Returns: undefined
+                           },
+"resend_invitation":
+{ Args: { "target": string,"token_hash": string }; Returns: {
+              "email": string,"organization": string
+            }[]
+                           },
+"revoke_invitation":
+{ Args: { "target": string }; Returns: undefined
+                           },
 "switch_organization":
 { Args: { "target": string }; Returns: undefined
+                           },
+"update_member_role":
+{ Args: { "role": string,"target": string }; Returns: undefined
                            }
           }
           Enums: {

@@ -8,7 +8,7 @@ import { callbackUrl } from "@/lib/auth/urls";
 import { createClient } from "@/lib/supabase/client";
 import { SITE_URL } from "@/lib/supabase/env";
 
-export function LoginForm({ initialError }: { initialError: string | null }) {
+export function LoginForm({ initialError, next }: { initialError: string | null; next: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [withPassword, setWithPassword] = useState(false);
@@ -26,14 +26,14 @@ export function LoginForm({ initialError }: { initialError: string | null }) {
       const result = await auth.signInWithPassword({ email, password });
       if (!result.error) {
         // Navegação completa: o proxy precisa ver os cookies novos para decidir sobre o MFA.
-        window.location.assign("/");
+        window.location.assign(next);
         return;
       }
       setError(authErrorMessage(result.error));
     } else {
       const result = await auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: callbackUrl(SITE_URL) },
+        options: { emailRedirectTo: callbackUrl(SITE_URL, next) },
       });
       if (result.error) setError(authErrorMessage(result.error));
       else setNotice("Enviamos um link de acesso para o seu e-mail.");
@@ -46,7 +46,7 @@ export function LoginForm({ initialError }: { initialError: string | null }) {
     setError(null);
     const { error: oauthError } = await createClient().auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: callbackUrl(SITE_URL) },
+      options: { redirectTo: callbackUrl(SITE_URL, next) },
     });
     if (oauthError) {
       setError(authErrorMessage(oauthError));

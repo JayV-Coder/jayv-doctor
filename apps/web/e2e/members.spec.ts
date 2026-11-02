@@ -41,7 +41,7 @@ test("convida, a pessoa entra pelo link e cai na Organização", async ({ page, 
   await page.getByLabel("E-mail", { exact: true }).fill(invited);
   await page.getByRole("button", { name: "Enviar convite" }).click();
   await expect(page.getByRole("status")).toContainText("Convite enviado");
-  await expect(page.getByText(invited)).toBeVisible();
+  await expect(page.getByText(invited, { exact: true })).toBeVisible();
   await expectNoHorizontalScroll(page);
 
   const link = await lastInvitationLink(invited);
@@ -97,7 +97,7 @@ test("convite revogado some da lista", async ({ page }) => {
   const invited = uniqueEmail();
   await page.getByLabel("E-mail", { exact: true }).fill(invited);
   await page.getByRole("button", { name: "Enviar convite" }).click();
-  await expect(page.getByText(invited)).toBeVisible();
+  await expect(page.getByText(invited, { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Revogar" }).click();
-  await expect(page.getByText(invited)).toHaveCount(0);
+  await expect(page.getByText(invited, { exact: true })).toHaveCount(0);
 });

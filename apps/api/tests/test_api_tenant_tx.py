@@ -3,8 +3,8 @@ from types import TracebackType
 from typing import Any, Self, cast
 
 import pytest
-from aid_api.auth import Claims
-from aid_api.db import tenant_tx
+from aid_api.core.auth import Claims
+from aid_api.core.db import tenant_tx
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 

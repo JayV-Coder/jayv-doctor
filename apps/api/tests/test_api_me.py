@@ -1,8 +1,9 @@
 from typing import Any
 
-from aid_api.auth import Claims, TokenVerifier, get_claims, get_verifier
+from aid_api.core.auth import Claims, TokenVerifier, get_claims, get_verifier
 from aid_api.main import create_app
-from aid_api.me import MeRepository, Organization, Profile, get_me_repository
+from aid_api.orgs.repo import MeRepository, get_me_repository
+from aid_api.orgs.schemas import Organization, Profile
 from fastapi.testclient import TestClient
 
 USER_ID = "00000000-0000-4000-8000-0000000a0001"
@@ -12,11 +13,8 @@ ORGANIZATION = Organization(id=TENANT_ID, name="Acme", slug="acme", role="owner"
 
 
 class FakeRepository(MeRepository):
-    async def profile(self, claims: Claims) -> Profile | None:
-        return PROFILE
-
-    async def organizations(self, claims: Claims) -> list[Organization]:
-        return [ORGANIZATION] if claims.tenant_id else []
+    async def me(self, claims: Claims) -> tuple[Profile | None, list[Organization]]:
+        return PROFILE, [ORGANIZATION] if claims.tenant_id else []
 
 
 def get_me(claims: Claims) -> Any:

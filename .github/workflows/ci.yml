@@ -39,6 +39,7 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy
+      - run: uv run lint-imports
       - run: uv run pytest
 
   e2e:
@@ -70,6 +71,10 @@ jobs:
           } | tee apps/web/.env.local >> "$GITHUB_ENV"
       - run: pnpm --filter @aid/web exec playwright install --with-deps chromium
       - run: pnpm --filter @aid/web test:e2e
+      - name: Testes de integração da API
+        env:
+          INTEGRATION_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: uv run pytest apps/api/tests/test_api_integration.py
 
   terraform:
     name: Terraform (fmt, validate, tflint, test)

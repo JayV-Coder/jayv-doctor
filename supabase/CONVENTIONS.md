@@ -33,6 +33,11 @@ using (tenant_id = (select doctor.current_tenant_id()))
 - [ ] teste pgTAP de isolamento em `tests/database/`: outro tenant não lê, não altera e não referencia
 - [ ] funções com `set search_path = ''` e nomes qualificados; `security definer` só com justificativa e `revoke execute … from public`
 
+## API
+
+- `core` é a plataforma (auth, `tenant_tx`, erros, idempotência, rate limit, telemetria); cada módulo tem `router.py`, `service.py` e `repo.py` e só importa `core`. `uv run lint-imports` barra o resto.
+- Novo módulo: crie o pacote em `aid_api/`, inclua no contrato de `pyproject.toml` e use `route_class=IdempotentRoute` com as dependências `rate_limit` e `idempotency`.
+
 ## Migrações
 
 - Fonte única: `supabase/migrations/<versão>_<nome>.sql`. Nunca edite uma migração já aplicada; crie outra.

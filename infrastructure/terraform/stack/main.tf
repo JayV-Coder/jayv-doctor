@@ -123,6 +123,7 @@ module "api" {
   env = {
     SUPABASE_JWT_ISSUER = var.supabase_jwt_issuer
     APP_URL             = var.app_url
+    OTEL_ENABLED        = "true"
   }
   secret_env = { for secret in local.api_secrets : local.secret_env[secret] => secret }
   depends_on = [module.secrets]
@@ -133,6 +134,14 @@ resource "google_service_account" "api" {
   account_id   = "${local.name_prefix}-api"
   display_name = "API"
   depends_on   = [module.project]
+}
+
+# Traces e métricas da API: tenant.id como atributo, sem dado pessoal.
+resource "google_project_iam_member" "api_telemetry" {
+  for_each = toset(["roles/cloudtrace.agent", "roles/monitoring.metricWriter"])
+  project  = var.project_id
+  role     = each.value
+  member   = "serviceAccount:${google_service_account.api.email}"
 }
 
 module "workers" {

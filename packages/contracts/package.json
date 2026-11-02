@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@types/node": "^22",
-    "json-schema-to-typescript": "^15.0.4"
+    "json-schema-to-typescript": "^15.0.4",
+    "openapi-typescript": "^7.9.1"
   }
 }

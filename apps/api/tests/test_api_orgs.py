@@ -1,15 +1,15 @@
 from typing import Any
 
-from aid_api.auth import Claims, get_claims
-from aid_api.errors import ApiError
+from aid_api.core.auth import Claims, get_claims
+from aid_api.core.errors import ApiError
 from aid_api.main import create_app
-from aid_api.orgs import (
-    NewOrganization,
+from aid_api.orgs.repo import (
     OrganizationRepository,
     get_organization_repository,
     not_a_member,
     slug_taken,
 )
+from aid_api.orgs.schemas import NewOrganization
 from fastapi.testclient import TestClient
 
 USER_ID = "00000000-0000-4000-8000-0000000a0001"

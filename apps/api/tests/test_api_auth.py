@@ -4,7 +4,7 @@ from typing import Annotated, Any
 
 import jwt
 import pytest
-from aid_api.auth import Claims, TokenVerifier, get_verifier, require_aal2
+from aid_api.core.auth import Claims, TokenVerifier, get_verifier, require_aal2
 from aid_api.main import create_app
 from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi import Depends

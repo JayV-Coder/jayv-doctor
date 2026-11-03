@@ -22,6 +22,7 @@ const TITLES: Record<string, string> = {
   "/integracoes": "Integrações",
   "/importar": "Importar logs",
   "/eventos": "Evento original",
+  "/conectores/novo": "Conector GCP",
 };
 
 // Telas que não são abas, mas pertencem a uma (o mockup abre Importar logs a partir de Conectores).

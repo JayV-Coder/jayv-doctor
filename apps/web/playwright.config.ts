@@ -47,7 +47,14 @@ export default defineConfig({
         APP_URL: "http://127.0.0.1:3000",
         // A mesma do script que semeia o E2E do Explorador (e2e/seed_execution.py).
         HMAC_MASTER_KEY: "chave-mestre-local-do-e2e-nao-usar-em-producao",
+        AID_GCP_OAUTH_URL: "http://127.0.0.1:8095/token",
+        AID_GCP_LOGGING_URL: "http://127.0.0.1:8095/v2/entries:list",
       },
+    },
+    {
+      command: "node e2e/fake-gcp.mjs",
+      url: "http://127.0.0.1:8095/",
+      reuseExistingServer: true,
     },
   ],
 });

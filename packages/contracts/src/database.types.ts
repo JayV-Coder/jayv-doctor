@@ -2,7 +2,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
-
+  
   "doctor": {
           Tables: {
             "audit_logs": {
@@ -114,20 +114,6 @@ isOneToOne: false
       referencedRelation: "raw_log_objects"
       referencedColumns: ["tenant_id","id"]
     }
-                  ]
-                },"events_2026_11": {
-                  Row: {
-                    "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"correlated_by": string | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"execution_ref": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key": string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id": string,"ingested_at"?: string,"integration_id": string,"operation": string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id"?: string | null
-                  }
-                  Update: {
-                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
-                  }
-                  Relationships: [
-
                   ]
                 },"execution_merges": {
                   Row: {
@@ -589,7 +575,7 @@ isOneToOne: false
                     "active"?: boolean,"category"?: string,"code"?: string,"created_at"?: string,"description"?: string,"severity_hint"?: string,"version"?: string
                   }
                   Relationships: [
-
+                    
                   ]
                 },"rule_matches": {
                   Row: {
@@ -635,7 +621,7 @@ isOneToOne: false
                     "applied_at"?: string,"version"?: string
                   }
                   Relationships: [
-
+                    
                   ]
                 },"tenants": {
                   Row: {
@@ -649,7 +635,7 @@ isOneToOne: false
                     "created_at"?: string,"dpa_accepted_at"?: string | null,"id"?: string,"llm_provider"?: string,"plan"?: string,"segment"?: string | null,"status"?: string,"updated_at"?: string
                   }
                   Relationships: [
-
+                    
                   ]
                 },"user_active_tenant": {
                   Row: {
@@ -687,7 +673,7 @@ isOneToOne: false
 { Args: { "body": string,"mentioned": (string)[],"target": string }; Returns: string
                            },
 "create_connector":
-{ Args: { "config": Json,"integration_id": string,"name": string,"provider": string,"secret": string }; Returns: string
+{ Args: { "config": Json,"integration_id": string,"name": string,"provider": string,"secret": string,"sync_interval_seconds"?: number }; Returns: string
                            },
 "create_import":
 { Args: { "filename": string,"integration_id": string,"sha256": string,"size_bytes": number }; Returns: {
@@ -972,7 +958,7 @@ export type CompositeTypes<
 export const Constants = {
   "doctor": {
           Enums: {
-
+            
           }
         }
 } as const

@@ -25,7 +25,7 @@ test("importa NDJSON, recusa formato errado e marca o arquivo repetido", async (
   await expect(page.getByRole("article", { name: "Pedidos Salesforce → SAP" })).toBeVisible();
 
   await page.goto("/conectores");
-  await page.getByRole("link", { name: "Importar logs" }).click();
+  await page.getByRole("link", { name: "Importar arquivo" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Importar logs" })).toBeVisible();
   const nav = page.getByRole("navigation", { name: "Navegação principal" });
   await expect(nav.getByRole("link", { name: "Conectores" })).toHaveAttribute(

@@ -51,8 +51,9 @@ async def create_connector(
 # Antes de `/{target}`: senão "test" seria lido como id.
 @router.post("/test", response_model=TestResult)
 async def test_new_connection(request: NewConnectionTest, claims: Manager) -> TestResult:
+    # Antes de salvar, o teste também prevê o volume (assistente); depois, só prova o acesso.
     return await service.test_connection(
-        request.provider, request.config, request.credential.get_secret_value()
+        request.provider, request.config, request.credential.get_secret_value(), preview=True
     )
 
 
@@ -74,7 +75,7 @@ async def test_connection(
 ) -> TestResult:
     current = await repository.get(claims, str(target))
     return await service.test_connection(
-        current.provider, current.config, request.credential.get_secret_value()
+        current.provider, current.config, request.credential.get_secret_value(), preview=False
     )
 
 

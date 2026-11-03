@@ -85,8 +85,13 @@ async def platform(connection: AsyncConnection) -> None:
     await connection.execute(text("set local role service_role"))
 
 
-def dedup_key(tenant_id: str, payload: Mapping[str, Any]) -> str:
-    """Mesmo conteúdo da mesma fonte no mesmo tenant: mesma chave, seja qual for o event_id."""
+def dedup_key(tenant_id: str, payload: Mapping[str, Any], *, by_event_id: bool = False) -> str:
+    """Com `by_event_id` (Eventos de sistemas externos, que trazem o próprio id): tenant, fonte e
+    event_id. Sem (Importação, cujo id é gerado aqui): tenant e o conteúdo canônico."""
+    if by_event_id:
+        provider = payload["source"]["provider"]
+        key = f"{tenant_id}|{provider}|{payload['event_id']}"
+        return hashlib.sha256(key.encode()).hexdigest()
     canonical = {key: value for key, value in payload.items() if key != "event_id"}
     canonical["source"] = {
         key: value for key, value in payload["source"].items() if key != "resource"
@@ -95,13 +100,21 @@ def dedup_key(tenant_id: str, payload: Mapping[str, Any]) -> str:
     return hashlib.sha256(f"{tenant_id}|{content}".encode()).hexdigest()
 
 
-def event_row(job: Job, payload: Mapping[str, Any], report: Mapping[str, Any]) -> dict[str, Any]:
+def event_row(
+    tenant_id: str,
+    integration_id: str,
+    raw_log_object_id: str | None,
+    payload: Mapping[str, Any],
+    report: Mapping[str, Any],
+    *,
+    by_event_id: bool = False,
+) -> dict[str, Any]:
     context = payload.get("business_context")
     return {
         "id": payload["event_id"],
-        "tenant_id": job.tenant_id,
-        "integration_id": job.integration_id,
-        "raw_log_object_id": job.raw_log_object_id,
+        "tenant_id": tenant_id,
+        "integration_id": integration_id,
+        "raw_log_object_id": raw_log_object_id,
         "timestamp": datetime.fromisoformat(payload["timestamp"]),
         "schema_version": payload["schema_version"],
         "execution_id": payload.get("execution_id"),
@@ -114,7 +127,7 @@ def event_row(job: Job, payload: Mapping[str, Any], report: Mapping[str, Any]) -
         "business_reference": context.get("entity_reference") if context else None,
         "attributes": json.dumps(payload["attributes"]) if "attributes" in payload else None,
         "sanitization_report": json.dumps(report),
-        "dedup_key": dedup_key(job.tenant_id, payload),
+        "dedup_key": dedup_key(tenant_id, payload, by_event_id=by_event_id),
     }
 
 
@@ -167,7 +180,15 @@ class Importer:
                 self.totals.secrets += sum(
                     count for kind, count in report.counts.items() if kind != "referencia"
                 )
-                batch.events.append(event_row(self.job, payload, report.as_dict()))
+                batch.events.append(
+                    event_row(
+                        self.job.tenant_id,
+                        self.job.integration_id,
+                        self.job.raw_log_object_id,
+                        payload,
+                        report.as_dict(),
+                    )
+                )
                 self.totals.valid += 1
                 return
         self.totals.rejected += 1
@@ -181,15 +202,7 @@ class Importer:
         )
 
     async def flush(self, batch: Batch) -> None:
-        months = {row["timestamp"].date().replace(day=1) for row in batch.events}
-        for month in sorted(months - self.partitions):
-            # Transação própria e curta: criar partição trava a tabela-mãe.
-            async with self.engine.begin() as connection:
-                await platform(connection)
-                await connection.execute(
-                    text("select doctor.ensure_event_partition(:day)"), {"day": month}
-                )
-            self.partitions.add(month)
+        await ensure_partitions(self.engine, batch.events, self.partitions)
         async with self.engine.begin() as connection:
             await platform(connection)
             if batch.events:
@@ -292,6 +305,93 @@ async def finish(engine: AsyncEngine, job: Job, totals: Totals) -> None:
                 "p": json.dumps({"import_id": job.import_id, "integration_id": job.integration_id}),
             },
         )
+
+
+async def ensure_partitions(
+    engine: AsyncEngine, rows: list[dict[str, Any]], known: set[date]
+) -> None:
+    months = {row["timestamp"].date().replace(day=1) for row in rows}
+    for month in sorted(months - known):
+        # Transação própria e curta: criar partição trava a tabela-mãe.
+        async with engine.begin() as connection:
+            await platform(connection)
+            await connection.execute(
+                text("select doctor.ensure_event_partition(:day)"), {"day": month}
+            )
+        known.add(month)
+
+
+def sanitized(sanitizer: Sanitizer, event: Mapping[str, Any]) -> tuple[dict[str, Any], Any]:
+    """Sanitiza o Evento, menos data, IDs técnicos e metadados (ver `TECHNICAL`)."""
+    free = {key: value for key, value in event.items() if key not in TECHNICAL}
+    cleaned, report = sanitizer.sanitize(free)
+    return {**event, **cleaned}, report
+
+
+async def process_batch(payload: Mapping[str, Any], engine: AsyncEngine, master_key: bytes) -> str:
+    """Lote de POST /ingestion/events (até 500 Eventos, já validados pela API): uma transação só.
+    Reentregue depois do commit, é ignorado; antes, é refeito, e o event_id impede repetição."""
+    batch_id = str(payload["batch_id"])
+    async with engine.begin() as connection:
+        await platform(connection)
+        found = (
+            await connection.execute(
+                text(
+                    "select tenant_id::text, integration_id::text, events, processed_at"
+                    " from doctor.ingestion_batches where id = cast(:b as uuid)"
+                ),
+                {"b": batch_id},
+            )
+        ).first()
+    if found is None or found.processed_at is not None:
+        return "ignored"
+    sanitizer = Sanitizer(reference_key=derive_tenant_key(master_key, UUID(found.tenant_id)))
+    rows = []
+    for event in found.events:
+        cleaned, report = sanitized(sanitizer, event)
+        rows.append(
+            event_row(
+                found.tenant_id,
+                found.integration_id,
+                None,
+                cleaned,
+                report.as_dict(),
+                by_event_id=True,
+            )
+        )
+    await ensure_partitions(engine, rows, set())
+    async with engine.begin() as connection:
+        await platform(connection)
+        # Trava o lote: duas entregas simultâneas não fecham o mesmo lote duas vezes.
+        closed = await connection.scalar(
+            text(
+                "select processed_at is not null from doctor.ingestion_batches"
+                " where id = cast(:b as uuid) for update"
+            ),
+            {"b": batch_id},
+        )
+        if closed:
+            return "ignored"
+        if rows:
+            await connection.execute(INSERT_EVENT, rows)
+        await connection.execute(
+            text(
+                "update doctor.ingestion_batches set processed_at = now()"
+                " where id = cast(:b as uuid)"
+            ),
+            {"b": batch_id},
+        )
+        await connection.execute(
+            text(
+                "insert into doctor.outbox_messages (tenant_id, topic, payload)"
+                " values (cast(:t as uuid), 'correlation.requested', cast(:p as jsonb))"
+            ),
+            {
+                "t": found.tenant_id,
+                "p": json.dumps({"batch_id": batch_id, "integration_id": found.integration_id}),
+            },
+        )
+    return "done"
 
 
 def transient(exc: Exception) -> bool:

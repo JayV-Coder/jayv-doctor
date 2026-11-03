@@ -75,3 +75,20 @@ async def translated_tx(
         if factory:
             raise factory() from exc
         raise
+
+
+@asynccontextmanager
+async def anonymous_tx(
+    errors: Mapping[str, Callable[[], ApiError]], engine: AsyncEngine | None = None
+) -> AsyncIterator[AsyncConnection]:
+    """Transação sem Usuário (sistema externo com token de ingestão): role `anon`, sem claims.
+    Só alcança as funções do banco liberadas para `anon`, que identificam o tenant pelo token."""
+    try:
+        async with (engine or get_engine()).begin() as connection:
+            await connection.execute(text("set local role anon"))
+            yield connection
+    except DBAPIError as exc:
+        factory = errors.get(sqlstate(exc) or "")
+        if factory:
+            raise factory() from exc
+        raise

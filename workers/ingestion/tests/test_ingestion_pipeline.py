@@ -81,7 +81,15 @@ async def tenant(engine: AsyncEngine) -> AsyncIterator[dict[str, str]]:
         )
     yield ids
     async with engine.begin() as connection:
-        for table in ("events", "outbox_messages", "imports", "raw_log_objects", "integrations"):
+        for table in (
+            "events",
+            "outbox_messages",
+            "ingestion_batches",
+            "ingestion_tokens",
+            "imports",
+            "raw_log_objects",
+            "integrations",
+        ):
             await connection.execute(
                 text(f"delete from doctor.{table} where tenant_id = :t"),  # noqa: S608
                 {"t": ids["tenant"]},
@@ -325,3 +333,82 @@ async def test_erro_inesperado_encerra_a_importacao_como_falha(
         "status": "failed",
         "error": "Erro inesperado ao processar o arquivo. Importe de novo.",
     }
+
+
+def api_event(event_id: str, **overrides: Any) -> dict[str, Any]:
+    return {
+        "schema_version": "1.0",
+        "event_id": event_id,
+        "integration_id": "",
+        "timestamp": "2026-11-02T14:05:00Z",
+        "source": {"provider": "sap", "service": "PI"},
+        "operation": "BAPI_SALESORDER",
+        "severity": "ERROR",
+        "error": {"category": "TIMEOUT", "message": "cliente ana.souza@acme.com.br sem resposta"},
+        **overrides,
+    }
+
+
+async def api_batch(engine: AsyncEngine, ids: dict[str, str], events: list[dict[str, Any]]) -> str:
+    import json
+
+    batch_id = str(uuid4())
+    for event in events:
+        event["integration_id"] = ids["integration"]
+    async with engine.begin() as connection:
+        token_id = await connection.scalar(
+            text(
+                "insert into doctor.ingestion_tokens"
+                " (tenant_id, name, integration_id, token_hash, prefix)"
+                " values (:t, 'SAP PI', :i, :h, 'aid_ing_xx') returning id"
+            ),
+            {"t": ids["tenant"], "i": ids["integration"], "h": uuid4().hex * 2},
+        )
+        await connection.execute(
+            text(
+                "insert into doctor.ingestion_batches"
+                " (id, tenant_id, integration_id, token_id, events, event_count)"
+                " values (:b, :t, :i, :k, cast(:e as jsonb), :n)"
+            ),
+            {
+                "b": batch_id,
+                "t": ids["tenant"],
+                "i": ids["integration"],
+                "k": token_id,
+                "e": json.dumps(events),
+                "n": len(events),
+            },
+        )
+    return batch_id
+
+
+@pytest.mark.asyncio
+async def test_mesmo_lote_da_api_tres_vezes_grava_uma_copia_de_cada_evento(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    from aid_ingestion.pipeline import process_batch
+
+    first = "0190f3a1-7b2c-7d4e-8f00-123456789abc"
+    second = "0190f3a1-7b2c-7d4e-8f00-123456789abd"
+    for _ in range(3):
+        batch_id = await api_batch(engine, tenant, [api_event(first), api_event(second)])
+        assert await process_batch({"batch_id": batch_id}, engine, MASTER) == "done"
+    assert await process_batch({"batch_id": batch_id}, engine, MASTER) == "ignored"
+
+    events = await scalar(
+        engine, "select count(*) from doctor.events where tenant_id = :t", t=tenant["tenant"]
+    )
+    assert events == 2
+    stored = await scalar(
+        engine,
+        "select string_agg(error ->> 'message', '') from doctor.events where tenant_id = :t",
+        t=tenant["tenant"],
+    )
+    assert "ana.souza" not in stored
+    outbox = await scalar(
+        engine,
+        "select count(*) from doctor.outbox_messages where topic = 'correlation.requested'"
+        " and payload ->> 'batch_id' = :b",
+        b=batch_id,
+    )
+    assert outbox == 1

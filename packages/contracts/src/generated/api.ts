@@ -297,6 +297,58 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/ingestion-tokens": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Tokens */
+    get: operations["list_tokens_api_v1_ingestion_tokens_get"];
+    put?: never;
+    /** Create Token */
+    post: operations["create_token_api_v1_ingestion_tokens_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/ingestion-tokens/{target}/revoke": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Revoke Token */
+    post: operations["revoke_token_api_v1_ingestion_tokens__target__revoke_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/ingestion/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Ingest Events */
+    post: operations["ingest_events_api_v1_ingestion_events_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -324,6 +376,15 @@ export interface components {
       error: string | null;
       /** Duplicate Of */
       duplicate_of: string | null;
+    };
+    /** CreatedIngestionToken */
+    CreatedIngestionToken: {
+      /** Id */
+      id: string;
+      /** Token */
+      token: string;
+      /** Prefix */
+      prefix: string;
     };
     /** CreatedInvitation */
     CreatedInvitation: {
@@ -376,6 +437,33 @@ export interface components {
        * Format: date-time
        */
       created_at: string;
+    };
+    /** IngestionResult */
+    IngestionResult: {
+      /** Accepted */
+      accepted: number;
+      /** Rejected */
+      rejected: components["schemas"]["RejectedEvent"][];
+    };
+    /** IngestionToken */
+    IngestionToken: {
+      /** Id */
+      id: string;
+      /** Name */
+      name: string;
+      /** Integration Id */
+      integration_id: string;
+      /** Prefix */
+      prefix: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Last Used At */
+      last_used_at: string | null;
+      /** Revoked At */
+      revoked_at: string | null;
     };
     /** Integration */
     Integration: {
@@ -487,6 +575,16 @@ export interface components {
       /** Sha256 */
       sha256: string;
     };
+    /** NewIngestionToken */
+    NewIngestionToken: {
+      /** Name */
+      name: string;
+      /**
+       * Integration Id
+       * Format: uuid
+       */
+      integration_id: string;
+    };
     /** NewIntegration */
     NewIntegration: {
       /** Name */
@@ -559,6 +657,13 @@ export interface components {
       avatar_url: string | null;
       /** Locale */
       locale: string;
+    };
+    /** RejectedEvent */
+    RejectedEvent: {
+      /** Index */
+      index: number;
+      /** Reason */
+      reason: string;
     };
     /** RoleChange */
     RoleChange: {
@@ -1266,6 +1371,142 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Import"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_tokens_api_v1_ingestion_tokens_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IngestionToken"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_token_api_v1_ingestion_tokens_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NewIngestionToken"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreatedIngestionToken"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  revoke_token_api_v1_ingestion_tokens__target__revoke_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  ingest_events_api_v1_ingestion_events_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          events: Record<string, never>[];
+        };
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IngestionResult"];
         };
       };
       /** @description Validation Error */

@@ -113,14 +113,14 @@ isOneToOne: false
                   ]
                 },"imports": {
                   Row: {
-                    "accepted": number,"created_at": string,"created_by": string | null,"duplicate_of": string | null,"duplicates": number,"error": string | null,"filename": string,"format": string | null,"id": string,"integration_id": string,"raw_log_object_id": string | null,"rejected": number,"secrets_removed": number,"sha256": string,"size_bytes": number,"status": string,"tenant_id": string,"total_lines": number,"updated_at": string
+                    "accepted": number,"created_at": string,"created_by": string | null,"duplicate_of": string | null,"duplicates": number,"error": string | null,"filename": string,"format": string | null,"id": string,"integration_id": string,"processing_started_at": string | null,"raw_log_object_id": string | null,"rejected": number,"secrets_removed": number,"sha256": string,"size_bytes": number,"status": string,"tenant_id": string,"total_lines": number,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "accepted"?: number,"created_at"?: string,"created_by"?: string | null,"duplicate_of"?: string | null,"duplicates"?: number,"error"?: string | null,"filename": string,"format"?: string | null,"id"?: string,"integration_id": string,"raw_log_object_id"?: string | null,"rejected"?: number,"secrets_removed"?: number,"sha256": string,"size_bytes": number,"status"?: string,"tenant_id": string,"total_lines"?: number,"updated_at"?: string
+                    "accepted"?: number,"created_at"?: string,"created_by"?: string | null,"duplicate_of"?: string | null,"duplicates"?: number,"error"?: string | null,"filename": string,"format"?: string | null,"id"?: string,"integration_id": string,"processing_started_at"?: string | null,"raw_log_object_id"?: string | null,"rejected"?: number,"secrets_removed"?: number,"sha256": string,"size_bytes": number,"status"?: string,"tenant_id": string,"total_lines"?: number,"updated_at"?: string
                   }
                   Update: {
-                    "accepted"?: number,"created_at"?: string,"created_by"?: string | null,"duplicate_of"?: string | null,"duplicates"?: number,"error"?: string | null,"filename"?: string,"format"?: string | null,"id"?: string,"integration_id"?: string,"raw_log_object_id"?: string | null,"rejected"?: number,"secrets_removed"?: number,"sha256"?: string,"size_bytes"?: number,"status"?: string,"tenant_id"?: string,"total_lines"?: number,"updated_at"?: string
+                    "accepted"?: number,"created_at"?: string,"created_by"?: string | null,"duplicate_of"?: string | null,"duplicates"?: number,"error"?: string | null,"filename"?: string,"format"?: string | null,"id"?: string,"integration_id"?: string,"processing_started_at"?: string | null,"raw_log_object_id"?: string | null,"rejected"?: number,"secrets_removed"?: number,"sha256"?: string,"size_bytes"?: number,"status"?: string,"tenant_id"?: string,"total_lines"?: number,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -146,6 +146,64 @@ isOneToOne: false
       columns: ["tenant_id","raw_log_object_id"]
 isOneToOne: false
       referencedRelation: "raw_log_objects"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"ingestion_batches": {
+                  Row: {
+                    "created_at": string,"event_count": number,"events": NonNullable<Json>,"expires_at": string,"id": string,"integration_id": string,"processed_at": string | null,"tenant_id": string,"token_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"event_count": number,"events": NonNullable<Json>,"expires_at"?: string,"id"?: string,"integration_id": string,"processed_at"?: string | null,"tenant_id": string,"token_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"event_count"?: number,"events"?: NonNullable<Json>,"expires_at"?: string,"id"?: string,"integration_id"?: string,"processed_at"?: string | null,"tenant_id"?: string,"token_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ingestion_batches_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "ingestion_batches_tenant_id_integration_id_fkey"
+      columns: ["tenant_id","integration_id"]
+isOneToOne: false
+      referencedRelation: "integrations"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "ingestion_batches_tenant_id_token_id_fkey"
+      columns: ["tenant_id","token_id"]
+isOneToOne: false
+      referencedRelation: "ingestion_tokens"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"ingestion_tokens": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"id": string,"integration_id": string,"last_used_at": string | null,"name": string,"prefix": string,"revoked_at": string | null,"tenant_id": string,"token_hash": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"integration_id": string,"last_used_at"?: string | null,"name": string,"prefix": string,"revoked_at"?: string | null,"tenant_id": string,"token_hash": string
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"id"?: string,"integration_id"?: string,"last_used_at"?: string | null,"name"?: string,"prefix"?: string,"revoked_at"?: string | null,"tenant_id"?: string,"token_hash"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ingestion_tokens_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "ingestion_tokens_tenant_id_integration_id_fkey"
+      columns: ["tenant_id","integration_id"]
+isOneToOne: false
+      referencedRelation: "integrations"
       referencedColumns: ["tenant_id","id"]
     }
                   ]
@@ -303,13 +361,19 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "accept_invitation":
+            "accept_ingestion_batch":
+{ Args: { "events": Json,"token_hash": string }; Returns: string
+                           },
+"accept_invitation":
 { Args: { "token_hash": string }; Returns: string
                            },
 "create_import":
 { Args: { "filename": string,"integration_id": string,"sha256": string,"size_bytes": number }; Returns: {
               "duplicate_of": string,"error": string,"format": string,"id": string,"status": string
             }[]
+                           },
+"create_ingestion_token":
+{ Args: { "integration_id": string,"name": string,"prefix": string,"token_hash": string }; Returns: string
                            },
 "create_organization":
 { Args: { "llm_provider": string,"name": string,"segment": string,"slug": string }; Returns: string
@@ -395,6 +459,14 @@ isOneToOne: false
 { Args: { "target": string,"token_hash": string }; Returns: {
               "email": string,"organization": string
             }[]
+                           },
+"resolve_ingestion_token":
+{ Args: { "token_hash": string }; Returns: {
+              "integration_id": string,"tenant_id": string,"token_id": string
+            }[]
+                           },
+"revoke_ingestion_token":
+{ Args: { "target": string }; Returns: undefined
                            },
 "revoke_invitation":
 { Args: { "target": string }; Returns: undefined

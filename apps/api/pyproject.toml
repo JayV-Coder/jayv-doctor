@@ -4,6 +4,7 @@ version = "0.0.0"
 description = "API FastAPI do Integration AI Doctor"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "aid-contracts",
     "aid-db",
     "fastapi>=0.162",
     "opentelemetry-exporter-gcp-monitoring>=1.9.0a0",
@@ -18,6 +19,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
+aid-contracts = { workspace = true }
 aid-db = { workspace = true }
 
 [build-system]

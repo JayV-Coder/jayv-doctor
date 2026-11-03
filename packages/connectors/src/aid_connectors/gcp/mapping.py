@@ -1,5 +1,7 @@
 """Entrada do Cloud Logging (`LogEntry`) → Evento no Contrato v1 (sem `integration_id`)."""
 
+import hashlib
+import json
 import re
 from collections.abc import Mapping
 from datetime import datetime
@@ -38,6 +40,15 @@ MESSAGE_CATEGORIES = [
 ]
 NANOS = re.compile(r"(\.\d{6})\d+")
 ATTRIBUTE = re.compile(r"[^a-z0-9_]+")
+
+
+def origin_id(entry: Mapping[str, Any]) -> str:
+    """insertId, ou o hash da entrada quando ele falta: duas entradas diferentes no mesmo
+    instante não podem virar o mesmo event_id."""
+    if entry.get("insertId"):
+        return str(entry["insertId"])
+    canonical = json.dumps(entry, sort_keys=True, ensure_ascii=False, default=str)
+    return "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
 
 
 def timestamp(value: str) -> datetime:
@@ -81,13 +92,21 @@ def to_event(entry: Mapping[str, Any]) -> dict[str, Any]:
     http: Mapping[str, Any] = entry.get("httpRequest") or {}
     moment = timestamp(str(entry["timestamp"]))
     severity = SEVERITIES.get(str(entry.get("severity", "DEFAULT")), "INFO")
-    message = payload.get("message") or entry.get("textPayload")
+    raw_message = payload.get("message") or entry.get("textPayload")
+    # `message` pode vir como objeto ou número no jsonPayload.
+    message = (
+        None
+        if raw_message is None
+        else raw_message
+        if isinstance(raw_message, str)
+        else json.dumps(raw_message, ensure_ascii=False)
+    )
     status = http.get("status")
     status = int(status) if isinstance(status, int | str) and str(status).isdigit() else None
 
     event: dict[str, Any] = {
         "schema_version": "1.0",
-        "event_id": stable_uuid7(f"gcp:{entry.get('insertId')}:{entry['timestamp']}", moment),
+        "event_id": stable_uuid7(f"gcp:{origin_id(entry)}:{entry['timestamp']}", moment),
         "timestamp": moment.isoformat(),
         "source": {
             "provider": "gcp",

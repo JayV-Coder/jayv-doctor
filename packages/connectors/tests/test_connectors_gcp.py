@@ -188,16 +188,9 @@ def test_credencial_que_nao_e_json_de_service_account() -> None:
         {**CONFIG, "project_id": "X"},
         {**CONFIG, "min_severity": "BARULHO"},
         {**CONFIG, "backfill_hours": 12},
-        {**CONFIG, "auth": "impersonation"},
+        {**CONFIG, "auth": "impersonation", "service_account": "x@b-proj.iam.gserviceaccount.com"},
+        {**CONFIG, "filter": 'severity=ERROR) OR (timestamp>="1970-01-01T00:00:00Z"'},
         {**CONFIG, "requests_per_minute": 0},
-    ],
-    ids=[
-        "sem-projeto",
-        "projeto-invalido",
-        "severidade",
-        "backfill",
-        "impersonation-sem-sa",
-        "cota",
     ],
 )
 def test_config_invalida(config: dict[str, Any]) -> None:
@@ -242,26 +235,102 @@ class TestGcpContract(ConnectorContractTests):
         pytest.skip("sobreposição intencional, coberta pela deduplicação do #12")
 
 
-def test_impersonation_sem_chave_usa_a_conta_da_plataforma() -> None:
-    seen: list[str] = []
+def test_filtro_com_parenteses_entre_aspas_e_aceito() -> None:
+    config = {**CONFIG, "filter": 'jsonPayload.msg="falhou (timeout)"'}
+    assert GcpLoggingConnector().validate_config(config) == {}
+
+
+def test_token_uri_do_json_e_ignorado() -> None:
+    info = json.loads(KEY)
+    info["token_uri"] = "http://10.0.0.5:8080/interno"  # noqa: S105
+    hosts: list[str] = []
     recorder = Recorder(pages=[{}])
 
     def handler(request: httpx.Request) -> httpx.Response:
-        seen.append(request.url.host)
-        if request.url.host == "metadata.google.internal":
-            return httpx.Response(200, json={"access_token": "da-plataforma", "expires_in": 3600})
-        if request.url.host == "iamcredentials.googleapis.com":
-            assert request.headers["authorization"] == "Bearer da-plataforma"
-            return httpx.Response(200, json={"accessToken": "do-cliente"})
-        assert request.headers["authorization"] == "Bearer do-cliente"
+        hosts.append(request.url.host)
         return recorder(request)
 
     gcp = GcpLoggingConnector(transport=httpx.MockTransport(handler), clock=lambda: NOW)
-    config = {
-        **CONFIG,
-        "auth": "impersonation",
-        "service_account": "doctor-reader@acme-integracoes.iam.gserviceaccount.com",
-    }
-    result = asyncio.run(gcp.test_connection(Secret("-"), config))
-    assert result.ok
-    assert seen[:2] == ["metadata.google.internal", "iamcredentials.googleapis.com"]
+    asyncio.run(gcp.test_connection(Secret(json.dumps(info)), CONFIG))
+    assert "10.0.0.5" not in hosts
+    assert hosts[0] == "oauth2.googleapis.com"
+
+
+def test_falha_de_rede_no_token_e_temporaria() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("dns")
+
+    gcp = GcpLoggingConnector(transport=httpx.MockTransport(handler), clock=lambda: NOW)
+
+    async def run() -> None:
+        async for _ in gcp.collect(Secret(KEY), CONFIG, None):
+            pass
+
+    with pytest.raises(ConnectorError) as raised:
+        asyncio.run(run())
+    assert raised.value.kind == "transient"
+
+
+def test_api_desativada_tem_mensagem_propria() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "oauth2.googleapis.com":
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
+        return httpx.Response(
+            403,
+            json={
+                "error": {
+                    "code": 403,
+                    "message": "Cloud Logging API has not been used in project 1 before",
+                    "details": [{"reason": "SERVICE_DISABLED"}],
+                }
+            },
+        )
+
+    gcp = GcpLoggingConnector(transport=httpx.MockTransport(handler), clock=lambda: NOW)
+    result = asyncio.run(gcp.test_connection(Secret(KEY), CONFIG))
+    assert "desativada" in result.message
+    assert "roles/logging.viewer" not in result.message
+
+
+def test_mensagem_que_nao_e_texto_nao_derruba_a_coleta() -> None:
+    from aid_connectors.gcp.mapping import to_event
+
+    event = to_event(
+        {
+            "timestamp": "2026-11-02T14:05:00Z",
+            "severity": "ERROR",
+            "jsonPayload": {"message": {"code": 504}},
+        }
+    )
+    assert event["error"]["message"] == '{"code": 504}'
+
+
+def test_entradas_sem_insert_id_no_mesmo_instante_tem_ids_diferentes() -> None:
+    from aid_connectors.gcp.mapping import to_event
+
+    first = to_event({"timestamp": "2026-11-02T14:05:00Z", "textPayload": "a"})
+    second = to_event({"timestamp": "2026-11-02T14:05:00Z", "textPayload": "b"})
+    assert first["event_id"] != second["event_id"]
+
+
+def test_token_e_reaproveitado_entre_tentativas() -> None:
+    tokens = 0
+    recorder = Recorder(pages=[{}])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal tokens
+        if request.url.host == "oauth2.googleapis.com":
+            tokens += 1
+        return recorder(request)
+
+    gcp = GcpLoggingConnector(
+        transport=httpx.MockTransport(handler), clock=lambda: NOW, sleep=lambda _: asyncio.sleep(0)
+    )
+
+    async def twice() -> None:
+        for _ in range(2):
+            async for _ in gcp.collect(Secret(KEY), CONFIG, None):
+                pass
+
+    asyncio.run(twice())
+    assert tokens == 1

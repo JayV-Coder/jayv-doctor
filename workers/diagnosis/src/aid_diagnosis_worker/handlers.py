@@ -11,6 +11,7 @@ from aid_knowledge.storage import KnowledgeStore
 from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from aid_diagnosis_worker.diagnose import diagnose, open_automatic
 from aid_diagnosis_worker.evaluate import evaluate_execution
 from aid_diagnosis_worker.knowledge import index, reindex_stale
 
@@ -35,16 +36,26 @@ async def rules_evaluate(payload: Mapping[str, Any]) -> None:
     await evaluate_execution(engine(), payload)
 
 
+async def diagnosis_requested(payload: Mapping[str, Any]) -> None:
+    await diagnose(engine(), payload, provider_for)
+
+
+async def incident_opened(payload: Mapping[str, Any]) -> None:
+    await open_automatic(engine(), payload)
+
+
 async def no_consumer_yet(payload: Mapping[str, Any]) -> None:
-    """`incident.opened`/`incident.updated` já saem (ticket #18), mas quem os consome chega com o
-    Diagnóstico (#24) e os alertas (v0.3). Até lá, confirmar evita reentrega e DLQ."""
+    """`incident.updated` e `diagnosis.published` já saem, mas quem os consome chega com os
+    alertas (v0.3). Até lá, confirmar evita reentrega e DLQ."""
 
 
 TOPICS: dict[str, Handler] = {
     "rules.evaluate": rules_evaluate,
     "knowledge.index": knowledge_index,
-    "incident.opened": no_consumer_yet,
+    "diagnosis.requested": diagnosis_requested,
+    "incident.opened": incident_opened,
     "incident.updated": no_consumer_yet,
+    "diagnosis.published": no_consumer_yet,
 }
 
 router = APIRouter()

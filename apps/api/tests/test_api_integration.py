@@ -742,3 +742,73 @@ async def test_dashboard_bate_com_as_consultas_de_controle(
     assert empty.executions.value == 0
     assert empty.error_rate.value is None
     assert empty.mttr_minutes.value is None
+
+
+@pytest.mark.asyncio
+async def test_diagnostico_pedido_pela_api_publicado_pelo_worker_e_lido_isolado(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aid_api.core.db as db
+    from aid_api.diagnoses.repo import DiagnosisRepository
+    from aid_api.diagnoses.schemas import DiagnosisRequest
+    from aid_diagnosis_engine.llm.fake import FakeProvider
+    from aid_diagnosis_worker.diagnose import diagnose
+
+    first, second = tenants
+    seeded = await seed_explorer(engine, first, second)
+    await add_admin(engine, first, user)
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("update doctor.memberships set role = 'analyst' where user_id = :u"), {"u": user}
+        )
+        incident = await connection.scalar(
+            text("select id::text from doctor.incidents where tenant_id = cast(:t as uuid)"),
+            {"t": first},
+        )
+        match = await connection.scalar(
+            text("select id::text from doctor.rule_matches where tenant_id = cast(:t as uuid)"),
+            {"t": first},
+        )
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    analyst = claims_for(first, user, "analyst")
+    repository = DiagnosisRepository()
+
+    queued = await repository.request(analyst, incident, DiagnosisRequest(), "req:k1")
+    again = await repository.request(analyst, incident, DiagnosisRequest(), "req:k1")
+    assert (queued.status, queued.version, again.diagnosis_id) == ("queued", 1, queued.diagnosis_id)
+
+    answer = {
+        "classification": "UPSTREAM_TIMEOUT",
+        "status": "IDENTIFIED",
+        "probable_cause": "O SAP não respondeu dentro do timeout do gateway.",
+        "confidence": 0.74,
+        "responsible_system": "sap",
+        "evidence": [
+            {"ref": match, "finding": "INT-003: HTTP 504."},
+            {"ref": seeded["e2"], "finding": "Erro após 30 s."},
+        ],
+        "hypotheses": [],
+        "recommendations": [{"text": "Confira no SAP se o pedido existe.", "kind": "verify"}],
+        "requires_human_review": False,
+    }
+    provider = FakeProvider([json.dumps(answer)])
+    assert await diagnose(engine, {"diagnosis_id": queued.diagnosis_id}, lambda n: provider) == (
+        "published"
+    )
+
+    detail = await repository.detail(analyst, queued.diagnosis_id)
+    assert (detail.status, detail.stage, detail.confidence, detail.responsible_system) == (
+        "published",
+        "done",
+        0.74,
+        "sap",
+    )
+    assert [(e.kind, e.ref_id) for e in detail.evidence] == [
+        ("rule_match", match),
+        ("event", seeded["e2"]),
+    ]
+    assert [r.text for r in detail.recommendations] == ["Confira no SAP se o pedido existe."]
+    assert [d.version for d in await repository.for_incident(analyst, incident)] == [1]
+    with pytest.raises(ApiError) as other:
+        await repository.detail(claims_for(second, user, "analyst"), queued.diagnosis_id)
+    assert other.value.status == 404

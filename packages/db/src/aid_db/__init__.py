@@ -1,5 +1,6 @@
 """Engine do Postgres compartilhado pela API e pelos workers."""
 
+import json
 from uuid import uuid4
 
 from sqlalchemy import text
@@ -24,3 +25,13 @@ def supavisor_engine(url: str) -> AsyncEngine:
 async def platform_role(connection: AsyncConnection) -> None:
     """Jobs de plataforma (workers) agem como service_role, nunca a API (ADR-0004)."""
     await connection.execute(text("set local role service_role"))
+
+
+async def tenant_role(connection: AsyncConnection, tenant_id: str) -> None:
+    """Leitura de um worker em nome de uma Organização: o RLS vale como na API, com a claim do
+    tenant e nenhum Usuário. Erro de código que esqueça o filtro não alcança outro tenant."""
+    await connection.execute(text("set local role authenticated"))
+    await connection.execute(
+        text("select set_config('request.jwt.claims', :claims, true)"),
+        {"claims": json.dumps({"role": "authenticated", "tenant_id": tenant_id})},
+    )

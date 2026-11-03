@@ -26,6 +26,8 @@ locals {
     # Indexação de documentos da Base de conhecimento (#23).
     "knowledge.index"     = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
     "diagnosis.requested" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    # Diagnóstico publicado (#24): quem consome chega com os alertas (v0.3).
+    "diagnosis.published" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
     "connector.sync"      = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
   }
 

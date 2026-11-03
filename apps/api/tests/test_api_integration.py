@@ -543,6 +543,7 @@ async def test_download_do_log_bruto_exige_analyst(
         await repository.raw_log_download(claims_for(first, user, "viewer"), seeded["raw"], sign)
     assert denied.value.status == 403
 
+
 @pytest.mark.asyncio
 async def test_conector_mostra_intervalo_checkpoint_e_registros_da_ultima_sincronizacao(
     engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch

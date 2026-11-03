@@ -84,7 +84,7 @@ root_package = "aid_api"
 [[tool.importlinter.contracts]]
 name = "Módulos independentes sobre o core"
 type = "layers"
-layers = ["aid_api.main", "aid_api.health | aid_api.orgs | aid_api.integrations | aid_api.imports | aid_api.ingestion | aid_api.connectors | aid_api.executions", "aid_api.core"]
+layers = ["aid_api.main", "aid_api.health | aid_api.orgs | aid_api.integrations | aid_api.imports | aid_api.ingestion | aid_api.connectors | aid_api.executions | aid_api.incidents", "aid_api.core"]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib --strict-markers"

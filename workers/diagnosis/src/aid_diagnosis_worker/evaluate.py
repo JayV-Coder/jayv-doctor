@@ -25,6 +25,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 WINDOW = timedelta(minutes=30)
+# Resolvido há menos que isto, com a mesma assinatura, é reaberto em vez de abrir outro.
+REOPEN = timedelta(hours=24)
 
 
 async def load(connection: AsyncConnection, execution_id: str) -> tuple[Any, list[EventView]]:
@@ -160,6 +162,46 @@ async def lock(connection: AsyncConnection, key: str) -> None:
     )
 
 
+async def reopen(connection: AsyncConnection, execution: Any, found: RuleMatch) -> Any:
+    """Incidente resolvido há até 24 h com a mesma assinatura volta a `open` (ticket #20), com a
+    reabertura no histórico, em vez de nascer outro."""
+    resolved = (
+        await connection.execute(
+            text(
+                "select id::text, severity, execution_count from doctor.incidents"
+                " where tenant_id = cast(:t as uuid) and integration_id = cast(:i as uuid)"
+                " and category = :c and status = 'resolved'"
+                " and resolved_at >= now() - make_interval(secs => :reopen)"
+                " order by resolved_at desc limit 1 for update"
+            ),
+            {
+                "t": execution.tenant_id,
+                "i": execution.integration_id,
+                "c": found.category,
+                "reopen": REOPEN.total_seconds(),
+            },
+        )
+    ).first()
+    if resolved is None:
+        return None
+    await connection.execute(
+        text(
+            "update doctor.incidents set status = 'open'"
+            " where tenant_id = cast(:t as uuid) and id = cast(:id as uuid)"
+        ),
+        {"t": execution.tenant_id, "id": resolved.id},
+    )
+    await connection.execute(
+        text(
+            "insert into doctor.incident_history (tenant_id, incident_id, action, from_value,"
+            " to_value, note) values (cast(:t as uuid), cast(:id as uuid), 'reopened',"
+            " 'resolved', 'open', 'Nova Execução com a mesma assinatura em até 24 h.')"
+        ),
+        {"t": execution.tenant_id, "id": resolved.id},
+    )
+    return resolved
+
+
 async def attach(connection: AsyncConnection, execution: Any, found: RuleMatch) -> str:
     """Põe a Execução no Incidente certo (já sem ligação nenhuma); devolve o id dele."""
     tenant = execution.tenant_id
@@ -183,6 +225,8 @@ async def attach(connection: AsyncConnection, execution: Any, found: RuleMatch) 
             },
         )
     ).first()
+    if current is None:
+        current = await reopen(connection, execution, found)
     if current is None:
         incident = str(
             await connection.scalar(

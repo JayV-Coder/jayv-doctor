@@ -65,6 +65,8 @@ async def tenant(engine: AsyncEngine) -> AsyncIterator[dict[str, str]]:
     )
     yield ids
     for table in (
+        "incident_history",
+        "incident_comments",
         "incident_executions",
         "incidents",
         "rule_matches",
@@ -75,6 +77,7 @@ async def tenant(engine: AsyncEngine) -> AsyncIterator[dict[str, str]]:
         "integrations",
     ):
         await run(engine, f"delete from doctor.{table} where tenant_id = :t", t=ids["tenant"])  # noqa: S608
+    await run(engine, "delete from doctor.incident_counters where tenant_id = :t", t=ids["tenant"])
     await run(engine, "delete from doctor.tenants where id = :t", t=ids["tenant"])
     await run(engine, "delete from public.organizations where id = :t", t=ids["tenant"])
 
@@ -378,3 +381,31 @@ async def test_fusao_nao_conta_a_mesma_execucao_duas_vezes(
         t=tenant["tenant"],
     )
     assert [link["x"] for link in linked] == [survivor]
+
+
+@pytest.mark.asyncio
+async def test_incidente_resolvido_reabre_com_a_mesma_assinatura_em_24_h(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    first = await closed_execution(engine, tenant, T0, TIMEOUT_504)
+    incident = await evaluate_execution(engine, {"execution_id": first})
+    await run(
+        engine,
+        "update doctor.incidents set status = 'resolved', resolution_note = 'Gateway ajustado.'"
+        " where id = :i",
+        i=incident,
+    )
+    # Bem depois da janela de 30 min, mas a resolução foi agora: reabre o mesmo.
+    later = await closed_execution(engine, tenant, T0 + timedelta(hours=3), TIMEOUT_504)
+    assert await evaluate_execution(engine, {"execution_id": later}) == incident
+    (only,) = await incidents(engine, tenant)
+    assert only["execution_count"] == 2
+    history = await rows(
+        engine,
+        "select action, from_value, to_value, actor_id from doctor.incident_history"
+        " where incident_id = :i",
+        i=incident,
+    )
+    assert [(h["action"], h["from_value"], h["to_value"], h["actor_id"]) for h in history] == [
+        ("reopened", "resolved", "open", None)
+    ]

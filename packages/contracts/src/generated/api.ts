@@ -558,6 +558,59 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/incidents/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Search Incidents */
+    post: operations["search_incidents_api_v1_incidents_search_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/incidents/{target}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Incident */
+    get: operations["get_incident_api_v1_incidents__target__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update Incident */
+    patch: operations["update_incident_api_v1_incidents__target__patch"];
+    trace?: never;
+  };
+  "/api/v1/incidents/{target}/comments": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Comments */
+    get: operations["list_comments_api_v1_incidents__target__comments_get"];
+    put?: never;
+    /** Add Comment */
+    post: operations["add_comment_api_v1_incidents__target__comments_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -571,6 +624,22 @@ export interface components {
     AcceptedInvitation: {
       /** Tenant Id */
       tenant_id: string;
+    };
+    /** Comment */
+    Comment: {
+      /** Id */
+      id: string;
+      /** Author Id */
+      author_id: string | null;
+      /** Body Md */
+      body_md: string;
+      /** Mentions */
+      mentions: string[];
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
     };
     /**
      * ConnectionTest
@@ -863,6 +932,24 @@ export interface components {
       /** Detail */
       detail?: components["schemas"]["ValidationError"][];
     };
+    /** HistoryEntry */
+    HistoryEntry: {
+      /** Action */
+      action: string;
+      /** From Value */
+      from_value: string | null;
+      /** To Value */
+      to_value: string | null;
+      /** Note */
+      note: string | null;
+      /** Actor Id */
+      actor_id: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+    };
     /** Import */
     Import: {
       /** Id */
@@ -900,6 +987,103 @@ export interface components {
        */
       created_at: string;
     };
+    /** IncidentChange */
+    IncidentChange: {
+      /** Status */
+      status?: ("open" | "investigating" | "resolved" | "dismissed") | null;
+      /** Severity */
+      severity?: ("low" | "medium" | "high" | "critical") | null;
+      /** Assignee Id */
+      assignee_id?: string | null;
+      /** Resolution Note */
+      resolution_note?: string | null;
+    };
+    /** IncidentDetail */
+    IncidentDetail: {
+      /** Id */
+      id: string;
+      /** Number */
+      number: number;
+      /** Title */
+      title: string;
+      /** Category */
+      category: string;
+      /**
+       * Severity
+       * @enum {string}
+       */
+      severity: "low" | "medium" | "high" | "critical";
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "open" | "investigating" | "resolved" | "dismissed";
+      /** Rule Code */
+      rule_code: string;
+      /** Rule Version */
+      rule_version: string;
+      /** Integration Id */
+      integration_id: string;
+      /** Integration Name */
+      integration_name: string;
+      /** Environment */
+      environment: string;
+      /**
+       * First Seen At
+       * Format: date-time
+       */
+      first_seen_at: string;
+      /**
+       * Last Seen At
+       * Format: date-time
+       */
+      last_seen_at: string;
+      /** Execution Count */
+      execution_count: number;
+      /** Assignee Id */
+      assignee_id: string | null;
+      /** Resolved At */
+      resolved_at: string | null;
+      /** Resolution Note */
+      resolution_note: string | null;
+      /** Executions */
+      executions: components["schemas"]["IncidentExecution"][];
+      /** Evidence */
+      evidence: components["schemas"]["RuleEvidence"][];
+      /** History */
+      history: components["schemas"]["HistoryEntry"][];
+    };
+    /** IncidentExecution */
+    IncidentExecution: {
+      /** Id */
+      id: string;
+      /** Status */
+      status: string;
+      /**
+       * First Event At
+       * Format: date-time
+       */
+      first_event_at: string;
+      /** Duration Ms */
+      duration_ms: number;
+      /** Event Count */
+      event_count: number;
+      /** Correlation Keys */
+      correlation_keys: {
+        [key: string]: string[];
+      };
+    };
+    /** IncidentPage */
+    IncidentPage: {
+      /** Items */
+      items: components["schemas"]["IncidentSummary"][];
+      /** Next Cursor */
+      next_cursor: string | null;
+      /** Counts */
+      counts: {
+        [key: string]: number;
+      };
+    };
     /** IncidentRef */
     IncidentRef: {
       /** Id */
@@ -910,6 +1094,84 @@ export interface components {
       severity: string;
       /** Status */
       status: string;
+    };
+    /**
+     * IncidentSearch
+     * @description Filtros no corpo (POST), como na busca de Execuções: `q` pode ser um nº de pedido.
+     */
+    IncidentSearch: {
+      /** Q */
+      q?: string | null;
+      /** Status */
+      status?: ("open" | "investigating" | "resolved" | "dismissed")[] | null;
+      /** Severity */
+      severity?: ("low" | "medium" | "high" | "critical")[] | null;
+      /** Category */
+      category?: string | null;
+      /** Integration Id */
+      integration_id?: string | null;
+      /** Environment */
+      environment?: ("prd" | "hml" | "dev") | null;
+      /** Assignee Id */
+      assignee_id?: string | null;
+      /** From */
+      from?: string | null;
+      /** To */
+      to?: string | null;
+      /** Cursor */
+      cursor?: string | null;
+      /**
+       * Limit
+       * @default 20
+       */
+      limit: number;
+    };
+    /** IncidentSummary */
+    IncidentSummary: {
+      /** Id */
+      id: string;
+      /** Number */
+      number: number;
+      /** Title */
+      title: string;
+      /** Category */
+      category: string;
+      /**
+       * Severity
+       * @enum {string}
+       */
+      severity: "low" | "medium" | "high" | "critical";
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "open" | "investigating" | "resolved" | "dismissed";
+      /** Rule Code */
+      rule_code: string;
+      /** Rule Version */
+      rule_version: string;
+      /** Integration Id */
+      integration_id: string;
+      /** Integration Name */
+      integration_name: string;
+      /** Environment */
+      environment: string;
+      /**
+       * First Seen At
+       * Format: date-time
+       */
+      first_seen_at: string;
+      /**
+       * Last Seen At
+       * Format: date-time
+       */
+      last_seen_at: string;
+      /** Execution Count */
+      execution_count: number;
+      /** Assignee Id */
+      assignee_id: string | null;
+      /** Resolved At */
+      resolved_at: string | null;
     };
     /** IngestionResult */
     IngestionResult: {
@@ -1033,6 +1295,13 @@ export interface components {
       role: string;
       /** Mfa Enabled */
       mfa_enabled: boolean;
+    };
+    /** NewComment */
+    NewComment: {
+      /** Body Md */
+      body_md: string;
+      /** Mentions */
+      mentions?: string[];
     };
     /**
      * NewConnectionTest
@@ -1212,6 +1481,24 @@ export interface components {
        * @enum {string}
        */
       role: "owner" | "admin" | "analyst" | "viewer";
+    };
+    /**
+     * RuleEvidence
+     * @description Evidência determinística: a Regra que disparou e os Eventos que ela usou como prova.
+     */
+    RuleEvidence: {
+      /** Execution Id */
+      execution_id: string;
+      /** Rule Code */
+      rule_code: string;
+      /** Rule Version */
+      rule_version: string;
+      /** Category */
+      category: string;
+      /** Description */
+      description: string;
+      /** Matched Event Ids */
+      matched_event_ids: string[];
     };
     /** RuleHit */
     RuleHit: {
@@ -2576,6 +2863,183 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["RawLogDownload"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  search_incidents_api_v1_incidents_search_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IncidentSearch"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IncidentPage"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_incident_api_v1_incidents__target__get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IncidentDetail"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_incident_api_v1_incidents__target__patch: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IncidentChange"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IncidentDetail"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_comments_api_v1_incidents__target__comments_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Comment"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  add_comment_api_v1_incidents__target__comments_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NewComment"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Comment"];
         };
       };
       /** @description Validation Error */

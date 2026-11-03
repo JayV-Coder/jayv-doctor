@@ -36,6 +36,7 @@ class Metrics:
     cost_usd: float | None
     latency_p50_ms: float
     latency_p95_ms: float
+    llm_failures: int = 0
     providers: list[str] = field(default_factory=list)
 
 
@@ -106,6 +107,7 @@ def summarize(
         cost_usd=cost(results, prices),
         latency_p50_ms=round(percentile(latencies, 0.5), 2),
         latency_p95_ms=round(percentile(latencies, 0.95), 2),
+        llm_failures=sum(1 for r in results if r.llm_failed),
         providers=sorted({f"{r.provider}/{r.model}" for r in results if r.provider}),
     )
 

@@ -1,5 +1,6 @@
 {
   "rules_only": {
-    "category_accuracy": 1.0
+    "category_accuracy": 1.0,
+    "inconclusive_rate": 1.0
   }
 }

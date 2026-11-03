@@ -2,6 +2,7 @@
 Eventos de cada Execução, o match mais severo é a categoria do Incidente e o motor diagnostica
 no modo pedido (com o provedor e o modelo do LLMProvider, no híbrido)."""
 
+import asyncio
 import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
@@ -15,7 +16,8 @@ from aid_diagnosis_engine.diagnosis import (
     RuleItem,
 )
 from aid_diagnosis_engine.diagnosis.model import Mode
-from aid_diagnosis_engine.incidents import LABELS, primary
+from aid_diagnosis_engine.incidents import LABELS, incident_title, primary
+from aid_diagnosis_engine.llm.base import LLMError
 from aid_diagnosis_engine.llm.client import GuardedLLM
 from aid_diagnosis_engine.rules import evaluate
 from aid_diagnosis_engine.rules.base import EventView, ExecutionView
@@ -23,6 +25,8 @@ from aid_diagnosis_engine.rules.base import EventView, ExecutionView
 from aid_evaluation.dataset import Case
 
 CATEGORIES = tuple(LABELS)
+# Casos ao mesmo tempo no híbrido (cada um faz uma chamada ao modelo e uma ao juiz).
+CONCURRENCY = 4
 # Juiz da Causa provável: (gabarito, Causa do Diagnóstico) → acertou?
 Judge = Callable[[str, str], Awaitable[bool]]
 
@@ -45,6 +49,8 @@ class CaseResult:
     latency_ms: float
     provider: str | None
     model: str | None
+    # No híbrido, o LLM falhou e o resultado veio só das Regras: não conta como acerto do LLM.
+    llm_failed: bool = False
     notes: list[str] = field(default_factory=list)
 
 
@@ -114,8 +120,7 @@ def context(case: Case) -> tuple[IncidentInfo, list[EventItem], list[RuleItem]]:
     incident = IncidentInfo(
         id=case.id,
         number=None,
-        title=f"{LABELS.get(found.category, 'Falha') if found else 'Falha sem Regra'}"
-        f" · {case.integration.name}",
+        title=incident_title(found.category if found else "UNKNOWN", case.integration.name),
         category=found.category if found else "UNKNOWN",
         severity=found.severity_hint if found else "medium",
         integration_name=case.integration.name,
@@ -140,20 +145,31 @@ async def run_case(
     draft = await engine.run(CaseLoader(incident, events, rules), mode=mode)
     latency = (time.perf_counter() - started) * 1000
     inconclusive = draft.status == "inconclusive"
-    if inconclusive:
+    llm_failed = mode == "hybrid" and draft.status == "failed_llm"
+    if inconclusive or llm_failed:
         predicted = None
-    elif draft.classification in CATEGORIES:
-        predicted = draft.classification
-    else:
-        # O LLM classifica com um código próprio (ex.: UPSTREAM_TIMEOUT); a categoria comparável
-        # é a do Incidente, que vem das Regras.
+    elif mode == "rules_only":
         predicted = incident.category if incident.category in CATEGORIES else None
+    else:
+        # No híbrido vale a classificação do LLM: um código fora das 8 categorias conta como
+        # erro, em vez de herdar a categoria do Incidente (que vem das Regras).
+        predicted = draft.classification if draft.classification in CATEGORIES else None
     discarded = sum(
         1 for note in draft.verification_notes if note.startswith("Evidência descartada")
     )
     cause_correct: bool | None = None
-    if judge is not None and label.probable_cause and draft.probable_cause and not inconclusive:
-        cause_correct = await judge(label.probable_cause, draft.probable_cause)
+    if (
+        judge is not None
+        and not llm_failed
+        and label.probable_cause
+        and draft.probable_cause
+        and not inconclusive
+    ):
+        try:
+            cause_correct = await judge(label.probable_cause, draft.probable_cause)
+        except LLMError:
+            # Juiz fora: o caso fica sem veredito, e a avaliação continua.
+            cause_correct = None
     return CaseResult(
         case_id=case.id,
         mode=mode,
@@ -164,13 +180,16 @@ async def run_case(
         probable_cause=draft.probable_cause,
         expected_cause=label.probable_cause,
         cause_correct=cause_correct,
-        discarded_evidence=discarded if mode == "hybrid" else 0,
-        cited_evidence=(len(draft.evidence) + discarded) if mode == "hybrid" else 0,
+        discarded_evidence=discarded if mode == "hybrid" and not llm_failed else 0,
+        cited_evidence=(len(draft.evidence) + discarded)
+        if mode == "hybrid" and not llm_failed
+        else 0,
         input_tokens=draft.input_tokens,
         output_tokens=draft.output_tokens,
         latency_ms=latency,
         provider=draft.provider,
         model=draft.model,
+        llm_failed=llm_failed,
         notes=draft.verification_notes,
     )
 
@@ -181,8 +200,11 @@ async def run(
     llm: Callable[[], GuardedLLM] | None = None,
     judge: Judge | None = None,
 ) -> list[CaseResult]:
-    return [
-        await run_case(case, mode, llm() if llm is not None else None, judge)
-        for case in cases
-        if case.label is not None
-    ]
+    """Casos rotulados, com até CONCURRENCY ao mesmo tempo; o resultado sai na ordem do dataset."""
+    gate = asyncio.Semaphore(CONCURRENCY)
+
+    async def one(case: Case) -> CaseResult:
+        async with gate:
+            return await run_case(case, mode, llm() if llm is not None else None, judge)
+
+    return list(await asyncio.gather(*(one(case) for case in cases if case.label is not None)))

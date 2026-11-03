@@ -13,7 +13,9 @@ from aid_evaluation.metrics import summarize
 from aid_evaluation.report import render
 from aid_evaluation.synthetic import generate
 
-DATASET = Path(__file__).resolve().parents[3] / "tests" / "evaluation" / "datasets" / "v1.jsonl"
+DATASET = (
+    Path(__file__).resolve().parents[3] / "tests" / "evaluation" / "datasets" / "synthetic-v1.jsonl"
+)
 
 
 def test_dataset_v1_tem_120_casos_com_15_sem_causa_e_e_reproduzivel(tmp_path: Path) -> None:
@@ -24,7 +26,7 @@ def test_dataset_v1_tem_120_casos_com_15_sem_causa_e_e_reproduzivel(tmp_path: Pa
     out = tmp_path / "v1.jsonl"
     dump(cases, out)
     assert load(out) == cases
-    # O arquivo versionado é o que o gerador produz (nada editado à mão sem querer).
+    # O sintético versionado é o que o gerador produz; os casos reais ficam em outro arquivo.
     assert load(DATASET) == generate()
 
 
@@ -44,7 +46,7 @@ async def test_hibrido_mede_alucinacao_juiz_tokens_e_custo() -> None:
     [case] = [c for c in generate() if c.id == "syn-timeout-00"]
     error = next(e for e in case.events if e.error)
     answer = {
-        "classification": "UPSTREAM_TIMEOUT",
+        "classification": "TIMEOUT",
         "status": "IDENTIFIED",
         "probable_cause": "O SAP demorou além do timeout.",
         "confidence": 0.7,
@@ -90,3 +92,47 @@ async def test_relatorio_tem_as_metricas_e_avisa_que_so_ha_sinteticos() -> None:
     assert "Matriz de confusão · rules_only" in text
     assert "Só casos sintéticos" in text
     assert "heurística (não calibrada)" in text
+
+
+@pytest.mark.asyncio
+async def test_falha_do_llm_no_hibrido_nao_conta_como_acerto_e_juiz_fora_nao_derruba() -> None:
+    from aid_diagnosis_engine.llm.base import LLMUnavailableError
+
+    [case] = [c for c in generate() if c.id == "syn-auth-00"]
+    provider = FakeProvider([LLMUnavailableError("fora")])
+    llm = GuardedLLM(
+        provider, breaker=CircuitBreaker(), policy=RetryPolicy(attempts=1, base_seconds=0)
+    )
+
+    async def judge(expected: str, proposed: str) -> bool:
+        raise LLMUnavailableError("juiz fora")
+
+    result = await run_case(case, "hybrid", llm, judge)
+    assert result.llm_failed is True
+    assert result.predicted_category is None
+    assert result.cited_evidence == 0
+    metrics = summarize("hybrid", [result])
+    assert (metrics.llm_failures, metrics.category_accuracy) == (1, 0.0)
+
+
+@pytest.mark.asyncio
+async def test_classificacao_fora_das_categorias_conta_como_erro_no_hibrido() -> None:
+    [case] = [c for c in generate() if c.id == "syn-timeout-00"]
+    error = next(e for e in case.events if e.error)
+    answer = {
+        "classification": "UPSTREAM_TIMEOUT",
+        "status": "IDENTIFIED",
+        "probable_cause": "Timeout.",
+        "confidence": 0.7,
+        "responsible_system": "indeterminado",
+        "evidence": [{"ref": error.id, "finding": "erro"}],
+        "hypotheses": [],
+        "recommendations": [],
+        "requires_human_review": True,
+    }
+    provider = FakeProvider([json.dumps(answer)])
+    llm = GuardedLLM(
+        provider, breaker=CircuitBreaker(), policy=RetryPolicy(attempts=1, base_seconds=0)
+    )
+    result = await run_case(case, "hybrid", llm)
+    assert result.predicted_category is None

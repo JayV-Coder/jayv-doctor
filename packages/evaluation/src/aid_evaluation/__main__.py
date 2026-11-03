@@ -18,13 +18,17 @@ from pathlib import Path
 from typing import Any, cast
 
 from aid_evaluation.dataset import Case, Label, dump, load
-from aid_evaluation.harness import CaseResult, Judge, run
+from aid_evaluation.harness import CATEGORIES, CaseResult, Judge, run
 from aid_evaluation.metrics import Metrics, summarize, write_json
 from aid_evaluation.report import render
 from aid_evaluation.synthetic import generate
 
 ROOT = Path(__file__).resolve().parents[4] / "tests" / "evaluation"
-DATASET = ROOT / "datasets" / "v1.jsonl"
+DATASETS = ROOT / "datasets"
+# O sintético sai do gerador e é sobrescrito por ele; os casos reais ficam num arquivo próprio
+# (`real-v1.jsonl`), que o gerador nunca toca.
+SYNTHETIC = DATASETS / "synthetic-v1.jsonl"
+REAL = DATASETS / "real-v1.jsonl"
 BASELINE = ROOT / "baseline.json"
 PRICES = ROOT / "prices.json"
 TOLERANCE = 0.02
@@ -36,6 +40,11 @@ def guarded(provider: str) -> Any:
 
     chosen = provider_for(provider)
     return lambda: GuardedLLM(chosen)
+
+
+def dataset(paths: list[str] | None) -> list[Case]:
+    files = [Path(p) for p in paths] if paths else sorted(DATASETS.glob("*.jsonl"))
+    return [case for path in files for case in load(path)]
 
 
 async def evaluate(
@@ -52,14 +61,21 @@ async def evaluate(
     for mode in modes:
         if mode == "hybrid" and llm is None:
             raise SystemExit("o modo hybrid precisa de --provider (anthropic ou vertex)")
-        results = await run(cases, cast("Any", mode), llm if mode == "hybrid" else None, referee)
+        # O juiz só no híbrido: no rules_only a Causa é o texto fixo da Regra.
+        results = await run(
+            cases,
+            cast("Any", mode),
+            llm if mode == "hybrid" else None,
+            referee if mode == "hybrid" else None,
+        )
         metrics.append(summarize(mode, results, prices))
         everything += results
     return metrics, everything
 
 
 def command_run(args: argparse.Namespace) -> None:
-    cases = load(Path(args.dataset))[: args.limit] if args.limit else load(Path(args.dataset))
+    cases = dataset(args.dataset)
+    cases = cases[: args.limit] if args.limit else cases
     metrics, results = asyncio.run(evaluate(cases, args.modes, args.provider, args.judge))
     notes = []
     if "hybrid" not in args.modes:
@@ -72,7 +88,8 @@ def command_run(args: argparse.Namespace) -> None:
     if not PRICES.exists():
         notes.append("Custo em aberto: preencha tests/evaluation/prices.json com a tabela oficial.")
     report = Path(args.report_dir) / f"{date.today().isoformat()}.md"
-    report.write_text(render(cases, metrics, Path(args.dataset).name, notes), encoding="utf-8")
+    names = ", ".join(args.dataset) if args.dataset else "datasets/*.jsonl"
+    report.write_text(render(cases, metrics, names, notes), encoding="utf-8")
     write_json(metrics, Path(args.json))
     Path(args.results).write_text(
         "\n".join(json.dumps(asdict(r), ensure_ascii=False) for r in results) + "\n",
@@ -81,22 +98,27 @@ def command_run(args: argparse.Namespace) -> None:
     print(f"relatório: {report}")
 
 
+GATED = ("category_accuracy", "inconclusive_rate")
+
+
 def command_gate(args: argparse.Namespace) -> None:
-    """Falha se a precisão de categoria do rules_only cair mais de 2 p.p. contra a linha de base."""
-    cases = load(Path(args.dataset))
+    """Falha se a precisão de categoria ou o inconclusivo correto do rules_only cair mais de 2 p.p.
+    contra a linha de base (um caso sem causa que passa a ganhar categoria também reprova)."""
+    cases = dataset(args.dataset)
     [metrics], _ = asyncio.run(evaluate(cases, ["rules_only"], None, False))
+    current = {name: getattr(metrics, name) or 0.0 for name in GATED}
     if args.update:
-        BASELINE.write_text(
-            json.dumps({"rules_only": {"category_accuracy": metrics.category_accuracy}}, indent=2)
-            + "\n",
-            encoding="utf-8",
-        )
-        print(f"linha de base: {metrics.category_accuracy:.4f}")
+        BASELINE.write_text(json.dumps({"rules_only": current}, indent=2) + "\n", encoding="utf-8")
+        print(f"linha de base: {current}")
         return
-    baseline = json.loads(BASELINE.read_text(encoding="utf-8"))["rules_only"]["category_accuracy"]
-    print(f"rules_only: {metrics.category_accuracy:.4f} (linha de base {baseline:.4f})")
-    if metrics.category_accuracy < baseline - TOLERANCE:
-        print("regressão acima de 2 p.p. na precisão de categoria")
+    baseline = json.loads(BASELINE.read_text(encoding="utf-8"))["rules_only"]
+    failed = False
+    for name in GATED:
+        print(f"{name}: {current[name]:.4f} (linha de base {baseline[name]:.4f})")
+        if current[name] < baseline[name] - TOLERANCE:
+            print(f"regressão acima de 2 p.p. em {name}")
+            failed = True
+    if failed:
         sys.exit(1)
 
 
@@ -106,9 +128,23 @@ def command_generate(args: argparse.Namespace) -> None:
     print(f"{len(cases)} casos em {args.out}")
 
 
-def ask(prompt: str, default: str | None) -> str | None:
-    answer = input(f"{prompt} [{default or ''}]: ").strip()
-    return answer or default
+YES = {"s", "sim", "y", "yes"}
+SYSTEMS = ("sap", "salesforce", "gcp", "other")
+
+
+def ask(prompt: str, default: str | None, choices: tuple[str, ...] | None = None) -> str:
+    """Repete a pergunta até ter uma resposta válida (Enter usa o valor atual, se houver)."""
+    while True:
+        answer = input(f"{prompt} [{default or ''}]: ").strip() or (default or "")
+        if choices is not None:
+            answer = answer.upper() if choices == CATEGORIES else answer.lower()
+            if answer in choices:
+                return answer
+            print(f"  use uma destas: {', '.join(choices)}")
+            continue
+        if answer:
+            return answer
+        print("  resposta obrigatória")
 
 
 def command_label(args: argparse.Namespace) -> None:
@@ -123,11 +159,9 @@ def command_label(args: argparse.Namespace) -> None:
             error = event.error or ""
             print(f"  {event.timestamp:%H:%M:%S} {event.severity:8} {event.operation} {error}")
         current = case.label
-        inconclusive = ask(
-            "Sem causa identificável? (s/n)",
-            "s" if current and current.expected_inconclusive else "n",
-        )
-        if inconclusive == "s":
+        default = "s" if current and current.expected_inconclusive else "n"
+        no_cause = input(f"Sem causa identificável? (s/n) [{default}]: ").strip().lower() or default
+        if no_cause in YES:
             case.label = Label(
                 category=None,
                 probable_cause=None,
@@ -137,13 +171,14 @@ def command_label(args: argparse.Namespace) -> None:
             )
         else:
             case.label = Label(
-                category=ask("Categoria", current.category if current else None),
+                category=ask("Categoria", current.category if current else None, CATEGORIES),
                 probable_cause=ask("Causa provável", current.probable_cause if current else None),
                 responsible_system=cast(
                     "Any",
                     ask(
-                        "Sistema (sap, salesforce, gcp, other)",
+                        "Sistema responsável",
                         current.responsible_system if current else None,
+                        SYSTEMS,
                     ),
                 ),
                 expected_inconclusive=False,
@@ -179,9 +214,9 @@ def main() -> None:
     commands = parser.add_subparsers(dest="command", required=True)
     gen = commands.add_parser("generate")
     gen.add_argument("--seed", type=int, default=30)
-    gen.add_argument("--out", default=str(DATASET))
+    gen.add_argument("--out", default=str(SYNTHETIC))
     runner = commands.add_parser("run")
-    runner.add_argument("--dataset", default=str(DATASET))
+    runner.add_argument("--dataset", nargs="+", help="padrão: todos os datasets/*.jsonl")
     runner.add_argument(
         "--modes", nargs="+", default=["rules_only"], choices=["rules_only", "hybrid"]
     )
@@ -192,7 +227,7 @@ def main() -> None:
     runner.add_argument("--json", default=str(ROOT / "reports" / "latest.json"))
     runner.add_argument("--results", default=str(ROOT / "reports" / "latest-results.jsonl"))
     gate = commands.add_parser("gate")
-    gate.add_argument("--dataset", default=str(DATASET))
+    gate.add_argument("--dataset", nargs="+", help="padrão: todos os datasets/*.jsonl")
     gate.add_argument("--update", action="store_true")
     label = commands.add_parser("label")
     label.add_argument("dataset")

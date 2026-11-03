@@ -23,6 +23,9 @@ def status(value: float | None, target: float) -> str:
 
 
 def render(cases: list[Case], metrics: list[Metrics], dataset: str, notes: list[str]) -> str:
+    unlabeled = sum(1 for case in cases if case.label is None)
+    # O cabeçalho conta só o que foi avaliado (caso sem gabarito fica de fora das métricas).
+    cases = [case for case in cases if case.label is not None]
     synthetic = sum(1 for case in cases if case.source.kind == "synthetic")
     real = sum(1 for case in cases if case.source.kind == "real")
     no_cause = sum(1 for case in cases if case.label and case.label.expected_inconclusive)
@@ -35,8 +38,9 @@ def render(cases: list[Case], metrics: list[Metrics], dataset: str, notes: list[
         " (`docs/operations/avaliacao.md`).",
         "",
         "| Modo | Categoria | Causa provável | Inconclusivo correto | Inconclusivo indevido"
-        " | Alucinação de Evidência | Tokens (entrada/saída) | Custo | Latência p50/p95 |",
-        "|---|---|---|---|---|---|---|---|---|",
+        " | Alucinação de Evidência | Falhas do LLM | Tokens (entrada/saída) | Custo"
+        " | Latência p50/p95 |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for item in metrics:
         category = f"{pct(item.category_accuracy)} ({item.category_correct}/{item.with_cause})"
@@ -48,6 +52,7 @@ def render(cases: list[Case], metrics: list[Metrics], dataset: str, notes: list[
             f" | {inconclusive}"
             f" | {item.false_inconclusive}"
             f" | {pct(item.hallucination_rate)} ({item.discarded_evidence}/{item.cited_evidence})"
+            f" | {item.llm_failures}"
             f" | {item.input_tokens}/{item.output_tokens}"
             f" | {'n/d' if item.cost_usd is None else f'US$ {item.cost_usd:.4f}'}"
             f" | {ms(item.latency_p50_ms)}/{ms(item.latency_p95_ms)} ms |"
@@ -78,6 +83,8 @@ def render(cases: list[Case], metrics: list[Metrics], dataset: str, notes: list[
             )
         if item.providers:
             lines += ["", f"Provedor/modelo: {', '.join(item.providers)}."]
+    if unlabeled:
+        notes = [f"{unlabeled} casos sem gabarito ficaram de fora (rotule com `label`).", *notes]
     if real == 0:
         notes = [
             "Só casos sintéticos: eles são construídos a partir das próprias Regras, então o"

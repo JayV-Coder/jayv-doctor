@@ -53,6 +53,8 @@ jobs:
             make eval-hybrid
           fi
       - uses: actions/upload-artifact@v4
+        # Mesmo se a rodada falhar no meio: o que foi pago e gravado fica.
+        if: always()
         with:
           name: avaliacao
           path: tests/evaluation/reports

@@ -25,10 +25,18 @@ async def _nothing(stage: Stage) -> None:
 
 
 class DiagnosisEngine:
-    def __init__(self, llm: GuardedLLM | None, *, scope: str) -> None:
-        """`llm` ausente = sem IA (modo rules_only ou sem Cota); `scope` é a Organização."""
+    def __init__(
+        self,
+        llm: GuardedLLM | None,
+        *,
+        scope: str,
+        without_ai: str = "Cota de IA indisponível: Diagnóstico só com as Regras.",
+    ) -> None:
+        """`llm` ausente = sem IA (modo rules_only, sem Cota ou envio desligado), e `without_ai`
+        diz por quê; `scope` é a Organização."""
         self.llm = llm
         self.scope = scope
+        self.without_ai = without_ai
         self.usage: list[Usage] = []
         if llm is not None:
             llm.usage_sink = self._record
@@ -59,7 +67,7 @@ class DiagnosisEngine:
             notes.append("Incidente sem Eventos carregados: Evidências insuficientes.")
 
         if mode == "hybrid" and self.llm is None:
-            notes.append("Cota de IA indisponível: Diagnóstico só com as Regras.")
+            notes.append(self.without_ai)
             mode = "rules_only"
         if mode == "rules_only":
             await on_stage("verification")

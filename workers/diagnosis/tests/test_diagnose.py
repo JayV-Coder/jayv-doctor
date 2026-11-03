@@ -388,3 +388,54 @@ async def test_caso_corrigido_e_promovido_volta_no_proximo_diagnostico(
     loader = DbLoader(engine, tenant["tenant"], found["incident"], provider)
     hits = await loader.knowledge("lock tabela VBAK job noturno")
     assert [hit.title for hit in hits if hit.origin == "tenant"] == ["INC-0001 · Timeout"]
+
+
+@pytest.mark.asyncio
+async def test_envio_ao_llm_desligado_nao_chama_o_provedor(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    from aid_diagnosis_worker.knowledge import index
+
+    await run(
+        engine,
+        "update doctor.tenants set llm_enabled = false where id = cast(:t as uuid)",
+        t=tenant["tenant"],
+    )
+    found = await incident_with_timeout(engine, tenant)
+    diagnosis = await request(engine, tenant, found["incident"], "hybrid")
+    provider = FakeProvider()
+    assert await diagnose(engine, {"diagnosis_id": diagnosis}, lambda n: provider) == "published"
+    [saved] = await rows(
+        engine,
+        "select mode, verification_notes from doctor.diagnoses where id = cast(:d as uuid)",
+        d=diagnosis,
+    )
+    assert saved["mode"] == "rules_only"
+    assert saved["verification_notes"][0].startswith("Envio de evidências ao LLM desligado")
+
+    document = str(uuid4())
+    await run(
+        engine,
+        "insert into doctor.knowledge_documents (id, tenant_id, title, source, incident_id,"
+        " content_type, size_bytes, status, body) values (:d, :t, 'Caso', 'incident', :i,"
+        " 'text/markdown', 10, 'indexing', '# Caso\\n\\nTimeout do SAP.')",
+        d=document,
+        t=tenant["tenant"],
+        i=found["incident"],
+    )
+
+    class NoFile:
+        async def read(self, path: str) -> bytes | None:
+            return None
+
+    assert await index(engine, {"document_id": document}, NoFile(), lambda n: provider) == "ready"
+    [chunk] = await rows(
+        engine,
+        "select embedding is null as plain, embedding_model from doctor.knowledge_chunks"
+        " where document_id = cast(:d as uuid)",
+        d=document,
+    )
+    assert (chunk["plain"], chunk["embedding_model"]) == (True, None)
+    # Nenhuma chamada ao provedor: nem completar, nem embedding (o FakeProvider guarda tudo).
+    assert provider.requests == []
+    assert provider.embeds == []

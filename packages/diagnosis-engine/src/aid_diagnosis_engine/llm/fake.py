@@ -17,6 +17,8 @@ class FakeProvider:
     responses: list[str | Exception] = field(default_factory=list)
     name: str = "fake"
     requests: list[dict[str, Any]] = field(default_factory=list)
+    # Quantos textos cada pedido de embedding levou (o teste do envio desligado confere vazio).
+    embeds: list[int] = field(default_factory=list)
 
     @property
     def embedding_dimensions(self) -> int:
@@ -48,6 +50,7 @@ class FakeProvider:
         return StructuredResult(output, usage)
 
     async def embed(self, texts: Sequence[str], *, input_type: InputType) -> list[list[float]]:
+        self.embeds.append(len(texts))
         # Vetor estável derivado do texto: mesmo texto, mesmo vetor, em qualquer processo.
         return [
             [byte / 255 for byte in hashlib.sha256(text.encode()).digest()[:DIMENSIONS]]

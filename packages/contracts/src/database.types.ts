@@ -301,6 +301,20 @@ isOneToOne: false
       referencedColumns: ["tenant_id","id"]
     }
                   ]
+                },"deletion_receipts": {
+                  Row: {
+                    "completed_at": string,"id": string,"removed": NonNullable<Json>,"requested_at": string,"requested_by": string | null,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "completed_at"?: string,"id"?: string,"removed"?: NonNullable<Json>,"requested_at": string,"requested_by"?: string | null,"tenant_id": string
+                  }
+                  Update: {
+                    "completed_at"?: string,"id"?: string,"removed"?: NonNullable<Json>,"requested_at"?: string,"requested_by"?: string | null,"tenant_id"?: string
+                  }
+                  Relationships: [
+
+                  ]
                 },"diagnoses": {
                   Row: {
                     "attempts": number,"classification": string | null,"confidence": number | null,"created_at": string,"duration_ms": number | null,"error": string | null,"id": string,"incident_id": string,"include_knowledge_base": boolean,"input_tokens": number,"mode": string,"model": string | null,"output_tokens": number,"probable_cause": string | null,"processing_key": string,"provider": string | null,"published_at": string | null,"requested_by": string | null,"requested_mode": string,"requires_human_review": boolean,"responsible_system": string | null,"ruleset_version": string | null,"stage": string,"started_at": string | null,"status": string,"tenant_id": string,"updated_at": string,"verification_notes": NonNullable<Json>,"version": number
@@ -1115,6 +1129,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"retention_policies": {
+                  Row: {
+                    "created_at": string,"data_class": string,"days": number,"id": string,"tenant_id": string,"updated_at": string,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"data_class": string,"days": number,"id"?: string,"tenant_id": string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"data_class"?: string,"days"?: number,"id"?: string,"tenant_id"?: string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "retention_policies_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"rule_definitions": {
                   Row: {
                     "active": boolean,"category": string,"code": string,"created_at": string,"description": string,"severity_hint": string,"version": string
@@ -1177,14 +1211,14 @@ isOneToOne: false
                   ]
                 },"tenants": {
                   Row: {
-                    "auto_diagnose_critical": boolean,"created_at": string,"dpa_accepted_at": string | null,"id": string,"llm_provider": string,"mttr_baseline_minutes": number | null,"plan": string,"segment": string | null,"status": string,"updated_at": string
+                    "auto_diagnose_critical": boolean,"created_at": string,"deletion_requested_at": string | null,"deletion_requested_by": string | null,"deletion_scheduled_for": string | null,"dpa_accepted_at": string | null,"id": string,"llm_enabled": boolean,"llm_provider": string,"mttr_baseline_minutes": number | null,"plan": string,"segment": string | null,"status": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "auto_diagnose_critical"?: boolean,"created_at"?: string,"dpa_accepted_at"?: string | null,"id": string,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"segment"?: string | null,"status"?: string,"updated_at"?: string
+                    "auto_diagnose_critical"?: boolean,"created_at"?: string,"deletion_requested_at"?: string | null,"deletion_requested_by"?: string | null,"deletion_scheduled_for"?: string | null,"dpa_accepted_at"?: string | null,"id": string,"llm_enabled"?: boolean,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"segment"?: string | null,"status"?: string,"updated_at"?: string
                   }
                   Update: {
-                    "auto_diagnose_critical"?: boolean,"created_at"?: string,"dpa_accepted_at"?: string | null,"id"?: string,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"segment"?: string | null,"status"?: string,"updated_at"?: string
+                    "auto_diagnose_critical"?: boolean,"created_at"?: string,"deletion_requested_at"?: string | null,"deletion_requested_by"?: string | null,"deletion_scheduled_for"?: string | null,"dpa_accepted_at"?: string | null,"id"?: string,"llm_enabled"?: boolean,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"segment"?: string | null,"status"?: string,"updated_at"?: string
                   }
                   Relationships: [
 
@@ -1224,6 +1258,9 @@ isOneToOne: false
 "add_incident_comment":
 { Args: { "body": string,"mentioned": (string)[],"target": string }; Returns: string
                            },
+"cancel_tenant_deletion":
+{ Args: Record<PropertyKey, never>; Returns: undefined
+                           },
 "create_connector":
 { Args: { "config": Json,"integration_id": string,"name": string,"provider": string,"secret": string,"sync_interval_seconds"?: number }; Returns: string
                            },
@@ -1261,17 +1298,47 @@ isOneToOne: false
 "diagnosis_is_final":
 { Args: { "status": string }; Returns: boolean
                            },
+"drop_expired_partitions":
+{ Args: Record<PropertyKey, never>; Returns: (string)[]
+                           },
+"due_tenant_deletions":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "tenant_id": string
+            }[]
+                           },
+"effective_retention":
+{ Args: { "data_class": string,"tenant": string }; Returns: number
+                           },
 "ensure_audit_partition":
 { Args: { "day": string }; Returns: string
                            },
 "ensure_event_partition":
 { Args: { "day": string }; Returns: string
                            },
+"erase_subject_events":
+{ Args: { "reference": string }; Returns: number
+                           },
+"expired_raw_logs":
+{ Args: { "batch": number }; Returns: {
+              "id": string,"storage_path": string,"tenant_id": string
+            }[]
+                           },
+"find_subject_events":
+{ Args: { "reference": string }; Returns: {
+              "events": number,"first_seen": string,"last_seen": string
+            }[]
+                           },
 "finish_import":
 { Args: { "reason": string,"stored_size": number,"target": string }; Returns: undefined
                            },
 "finish_knowledge_upload":
 { Args: { "target": string }; Returns: undefined
+                           },
+"forget_raw_logs":
+{ Args: { "targets": (string)[] }; Returns: number
+                           },
+"freeze_tenant":
+{ Args: { "tenant": string }; Returns: undefined
                            },
 "get_connector_secret":
 { Args: { "target": string }; Returns: string
@@ -1365,11 +1432,20 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"my_retention":
+{ Args: { "data_class": string }; Returns: number
+                           },
 "pause_connector":
 { Args: { "target": string }; Returns: undefined
                            },
 "promote_incident_to_knowledge":
 { Args: { "incident": string }; Returns: string
+                           },
+"purge_tenant":
+{ Args: { "storage_objects": number,"tenant": string }; Returns: string
+                           },
+"purge_tenant_data":
+{ Args: { "raw_logs"?: number,"tenant": string }; Returns: Json
                            },
 "put_connector_secret":
 { Args: { "secret": string,"target": string }; Returns: undefined
@@ -1397,6 +1473,9 @@ isOneToOne: false
 "request_raw_log_download":
 { Args: { "target": string }; Returns: string
                            },
+"request_tenant_deletion":
+{ Args: { "confirmation": string }; Returns: string
+                           },
 "require_manager":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
@@ -1416,6 +1495,11 @@ isOneToOne: false
 "resume_connector":
 { Args: { "target": string }; Returns: undefined
                            },
+"retention_bounds":
+{ Args: { "data_class": string }; Returns: {
+              "default_days": number,"max_days": number,"min_days": number
+            }[]
+                           },
 "revoke_ingestion_token":
 { Args: { "target": string }; Returns: undefined
                            },
@@ -1424,6 +1508,12 @@ isOneToOne: false
                            },
 "set_auto_diagnosis":
 { Args: { "enabled": boolean }; Returns: undefined
+                           },
+"set_llm_enabled":
+{ Args: { "enabled": boolean }; Returns: undefined
+                           },
+"set_retention_policy":
+{ Args: { "data_class": string,"days": number }; Returns: undefined
                            },
 "submit_diagnosis_feedback":
 { Args: { "comment": string,"correct_category": string,"correct_cause": string,"responsible_system": string,"target": string,"verdict": string }; Returns: {

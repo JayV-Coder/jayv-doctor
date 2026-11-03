@@ -14,7 +14,8 @@ from aid_knowledge.extract import extract_text
 @dataclass(frozen=True)
 class IndexedChunk:
     chunk: Chunk
-    embedding: list[float]
+    # Sem embedding quando a Organização desligou o envio ao LLM: a busca usa só o texto.
+    embedding: list[float] | None
 
 
 async def embed_chunks(provider: LLMProvider, chunks: Sequence[Chunk]) -> list[IndexedChunk]:
@@ -24,9 +25,12 @@ async def embed_chunks(provider: LLMProvider, chunks: Sequence[Chunk]) -> list[I
 
 
 async def index_document(
-    data: bytes, content_type: str, sanitizer: Sanitizer, provider: LLMProvider
+    data: bytes, content_type: str, sanitizer: Sanitizer, provider: LLMProvider | None
 ) -> tuple[list[IndexedChunk], dict[str, int]]:
-    """(Fragmentos com embedding, contagem do que a Sanitização tirou)."""
+    """(Fragmentos com embedding, contagem do que a Sanitização tirou). Sem provedor, nenhum
+    trecho sai da plataforma: os Fragmentos ficam só com o texto."""
     clean, report = sanitizer.sanitize(extract_text(data, content_type))
     chunks = chunk_text(str(clean))
+    if provider is None:
+        return [IndexedChunk(chunk, None) for chunk in chunks], dict(report.counts)
     return await embed_chunks(provider, chunks), dict(report.counts)

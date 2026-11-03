@@ -3845,6 +3845,453 @@
           }
         }
       }
+    },
+    "/api/v1/privacy": {
+      "get": {
+        "tags": ["privacy"],
+        "summary": "Get Privacy",
+        "operationId": "get_privacy_api_v1_privacy_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacySettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/privacy/retention": {
+      "put": {
+        "tags": ["privacy"],
+        "summary": "Put Retention",
+        "operationId": "put_retention_api_v1_privacy_retention_put",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetentionChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/privacy/llm": {
+      "put": {
+        "tags": ["privacy"],
+        "summary": "Put Llm",
+        "operationId": "put_llm_api_v1_privacy_llm_put",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LlmChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/privacy/deletion": {
+      "post": {
+        "tags": ["privacy"],
+        "summary": "Request Deletion",
+        "description": "Agenda a exclusão total para daqui a 7 dias (cancelável até lá).",
+        "operationId": "request_deletion_api_v1_privacy_deletion_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacySettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["privacy"],
+        "summary": "Cancel Deletion",
+        "operationId": "cancel_deletion_api_v1_privacy_deletion_delete",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/privacy/subject/search": {
+      "post": {
+        "tags": ["privacy"],
+        "summary": "Find Subject",
+        "operationId": "find_subject_api_v1_privacy_subject_search_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubjectQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectEvents"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/privacy/subject/erase": {
+      "post": {
+        "tags": ["privacy"],
+        "summary": "Erase Subject",
+        "operationId": "erase_subject_api_v1_privacy_subject_erase_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubjectQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubjectErased"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4609,6 +5056,38 @@
           "recent_incidents"
         ],
         "title": "Dashboard"
+      },
+      "Deletion": {
+        "properties": {
+          "requested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Requested At"
+          },
+          "scheduled_for": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Scheduled For"
+          }
+        },
+        "type": "object",
+        "required": ["requested_at", "scheduled_for"],
+        "title": "Deletion"
+      },
+      "DeletionRequest": {
+        "properties": {
+          "confirmation": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Confirmation"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["confirmation"],
+        "title": "DeletionRequest",
+        "description": "O Owner digita o slug da Organização para confirmar."
       },
       "DiagnosisDetail": {
         "properties": {
@@ -7068,6 +7547,18 @@
         "required": ["value", "previous", "change"],
         "title": "Kpi"
       },
+      "LlmChange": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["enabled"],
+        "title": "LlmChange"
+      },
       "Me": {
         "properties": {
           "id": {
@@ -7498,6 +7989,39 @@
         "required": ["id", "name", "slug", "role"],
         "title": "Organization"
       },
+      "PrivacySettings": {
+        "properties": {
+          "retention": {
+            "items": {
+              "$ref": "#/components/schemas/Retention"
+            },
+            "type": "array",
+            "title": "Retention"
+          },
+          "llm_enabled": {
+            "type": "boolean",
+            "title": "Llm Enabled"
+          },
+          "llm_provider": {
+            "type": "string",
+            "enum": ["anthropic", "vertex"],
+            "title": "Llm Provider"
+          },
+          "deletion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Deletion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["retention", "llm_enabled", "llm_provider", "deletion"],
+        "title": "PrivacySettings"
+      },
       "Profile": {
         "properties": {
           "full_name": {
@@ -7627,6 +8151,53 @@
         "required": ["index", "reason"],
         "title": "RejectedEvent"
       },
+      "Retention": {
+        "properties": {
+          "data_class": {
+            "type": "string",
+            "enum": ["raw_logs", "events", "incidents", "audit"],
+            "title": "Data Class"
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "default_days": {
+            "type": "integer",
+            "title": "Default Days"
+          },
+          "min_days": {
+            "type": "integer",
+            "title": "Min Days"
+          },
+          "max_days": {
+            "type": "integer",
+            "title": "Max Days"
+          }
+        },
+        "type": "object",
+        "required": ["data_class", "days", "default_days", "min_days", "max_days"],
+        "title": "Retention"
+      },
+      "RetentionChange": {
+        "properties": {
+          "data_class": {
+            "type": "string",
+            "enum": ["raw_logs", "events", "incidents", "audit"],
+            "title": "Data Class"
+          },
+          "days": {
+            "type": "integer",
+            "maximum": 3650.0,
+            "minimum": 1.0,
+            "title": "Days"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["data_class", "days"],
+        "title": "RetentionChange"
+      },
       "RoleChange": {
         "properties": {
           "role": {
@@ -7711,6 +8282,67 @@
         "type": "object",
         "required": ["rule_code", "rule_version", "category", "description", "matched_event_ids"],
         "title": "RuleHit"
+      },
+      "SubjectErased": {
+        "properties": {
+          "events_erased": {
+            "type": "integer",
+            "title": "Events Erased"
+          }
+        },
+        "type": "object",
+        "required": ["events_erased"],
+        "title": "SubjectErased"
+      },
+      "SubjectEvents": {
+        "properties": {
+          "events": {
+            "type": "integer",
+            "title": "Events"
+          },
+          "first_seen": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Seen"
+          },
+          "last_seen": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen"
+          }
+        },
+        "type": "object",
+        "required": ["events", "first_seen", "last_seen"],
+        "title": "SubjectEvents"
+      },
+      "SubjectQuery": {
+        "properties": {
+          "reference": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Reference"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["reference"],
+        "title": "SubjectQuery",
+        "description": "A Referência de negócio do titular (ex.: nº do pedido ou CPF) no corpo; vira HMAC com a\nchave da Organização e nunca chega ao banco nem aos logs."
       },
       "TestResult": {
         "properties": {

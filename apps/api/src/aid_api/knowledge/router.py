@@ -101,13 +101,16 @@ async def search_knowledge(
     """Híbrida (vetor + texto, RRF) com o embedding do provedor da Organização; com o provedor
     fora, só o texto, em vez de falhar. O provedor sai numa transação curta e o embedding é
     gerado fora dela: nenhuma conexão do banco fica presa esperando a API de IA."""
-    provider = providers(await repository.llm_provider(claims))
+    name = await repository.llm_provider(claims)
+    # Envio ao LLM desligado: nem o embedding da pergunta sai; a busca vai só pelo texto.
+    provider = providers(name) if name is not None else None
     embedding: list[float] | None = None
-    try:
-        [embedding] = await provider.embed([query.q], input_type="query")
-    except LLMError:
-        embedding = None
-    model = provider.embedding_model
+    if provider is not None:
+        try:
+            [embedding] = await provider.embed([query.q], input_type="query")
+        except LLMError:
+            embedding = None
+    model = provider.embedding_model if provider is not None else None
     hybrid = vector_usable(embedding, model)
     items = await repository.search(
         claims, query.q, query.k, embedding if hybrid else None, model if hybrid else None

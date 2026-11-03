@@ -42,14 +42,20 @@ ProviderFor = Callable[[str], LLMProvider]
 
 
 async def ai_allowed(engine: AsyncEngine, tenant: str) -> bool:
-    """Cota de IA da Organização. O controle de consumo chega com o #31 (`usage_records`); até
-    lá, a IA está liberada para todas."""
-    return True
+    """A Organização permite enviar evidências ao LLM (#29)? A Cota de IA entra aqui com o #31
+    (`usage_records`); até lá, só a chave da Organização decide."""
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        enabled = await connection.scalar(
+            text("select llm_enabled from doctor.tenants where id = cast(:t as uuid)"),
+            {"t": tenant},
+        )
+    return bool(enabled)
 
 
 class DbLoader:
     def __init__(
-        self, engine: AsyncEngine, tenant: str, incident: str, provider: LLMProvider
+        self, engine: AsyncEngine, tenant: str, incident: str, provider: LLMProvider | None
     ) -> None:
         self.engine, self.tenant, self.incident_id, self.provider = (
             engine,
@@ -142,11 +148,12 @@ class DbLoader:
     async def knowledge(self, query: str) -> Sequence[KnowledgeItem]:
         # Embedding fora da transação; a busca, com a claim do tenant (o RAG não cruza tenants).
         # Sem embedding (provedor fora), a busca segue só pelo texto, como na API.
-        vector: list[float] | None
-        try:
-            [vector] = await self.provider.embed([query], input_type="query")
-        except LLMError:
-            vector = None
+        vector: list[float] | None = None
+        if self.provider is not None:
+            try:
+                [vector] = await self.provider.embed([query], input_type="query")
+            except LLMError:
+                vector = None
         async with self.engine.begin() as connection:
             await tenant_role(connection, self.tenant)
             hits = await search(
@@ -154,7 +161,9 @@ class DbLoader:
                 self.tenant,
                 query,
                 embedding=vector,
-                model=self.provider.embedding_model if vector is not None else None,
+                model=self.provider.embedding_model
+                if vector is not None and self.provider is not None
+                else None,
                 k=KNOWLEDGE_K,
             )
         return [
@@ -362,11 +371,21 @@ async def diagnose(
     try:
         provider = provider_for(diagnosis.llm_provider)
         hybrid = diagnosis.requested_mode == "hybrid"
-        allowed = hybrid and await ai_allowed(engine, diagnosis.tenant_id)
+        llm_enabled = await ai_allowed(engine, diagnosis.tenant_id)
+        allowed = hybrid and llm_enabled
         motor = DiagnosisEngine(
-            GuardedLLM(provider) if allowed else None, scope=diagnosis.tenant_id
+            GuardedLLM(provider) if allowed else None,
+            scope=diagnosis.tenant_id,
+            without_ai=(
+                "Envio de evidências ao LLM desligado pela Organização: Diagnóstico só com"
+                " as Regras."
+            ),
         )
-        loader = DbLoader(engine, diagnosis.tenant_id, diagnosis.incident_id, provider)
+        # Envio ao LLM desligado: a Base também não gera o embedding da pergunta (só o texto). No
+        # rules_only com o envio ligado, o embedding da Base continua.
+        loader = DbLoader(
+            engine, diagnosis.tenant_id, diagnosis.incident_id, provider if llm_enabled else None
+        )
         draft = await motor.run(
             loader,
             mode=cast("Mode", diagnosis.requested_mode),

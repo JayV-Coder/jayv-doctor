@@ -846,6 +846,112 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/privacy": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Privacy */
+    get: operations["get_privacy_api_v1_privacy_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/privacy/retention": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Put Retention */
+    put: operations["put_retention_api_v1_privacy_retention_put"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/privacy/llm": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Put Llm */
+    put: operations["put_llm_api_v1_privacy_llm_put"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/privacy/deletion": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Request Deletion
+     * @description Agenda a exclusão total para daqui a 7 dias (cancelável até lá).
+     */
+    post: operations["request_deletion_api_v1_privacy_deletion_post"];
+    /** Cancel Deletion */
+    delete: operations["cancel_deletion_api_v1_privacy_deletion_delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/privacy/subject/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Find Subject */
+    post: operations["find_subject_api_v1_privacy_subject_search_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/privacy/subject/erase": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Erase Subject */
+    post: operations["erase_subject_api_v1_privacy_subject_erase_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1113,6 +1219,27 @@ export interface components {
       critical_incident: components["schemas"]["IncidentRow"] | null;
       /** Recent Incidents */
       recent_incidents: components["schemas"]["IncidentRow"][];
+    };
+    /** Deletion */
+    Deletion: {
+      /**
+       * Requested At
+       * Format: date-time
+       */
+      requested_at: string;
+      /**
+       * Scheduled For
+       * Format: date-time
+       */
+      scheduled_for: string;
+    };
+    /**
+     * DeletionRequest
+     * @description O Owner digita o slug da Organização para confirmar.
+     */
+    DeletionRequest: {
+      /** Confirmation */
+      confirmation: string;
     };
     /** DiagnosisDetail */
     DiagnosisDetail: {
@@ -2004,6 +2131,11 @@ export interface components {
       /** Change */
       change: number | null;
     };
+    /** LlmChange */
+    LlmChange: {
+      /** Enabled */
+      enabled: boolean;
+    };
     /** Me */
     Me: {
       /** Id */
@@ -2192,6 +2324,19 @@ export interface components {
       /** Role */
       role: string;
     };
+    /** PrivacySettings */
+    PrivacySettings: {
+      /** Retention */
+      retention: components["schemas"]["Retention"][];
+      /** Llm Enabled */
+      llm_enabled: boolean;
+      /**
+       * Llm Provider
+       * @enum {string}
+       */
+      llm_provider: "anthropic" | "vertex";
+      deletion: components["schemas"]["Deletion"] | null;
+    };
     /** Profile */
     Profile: {
       /** Full Name */
@@ -2248,6 +2393,32 @@ export interface components {
       /** Reason */
       reason: string;
     };
+    /** Retention */
+    Retention: {
+      /**
+       * Data Class
+       * @enum {string}
+       */
+      data_class: "raw_logs" | "events" | "incidents" | "audit";
+      /** Days */
+      days: number;
+      /** Default Days */
+      default_days: number;
+      /** Min Days */
+      min_days: number;
+      /** Max Days */
+      max_days: number;
+    };
+    /** RetentionChange */
+    RetentionChange: {
+      /**
+       * Data Class
+       * @enum {string}
+       */
+      data_class: "raw_logs" | "events" | "incidents" | "audit";
+      /** Days */
+      days: number;
+    };
     /** RoleChange */
     RoleChange: {
       /**
@@ -2286,6 +2457,29 @@ export interface components {
       description: string;
       /** Matched Event Ids */
       matched_event_ids: string[];
+    };
+    /** SubjectErased */
+    SubjectErased: {
+      /** Events Erased */
+      events_erased: number;
+    };
+    /** SubjectEvents */
+    SubjectEvents: {
+      /** Events */
+      events: number;
+      /** First Seen */
+      first_seen: string | null;
+      /** Last Seen */
+      last_seen: string | null;
+    };
+    /**
+     * SubjectQuery
+     * @description A Referência de negócio do titular (ex.: nº do pedido ou CPF) no corpo; vira HMAC com a
+     *     chave da Organização e nunca chega ao banco nem aos logs.
+     */
+    SubjectQuery: {
+      /** Reference */
+      reference: string;
     };
     /** TestResult */
     TestResult: {
@@ -4358,6 +4552,242 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_privacy_api_v1_privacy_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PrivacySettings"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  put_retention_api_v1_privacy_retention_put: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["RetentionChange"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  put_llm_api_v1_privacy_llm_put: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["LlmChange"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  request_deletion_api_v1_privacy_deletion_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DeletionRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PrivacySettings"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  cancel_deletion_api_v1_privacy_deletion_delete: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  find_subject_api_v1_privacy_subject_search_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SubjectQuery"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SubjectEvents"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  erase_subject_api_v1_privacy_subject_erase_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SubjectQuery"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SubjectErased"];
+        };
       };
       /** @description Validation Error */
       422: {

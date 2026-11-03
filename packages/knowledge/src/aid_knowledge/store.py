@@ -134,7 +134,7 @@ async def store_chunks(
     tenant_id: str,
     document_id: str,
     indexed: Sequence[IndexedChunk],
-    model: str,
+    model: str | None,
     report: dict[str, int],
 ) -> None:
     """Troca os Fragmentos do documento pelos novos (reindexar é refazer, sem misturar)."""
@@ -161,8 +161,8 @@ async def store_chunks(
                     "c": item.chunk.content,
                     "k": item.chunk.tokens,
                     "h": item.chunk.heading,
-                    "e": vector_literal(item.embedding),
-                    "m": model,
+                    "e": vector_literal(item.embedding) if item.embedding is not None else None,
+                    "m": model if item.embedding is not None else None,
                     "meta": json.dumps({"sanitization": report}),
                 }
                 for item in indexed

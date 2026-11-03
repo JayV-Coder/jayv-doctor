@@ -51,7 +51,7 @@ async def index(
             await connection.execute(
                 text(
                     "select d.id::text, d.tenant_id::text, d.storage_path, d.content_type,"
-                    " d.body, t.llm_provider from doctor.knowledge_documents d"
+                    " d.body, t.llm_provider, t.llm_enabled from doctor.knowledge_documents d"
                     " join doctor.tenants t on t.id = d.tenant_id"
                     " where d.id = cast(:d as uuid) and d.status in ('indexing', 'ready')"
                 ),
@@ -69,7 +69,9 @@ async def index(
     if data is None:
         await fail(engine, document, "Arquivo não encontrado no armazenamento.")
         return "failed"
-    provider = provider_for(document.llm_provider)
+    # Envio ao LLM desligado (#29): nada sai para o provedor; os Fragmentos ficam só com o texto.
+    provider = provider_for(document.llm_provider) if document.llm_enabled else None
+    model = provider.embedding_model if provider is not None else None
     try:
         # Sem Referências de negócio aqui: o documento é texto livre, não um Evento.
         indexed, report = await index_document(data, document.content_type, Sanitizer(), provider)
@@ -88,9 +90,7 @@ async def index(
         return "failed"
     async with engine.begin() as connection:
         await platform_role(connection)
-        await store_chunks(
-            connection, document.tenant_id, document.id, indexed, provider.embedding_model, report
-        )
+        await store_chunks(connection, document.tenant_id, document.id, indexed, model, report)
         await connection.execute(
             text(
                 # Incidente promovido: o texto do registro vira o sanitizado (o bruto não fica).
@@ -103,7 +103,7 @@ async def index(
                 "t": document.tenant_id,
                 "d": document.id,
                 "n": len(indexed),
-                "m": provider.embedding_model,
+                "m": model,
                 "body": str(Sanitizer().sanitize(document.body)[0])
                 if document.body is not None
                 else None,
@@ -125,7 +125,7 @@ async def reindex_stale(engine: AsyncEngine, provider_for: ProviderFor) -> int:
                 "with stale as (select d.id, d.tenant_id from doctor.knowledge_documents d"
                 " join doctor.tenants t on t.id = d.tenant_id"
                 " where (d.status = 'indexing' and d.updated_at < cast(:cutoff as timestamptz)"
-                " or d.status = 'ready' and d.embedding_model is distinct from"
+                " or d.status = 'ready' and t.llm_enabled and d.embedding_model is distinct from"
                 " (cast(:models as jsonb) ->> t.llm_provider))"
                 " and (d.reindex_queued_at is null"
                 " or d.reindex_queued_at < cast(:cutoff as timestamptz))"

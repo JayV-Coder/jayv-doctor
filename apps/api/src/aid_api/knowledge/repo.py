@@ -93,15 +93,20 @@ class KnowledgeRepository:
                 text("select doctor.delete_knowledge_document(cast(:d as uuid))"), {"d": target}
             )
 
-    async def llm_provider(self, claims: Claims) -> str:
+    async def llm_provider(self, claims: Claims) -> str | None:
+        """Provedor da Organização, ou `None` se ela desligou o envio ao LLM (#29)."""
         async with translated_tx(claims, ERRORS) as connection:
-            found = await connection.scalar(
-                text(
-                    "select llm_provider from doctor.tenants"
-                    " where id = (select doctor.current_tenant_id())"
+            found = (
+                await connection.execute(
+                    text(
+                        "select llm_provider, llm_enabled from doctor.tenants"
+                        " where id = (select doctor.current_tenant_id())"
+                    )
                 )
-            )
-        return str(found or "anthropic")
+            ).first()
+        if found is not None and not found.llm_enabled:
+            return None
+        return str(found.llm_provider) if found is not None else "anthropic"
 
     async def search(
         self,

@@ -45,6 +45,8 @@ export default defineConfig({
         SUPABASE_URL: "http://127.0.0.1:54321",
         SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "",
         APP_URL: "http://127.0.0.1:3000",
+        // A mesma do script que semeia o E2E do Explorador (e2e/seed_execution.py).
+        HMAC_MASTER_KEY: "chave-mestre-local-do-e2e-nao-usar-em-producao",
         AID_GCP_OAUTH_URL: "http://127.0.0.1:8095/token",
         AID_GCP_LOGGING_URL: "http://127.0.0.1:8095/v2/entries:list",
       },

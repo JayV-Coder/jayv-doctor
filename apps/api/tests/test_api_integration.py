@@ -1,10 +1,12 @@
 """Contra um Postgres real. Rodam só com INTEGRATION_DB_URL, no job de E2E do CI."""
 
 import asyncio
+import json
 import os
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
-from uuid import uuid4
+from datetime import UTC, datetime, timedelta
+from typing import Any
+from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
@@ -347,6 +349,199 @@ async def test_conector_criado_pela_api_guarda_a_credencial_so_no_vault(
             {"c": created.id},
         )
     assert stored == "trocada"
+
+
+async def seed_explorer(engine: AsyncEngine, tenant: str, other: str) -> dict[str, str]:
+    """Duas Execuções visíveis, uma fundida e uma de outra Organização com o mesmo execution_id."""
+    from aid_security.references import derive_tenant_key, reference_hmac
+
+    ids = {name: str(uuid4()) for name in ("i", "o", "x1", "x2", "x3", "xo", "e1", "e2", "raw")}
+    reference = reference_hmac(
+        derive_tenant_key(b"chave-mestre-de-teste", UUID(tenant)), "4500012345"
+    )
+    t0 = datetime(2026, 11, 2, 14, 2, tzinfo=UTC)
+    statements = [
+        (
+            "insert into doctor.integrations (id, tenant_id, name, source_system, target_system,"
+            " environment) values (:i, :t, 'Pedidos SF → SAP', 'salesforce', 'sap', 'prd'),"
+            " (:o, :other, 'Outra', 'sap', 'gcp', 'prd')",
+            {},
+        ),
+        (
+            "insert into doctor.raw_log_objects (id, tenant_id, storage_path, sha256, size_bytes,"
+            " source) values (:raw, :t, :path, repeat('a', 64), 10,"
+            " 'api')",
+            {},
+        ),
+        (
+            "insert into doctor.executions (id, tenant_id, integration_id, status, first_event_at,"
+            " last_event_at, duration_ms, event_count, correlation_keys, closed_at) values"
+            " (:x1, :t, :i, 'failed', :t0, :t30, 30000, 2, cast(:k1 as jsonb), now()),"
+            " (:x2, :t, :i, 'success', :before, :before, 0, 1,"
+            '  \'{"execution_id": ["exec-122"]}\', now()),'
+            " (:xo, :other, :o, 'success', :t0, :t0, 0, 1,"
+            '  \'{"execution_id": ["exec-123"]}\', now())',
+            {
+                "k1": json.dumps(
+                    {
+                        "execution_id": ["exec-123"],
+                        "trace_id": ["trace-abc"],
+                        "business_reference": [reference],
+                    }
+                )
+            },
+        ),
+        (
+            "insert into doctor.executions (id, tenant_id, integration_id, first_event_at,"
+            " last_event_at, merged_into, closed_at) values (:x3, :t, :i, :t0, :t0, :x1, now())",
+            {},
+        ),
+        ("select doctor.ensure_event_partition('2026-11-02')", {}),
+        (
+            "insert into doctor.events (id, tenant_id, integration_id, raw_log_object_id,"
+            " timestamp, schema_version, source, operation, severity, error, dedup_key,"
+            " execution_id, execution_ref, correlated_by, sanitization_report) values"
+            " (:e1, :t, :i, :raw, :t0, '1.0', cast(:src as jsonb), 'BAPI', 'INFO', null, :d1,"
+            "  'exec-123', :x1, 'execution_id', '{\"counts\": {}}'),"
+            " (:e2, :t, :i, :raw, :t30, '1.0',"
+            "  cast(:src as jsonb), 'BAPI', 'ERROR', cast(:err as jsonb), :d2, 'exec-123', :x1,"
+            "  'execution_id', '{\"counts\": {\"bearer\": 1}}')",
+            {
+                "src": json.dumps({"provider": "sap", "service": "PI"}),
+                "err": json.dumps({"category": "TIMEOUT", "http_status": 504}),
+                "d1": str(uuid4()),
+                "d2": str(uuid4()),
+            },
+        ),
+        (
+            "insert into doctor.rule_matches (tenant_id, execution_id, rule_code, rule_version,"
+            " matched_event_ids)"
+            " values (:t, :x1, 'INT-003', '2026.10.1', array[cast(:e2 as uuid)])",
+            {},
+        ),
+        (
+            "with created as (insert into doctor.incidents (tenant_id, integration_id, title,"
+            " category, severity, rule_code, rule_version, first_seen_at, last_seen_at,"
+            " execution_count) values (:t, :i, 'Timeout · Pedidos SF → SAP', 'TIMEOUT',"
+            " 'critical', 'INT-003', '2026.10.1', :t0, :t0, 1) returning id)"
+            " insert into doctor.incident_executions (tenant_id, incident_id, execution_id)"
+            " select :t, id, :x1 from created",
+            {},
+        ),
+    ]
+    async with engine.begin() as connection:
+        for sql, extra in statements:
+            await connection.execute(
+                text(sql),
+                {
+                    **ids,
+                    "t": tenant,
+                    "other": other,
+                    "t0": t0,
+                    "t30": t0 + timedelta(seconds=30),
+                    "before": t0 - timedelta(hours=1),
+                    "path": f"{tenant}/api/lote.json",
+                    **extra,
+                },
+            )
+    return {**ids, "reference": reference}
+
+
+@pytest.mark.asyncio
+async def test_explorador_busca_pagina_e_isola(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aid_api.core.db as db
+    from aid_api.executions.repo import ExecutionRepository
+    from aid_api.executions.schemas import ExecutionSearch
+
+    first, second = tenants
+    seeded = await seed_explorer(engine, first, second)
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    viewer = claims_for(first, user)
+    repository = ExecutionRepository()
+
+    async def ids(reference: str | None = None, **query: Any) -> list[str]:
+        page = await repository.search(viewer, ExecutionSearch.model_validate(query), reference)
+        return [item.id for item in page.items]
+
+    assert await ids() == [seeded["x1"], seeded["x2"]]
+    assert await ids(q="trace-abc") == [seeded["x1"]]
+    assert await ids(q="exec-122") == [seeded["x2"]]
+    # O número do pedido só chega ao banco em HMAC.
+    assert await ids(seeded["reference"], q="4500012345") == [seeded["x1"]]
+    assert await ids(q="4500012345") == []
+    assert await ids(status="success") == [seeded["x2"]]
+
+    page = await repository.search(viewer, ExecutionSearch(limit=1), None)
+    assert [item.id for item in page.items] == [seeded["x1"]]
+    assert page.items[0].incident is not None
+    assert page.items[0].incident.severity == "critical"
+    assert page.next_cursor is not None
+    assert await ids(limit=1, cursor=page.next_cursor) == [seeded["x2"]]
+
+    detail = await repository.detail(viewer, seeded["x3"])
+    assert detail.id == seeded["x1"]
+    assert [event.id for event in detail.events] == [seeded["e1"], seeded["e2"]]
+    assert detail.events[1].rule_codes == ["INT-003"]
+    assert detail.rules[0].category == "TIMEOUT"
+
+    event = await repository.event(viewer, seeded["e2"])
+    assert event.sanitization_report == {"counts": {"bearer": 1}}
+    # O Log bruto (e de onde ele veio) é de Analyst para cima, como no bucket.
+    assert event.raw_log is None
+    await add_admin(engine, first, user)
+    event = await repository.event(claims_for(first, user, "admin"), seeded["e2"])
+    assert event.raw_log is not None
+    assert 29 <= event.raw_log.retention_days_left <= 30
+    with pytest.raises(ApiError) as missing:
+        await repository.detail(viewer, seeded["xo"])
+    assert missing.value.status == 404
+
+
+@pytest.mark.asyncio
+async def test_download_do_log_bruto_exige_analyst(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aid_api.core.db as db
+    from aid_api.executions.repo import ExecutionRepository
+
+    first, second = tenants
+    seeded = await seed_explorer(engine, first, second)
+    await add_admin(engine, first, user)
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    repository = ExecutionRepository()
+
+    async def sign(path: str) -> str:
+        return f"https://storage.test/{path}"
+
+    async def broken(path: str) -> str:
+        raise ApiError(503, "storage_unavailable", "fora")
+
+    admin = claims_for(first, user, "admin")
+    url = await repository.raw_log_download(admin, seeded["raw"], sign)
+    assert url == f"https://storage.test/{first}/api/lote.json"
+    with pytest.raises(ApiError):
+        await repository.raw_log_download(admin, seeded["raw"], broken)
+    async with engine.begin() as connection:
+        audited = (
+            await connection.execute(
+                text(
+                    "select action, actor_id::text, resource_id from doctor.audit_logs"
+                    " where tenant_id = :t order by id"
+                ),
+                {"t": first},
+            )
+        ).all()
+    # Só o download que gerou URL fica na auditoria.
+    assert [tuple(row) for row in audited] == [("raw_log.downloaded", user, seeded["raw"])]
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("update doctor.memberships set role = 'viewer' where user_id = :u"), {"u": user}
+        )
+    with pytest.raises(ApiError) as denied:
+        await repository.raw_log_download(claims_for(first, user, "viewer"), seeded["raw"], sign)
+    assert denied.value.status == 403
 
 
 @pytest.mark.asyncio

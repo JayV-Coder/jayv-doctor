@@ -1126,3 +1126,186 @@ p {
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   gap: 10px;
 }
+
+/* Tela 7: busca, chips de filtro (links que ligam e desligam) e o ponto do status. */
+.search-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.search-row .field {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-row .btn {
+  flex: none;
+  width: auto;
+}
+
+.chip-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--bd);
+  border-radius: 22px;
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.chip-link[aria-pressed="true"] {
+  border-color: var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--go);
+  vertical-align: middle;
+}
+
+.dot[data-tone="danger"] {
+  background: var(--stop);
+}
+
+.dot[data-tone="warning"] {
+  background: var(--ask);
+}
+
+.dot[data-tone="neutral"] {
+  background: var(--faint);
+}
+
+/* Tela 8: Timeline vertical; o Evento que uma Regra usou como prova fica destacado. */
+.timeline {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline .it {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  padding-left: 2px;
+}
+
+/* A linha que liga os pontos. */
+.timeline .it::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  border-left: 1px solid var(--bd);
+}
+
+.timeline .it > .dot {
+  position: relative;
+  margin-top: 18px;
+}
+
+.it-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 0;
+  color: inherit;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.it-title {
+  font-size: 13px;
+}
+
+.it.flagged .it-body {
+  margin: 4px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--stop);
+  border-radius: 5px;
+  background: var(--card);
+}
+
+.it-error {
+  font-weight: 600;
+}
+
+/* Tela 9: JSON com realce e o que a Sanitização tirou. */
+.segmented.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.segmented button {
+  min-height: 44px;
+  border: 0;
+  border-left: 1px solid var(--bd);
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.segmented button:first-child {
+  border-left: 0;
+}
+
+.segmented button[aria-selected="true"] {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.code {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.j-key {
+  color: var(--info);
+}
+
+.j-string {
+  color: var(--go);
+}
+
+.j-number,
+.j-literal {
+  color: var(--ask);
+}
+
+.j-redacted {
+  color: var(--stop);
+  font-weight: 600;
+}
+
+.checklist {
+  gap: 2px;
+  font-size: 12px;
+}
+
+.checklist span:not(.label)::before {
+  content: "✓ ";
+  color: var(--go);
+}

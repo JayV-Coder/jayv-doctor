@@ -2238,6 +2238,252 @@
           }
         }
       }
+    },
+    "/api/v1/executions/search": {
+      "post": {
+        "tags": ["executions"],
+        "summary": "Search Executions",
+        "operationId": "search_executions_api_v1_executions_search_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecutionSearch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/executions/{target}": {
+      "get": {
+        "tags": ["executions"],
+        "summary": "Get Execution",
+        "operationId": "get_execution_api_v1_executions__target__get",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events/{target}": {
+      "get": {
+        "tags": ["executions"],
+        "summary": "Get Event",
+        "description": "`at`: o instante do Evento (a Timeline manda), para ler só a partição dele.",
+        "operationId": "get_event_api_v1_events__target__get",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target"
+            }
+          },
+          {
+            "name": "at",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "At"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/raw-logs/{target}/download": {
+      "get": {
+        "tags": ["executions"],
+        "summary": "Download Raw Log",
+        "operationId": "download_raw_log_api_v1_raw_logs__target__download_get",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RawLogDownload"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2591,6 +2837,504 @@
         "required": ["id"],
         "title": "CreatedOrganization"
       },
+      "EventDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "execution_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Ref"
+          },
+          "integration_id": {
+            "type": "string",
+            "title": "Integration Id"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "ingested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ingested At"
+          },
+          "schema_version": {
+            "type": "string",
+            "title": "Schema Version"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "operation": {
+            "type": "string",
+            "title": "Operation"
+          },
+          "source": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Source"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "execution_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Id"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          },
+          "business_context": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Context"
+          },
+          "attributes": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attributes"
+          },
+          "sanitization_report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sanitization Report"
+          },
+          "correlated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlated By"
+          },
+          "raw_log": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RawLogRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "execution_ref",
+          "integration_id",
+          "timestamp",
+          "ingested_at",
+          "schema_version",
+          "severity",
+          "operation",
+          "source",
+          "error",
+          "execution_id",
+          "trace_id",
+          "business_context",
+          "attributes",
+          "sanitization_report",
+          "correlated_by",
+          "raw_log"
+        ],
+        "title": "EventDetail",
+        "description": "O Evento normalizado inteiro (já sanitizado), para a Tela 9."
+      },
+      "ExecutionDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "integration_id": {
+            "type": "string",
+            "title": "Integration Id"
+          },
+          "integration_name": {
+            "type": "string",
+            "title": "Integration Name"
+          },
+          "environment": {
+            "type": "string",
+            "enum": ["prd", "hml", "dev"],
+            "title": "Environment"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["success", "failed", "pending_confirmation", "unknown"],
+            "title": "Status"
+          },
+          "low_confidence": {
+            "type": "boolean",
+            "title": "Low Confidence"
+          },
+          "first_event_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "First Event At"
+          },
+          "last_event_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Event At"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms"
+          },
+          "event_count": {
+            "type": "integer",
+            "title": "Event Count"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "correlation_keys": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Correlation Keys"
+          },
+          "incident": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IncidentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/TimelineEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/RuleHit"
+            },
+            "type": "array",
+            "title": "Rules"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "integration_id",
+          "integration_name",
+          "environment",
+          "status",
+          "low_confidence",
+          "first_event_at",
+          "last_event_at",
+          "duration_ms",
+          "event_count",
+          "closed_at",
+          "correlation_keys",
+          "incident",
+          "events",
+          "rules"
+        ],
+        "title": "ExecutionDetail"
+      },
+      "ExecutionPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": ["items", "next_cursor"],
+        "title": "ExecutionPage"
+      },
+      "ExecutionSearch": {
+        "properties": {
+          "q": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q"
+          },
+          "integration_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Integration Id"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["prd", "hml", "dev"]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["success", "failed", "pending_confirmation", "unknown"]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cursor"
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "default": 50
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ExecutionSearch",
+        "description": "Busca no corpo, não na URL: o termo pode ser um número de pedido, e URL vai para os logs\ndo Cloud Run e do proxy. A Referência de negócio vira HMAC no servidor antes de consultar."
+      },
+      "ExecutionSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "integration_id": {
+            "type": "string",
+            "title": "Integration Id"
+          },
+          "integration_name": {
+            "type": "string",
+            "title": "Integration Name"
+          },
+          "environment": {
+            "type": "string",
+            "enum": ["prd", "hml", "dev"],
+            "title": "Environment"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["success", "failed", "pending_confirmation", "unknown"],
+            "title": "Status"
+          },
+          "low_confidence": {
+            "type": "boolean",
+            "title": "Low Confidence"
+          },
+          "first_event_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "First Event At"
+          },
+          "last_event_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Event At"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms"
+          },
+          "event_count": {
+            "type": "integer",
+            "title": "Event Count"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "correlation_keys": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Correlation Keys"
+          },
+          "incident": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IncidentRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "integration_id",
+          "integration_name",
+          "environment",
+          "status",
+          "low_confidence",
+          "first_event_at",
+          "last_event_at",
+          "duration_ms",
+          "event_count",
+          "closed_at",
+          "correlation_keys",
+          "incident"
+        ],
+        "title": "ExecutionSummary"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2705,6 +3449,29 @@
           "created_at"
         ],
         "title": "Import"
+      },
+      "IncidentRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": ["id", "title", "severity", "status"],
+        "title": "IncidentRef"
       },
       "IngestionResult": {
         "properties": {
@@ -2942,7 +3709,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": ["dev", "hml", "prd"]
+                "enum": ["prd", "hml", "dev"]
               },
               {
                 "type": "null"
@@ -3383,6 +4150,56 @@
         "required": ["full_name", "avatar_url", "locale"],
         "title": "Profile"
       },
+      "RawLogDownload": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In"
+          }
+        },
+        "type": "object",
+        "required": ["url", "expires_in"],
+        "title": "RawLogDownload"
+      },
+      "RawLogRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "retention_days_left": {
+            "type": "integer",
+            "title": "Retention Days Left"
+          },
+          "import_filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Filename"
+          }
+        },
+        "type": "object",
+        "required": ["id", "source", "expires_at", "retention_days_left", "import_filename"],
+        "title": "RawLogRef"
+      },
       "RejectedEvent": {
         "properties": {
           "index": {
@@ -3411,6 +4228,36 @@
         "required": ["role"],
         "title": "RoleChange"
       },
+      "RuleHit": {
+        "properties": {
+          "rule_code": {
+            "type": "string",
+            "title": "Rule Code"
+          },
+          "rule_version": {
+            "type": "string",
+            "title": "Rule Version"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "matched_event_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Matched Event Ids"
+          }
+        },
+        "type": "object",
+        "required": ["rule_code", "rule_version", "category", "description", "matched_event_ids"],
+        "title": "RuleHit"
+      },
       "TestResult": {
         "properties": {
           "ok": {
@@ -3425,6 +4272,110 @@
         "type": "object",
         "required": ["ok", "message"],
         "title": "TestResult"
+      },
+      "TimelineEvent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "operation": {
+            "type": "string",
+            "title": "Operation"
+          },
+          "source": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Source"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "execution_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Id"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          },
+          "business_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Business Reference"
+          },
+          "correlated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlated By"
+          },
+          "rule_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rule Codes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "timestamp",
+          "severity",
+          "operation",
+          "source",
+          "error",
+          "execution_id",
+          "trace_id",
+          "business_reference",
+          "correlated_by",
+          "rule_codes"
+        ],
+        "title": "TimelineEvent"
       },
       "UploadUrl": {
         "properties": {

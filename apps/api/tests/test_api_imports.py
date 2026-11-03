@@ -4,10 +4,10 @@ from typing import Any
 import pytest
 from aid_api.core.auth import Claims, get_bearer_token, get_claims
 from aid_api.core.errors import ApiError
+from aid_api.core.storage import Head, Storage, get_storage
 from aid_api.imports.content import MISMATCH
 from aid_api.imports.repo import CreatedRow, ImportRepository, get_import_repository
 from aid_api.imports.schemas import Import, NewImport
-from aid_api.imports.storage import Head, Storage, get_storage
 from aid_api.main import create_app
 from fastapi.testclient import TestClient
 

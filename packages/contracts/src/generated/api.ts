@@ -487,6 +487,77 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/executions/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Search Executions */
+    post: operations["search_executions_api_v1_executions_search_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/executions/{target}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Execution */
+    get: operations["get_execution_api_v1_executions__target__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/events/{target}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Event
+     * @description `at`: o instante do Evento (a Timeline manda), para ler só a partição dele.
+     */
+    get: operations["get_event_api_v1_events__target__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/raw-logs/{target}/download": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Download Raw Log */
+    get: operations["download_raw_log_api_v1_raw_logs__target__download_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -619,6 +690,182 @@ export interface components {
       /** Id */
       id: string;
     };
+    /**
+     * EventDetail
+     * @description O Evento normalizado inteiro (já sanitizado), para a Tela 9.
+     */
+    EventDetail: {
+      /** Id */
+      id: string;
+      /** Execution Ref */
+      execution_ref: string | null;
+      /** Integration Id */
+      integration_id: string;
+      /**
+       * Timestamp
+       * Format: date-time
+       */
+      timestamp: string;
+      /**
+       * Ingested At
+       * Format: date-time
+       */
+      ingested_at: string;
+      /** Schema Version */
+      schema_version: string;
+      /** Severity */
+      severity: string;
+      /** Operation */
+      operation: string;
+      /** Source */
+      source: {
+        [key: string]: unknown;
+      };
+      /** Error */
+      error: {
+        [key: string]: unknown;
+      } | null;
+      /** Execution Id */
+      execution_id: string | null;
+      /** Trace Id */
+      trace_id: string | null;
+      /** Business Context */
+      business_context: {
+        [key: string]: unknown;
+      } | null;
+      /** Attributes */
+      attributes: {
+        [key: string]: unknown;
+      } | null;
+      /** Sanitization Report */
+      sanitization_report: {
+        [key: string]: unknown;
+      } | null;
+      /** Correlated By */
+      correlated_by: string | null;
+      raw_log: components["schemas"]["RawLogRef"] | null;
+    };
+    /** ExecutionDetail */
+    ExecutionDetail: {
+      /** Id */
+      id: string;
+      /** Integration Id */
+      integration_id: string;
+      /** Integration Name */
+      integration_name: string;
+      /**
+       * Environment
+       * @enum {string}
+       */
+      environment: "prd" | "hml" | "dev";
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "success" | "failed" | "pending_confirmation" | "unknown";
+      /** Low Confidence */
+      low_confidence: boolean;
+      /**
+       * First Event At
+       * Format: date-time
+       */
+      first_event_at: string;
+      /**
+       * Last Event At
+       * Format: date-time
+       */
+      last_event_at: string;
+      /** Duration Ms */
+      duration_ms: number;
+      /** Event Count */
+      event_count: number;
+      /** Closed At */
+      closed_at: string | null;
+      /** Correlation Keys */
+      correlation_keys: {
+        [key: string]: string[];
+      };
+      incident: components["schemas"]["IncidentRef"] | null;
+      /** Events */
+      events: components["schemas"]["TimelineEvent"][];
+      /** Rules */
+      rules: components["schemas"]["RuleHit"][];
+    };
+    /** ExecutionPage */
+    ExecutionPage: {
+      /** Items */
+      items: components["schemas"]["ExecutionSummary"][];
+      /** Next Cursor */
+      next_cursor: string | null;
+    };
+    /**
+     * ExecutionSearch
+     * @description Busca no corpo, não na URL: o termo pode ser um número de pedido, e URL vai para os logs
+     *     do Cloud Run e do proxy. A Referência de negócio vira HMAC no servidor antes de consultar.
+     */
+    ExecutionSearch: {
+      /** Q */
+      q?: string | null;
+      /** Integration Id */
+      integration_id?: string | null;
+      /** Environment */
+      environment?: ("prd" | "hml" | "dev") | null;
+      /** Status */
+      status?: ("success" | "failed" | "pending_confirmation" | "unknown") | null;
+      /** From */
+      from?: string | null;
+      /** To */
+      to?: string | null;
+      /** Cursor */
+      cursor?: string | null;
+      /**
+       * Limit
+       * @default 50
+       */
+      limit: number;
+    };
+    /** ExecutionSummary */
+    ExecutionSummary: {
+      /** Id */
+      id: string;
+      /** Integration Id */
+      integration_id: string;
+      /** Integration Name */
+      integration_name: string;
+      /**
+       * Environment
+       * @enum {string}
+       */
+      environment: "prd" | "hml" | "dev";
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "success" | "failed" | "pending_confirmation" | "unknown";
+      /** Low Confidence */
+      low_confidence: boolean;
+      /**
+       * First Event At
+       * Format: date-time
+       */
+      first_event_at: string;
+      /**
+       * Last Event At
+       * Format: date-time
+       */
+      last_event_at: string;
+      /** Duration Ms */
+      duration_ms: number;
+      /** Event Count */
+      event_count: number;
+      /** Closed At */
+      closed_at: string | null;
+      /** Correlation Keys */
+      correlation_keys: {
+        [key: string]: string[];
+      };
+      incident: components["schemas"]["IncidentRef"] | null;
+    };
     /** HTTPValidationError */
     HTTPValidationError: {
       /** Detail */
@@ -660,6 +907,17 @@ export interface components {
        * Format: date-time
        */
       created_at: string;
+    };
+    /** IncidentRef */
+    IncidentRef: {
+      /** Id */
+      id: string;
+      /** Title */
+      title: string;
+      /** Severity */
+      severity: string;
+      /** Status */
+      status: string;
     };
     /** IngestionResult */
     IngestionResult: {
@@ -739,7 +997,7 @@ export interface components {
       /** Owner Team */
       owner_team?: string | null;
       /** Environment */
-      environment?: ("dev" | "hml" | "prd") | null;
+      environment?: ("prd" | "hml" | "dev") | null;
     };
     /** Invitation */
     Invitation: {
@@ -927,6 +1185,29 @@ export interface components {
       /** Locale */
       locale: string;
     };
+    /** RawLogDownload */
+    RawLogDownload: {
+      /** Url */
+      url: string;
+      /** Expires In */
+      expires_in: number;
+    };
+    /** RawLogRef */
+    RawLogRef: {
+      /** Id */
+      id: string;
+      /** Source */
+      source: string;
+      /**
+       * Expires At
+       * Format: date-time
+       */
+      expires_at: string;
+      /** Retention Days Left */
+      retention_days_left: number;
+      /** Import Filename */
+      import_filename: string | null;
+    };
     /** RejectedEvent */
     RejectedEvent: {
       /** Index */
@@ -942,12 +1223,57 @@ export interface components {
        */
       role: "owner" | "admin" | "analyst" | "viewer";
     };
+    /** RuleHit */
+    RuleHit: {
+      /** Rule Code */
+      rule_code: string;
+      /** Rule Version */
+      rule_version: string;
+      /** Category */
+      category: string;
+      /** Description */
+      description: string;
+      /** Matched Event Ids */
+      matched_event_ids: string[];
+    };
     /** TestResult */
     TestResult: {
       /** Ok */
       ok: boolean;
       /** Message */
       message: string;
+    };
+    /** TimelineEvent */
+    TimelineEvent: {
+      /** Id */
+      id: string;
+      /**
+       * Timestamp
+       * Format: date-time
+       */
+      timestamp: string;
+      /** Severity */
+      severity: string;
+      /** Operation */
+      operation: string;
+      /** Source */
+      source: {
+        [key: string]: unknown;
+      };
+      /** Error */
+      error: {
+        [key: string]: unknown;
+      } | null;
+      /** Execution Id */
+      execution_id: string | null;
+      /** Trace Id */
+      trace_id: string | null;
+      /** Business Reference */
+      business_reference: string | null;
+      /** Correlated By */
+      correlated_by: string | null;
+      /** Rule Codes */
+      rule_codes: string[];
     };
     /** UploadUrl */
     UploadUrl: {
@@ -2124,6 +2450,142 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ConnectorSync"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  search_executions_api_v1_executions_search_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ExecutionSearch"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExecutionPage"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_execution_api_v1_executions__target__get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ExecutionDetail"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_event_api_v1_events__target__get: {
+    parameters: {
+      query?: {
+        at?: string | null;
+      };
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["EventDetail"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  download_raw_log_api_v1_raw_logs__target__download_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RawLogDownload"];
         };
       };
       /** @description Validation Error */

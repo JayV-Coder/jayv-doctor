@@ -12,6 +12,11 @@ export type Invitation = Schemas["Invitation"];
 export type Integration = Schemas["Integration"];
 export type Import = Schemas["Import"];
 export type CreatedImport = Schemas["CreatedImport"];
+export type ExecutionSummary = Schemas["ExecutionSummary"];
+export type ExecutionPage = Schemas["ExecutionPage"];
+export type ExecutionDetail = Schemas["ExecutionDetail"];
+export type EventDetail = Schemas["EventDetail"];
+export type ExecutionSearch = Schemas["ExecutionSearch"];
 export type Connector = Schemas["Connector"];
 export type ConnectorSync = Schemas["ConnectorSync"];
 type Me = Schemas["Me"];
@@ -42,17 +47,44 @@ export async function listImports(): Promise<Import[] | null> {
   return response?.ok ? ((await response.json()) as Import[]) : null;
 }
 
+// Busca no corpo (POST): o termo pode ser um número de pedido e não vai para URL nem log.
+export async function searchExecutions(
+  body: Partial<ExecutionSearch>,
+): Promise<ExecutionPage | null> {
+  const response = await apiFetch("/executions/search", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }).catch(() => null);
+  return response?.ok ? ((await response.json()) as ExecutionPage) : null;
+}
+
+// `"not_found"` quando não existe nesta Organização; `null` se a API não respondeu.
+async function getOne<T>(path: string): Promise<T | "not_found" | null> {
+  const response = await apiFetch(path).catch(() => null);
+  if (response?.status === 404 || response?.status === 422) return "not_found";
+  return response?.ok ? ((await response.json()) as T) : null;
+}
+
+export async function getExecution(id: string): Promise<ExecutionDetail | "not_found" | null> {
+  return getOne<ExecutionDetail>(`/executions/${encodeURIComponent(id)}`);
+}
+
+export async function getEvent(
+  id: string,
+  at: string | null = null,
+): Promise<EventDetail | "not_found" | null> {
+  const query = at ? `?at=${encodeURIComponent(at)}` : "";
+  return getOne<EventDetail>(`/events/${encodeURIComponent(id)}${query}`);
+}
+
 // Conectores da Organização ativa; `null` se a API não respondeu.
 export async function listConnectors(): Promise<Connector[] | null> {
   const response = await apiFetch("/connectors").catch(() => null);
   return response?.ok ? ((await response.json()) as Connector[]) : null;
 }
 
-// `"not_found"` quando não existe nesta Organização; `null` se a API não respondeu.
 export async function getConnector(id: string): Promise<Connector | "not_found" | null> {
-  const response = await apiFetch(`/connectors/${encodeURIComponent(id)}`).catch(() => null);
-  if (response?.status === 404 || response?.status === 422) return "not_found";
-  return response?.ok ? ((await response.json()) as Connector) : null;
+  return getOne<Connector>(`/connectors/${encodeURIComponent(id)}`);
 }
 
 // As 50 Sincronizações mais recentes de um Conector; `null` se a API não respondeu.

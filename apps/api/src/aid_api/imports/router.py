@@ -10,10 +10,10 @@ from aid_api.core.errors import ApiError
 from aid_api.core.idempotency import Idempotent, IdempotentRoute
 from aid_api.core.permissions import IMPORT_LOGS, VIEW
 from aid_api.core.rate_limit import rate_limit
+from aid_api.core.storage import Storage, get_storage
 from aid_api.imports.content import HEAD_BYTES, check_head
 from aid_api.imports.repo import ImportRepository, get_import_repository, not_pending
 from aid_api.imports.schemas import CreatedImport, Import, NewImport, UploadUrl
-from aid_api.imports.storage import Storage, get_storage
 
 router = APIRouter(
     prefix="/api/v1/imports",

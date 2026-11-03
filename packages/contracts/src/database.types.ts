@@ -5,7 +5,27 @@ export type Database = {
 
   "doctor": {
           Tables: {
-            "connector_syncs": {
+            "audit_logs": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: never,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: never,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "audit_logs_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"connector_syncs": {
                   Row: {
                     "checkpoint_from": Json | null,"checkpoint_to": Json | null,"connector_id": string,"error": string | null,"finished_at": string | null,"id": string,"records": number,"started_at": string,"status": string,"tenant_id": string
                   }
@@ -704,6 +724,9 @@ isOneToOne: false
                            },
 "request_connector_sync":
 { Args: { "target": string }; Returns: undefined
+                           },
+"request_raw_log_download":
+{ Args: { "target": string }; Returns: string
                            },
 "require_manager":
 { Args: Record<PropertyKey, never>; Returns: string

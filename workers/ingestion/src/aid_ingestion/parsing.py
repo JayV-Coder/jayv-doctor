@@ -1,5 +1,9 @@
 """Leitura do Log bruto por formato. Cada linha vira um registro (objeto) ou uma rejeição com o
-número da linha e o motivo; nada aqui lança exceção por causa do conteúdo."""
+número da linha e o motivo; nada aqui lança exceção por causa do conteúdo.
+
+NDJSON e CSV são lidos linha a linha a partir dos bytes, e a codificação é decidida por linha
+(UTF-8, senão Latin-1): um byte estranho numa linha não estraga os acentos do arquivo inteiro.
+"""
 
 import csv
 import io
@@ -10,6 +14,8 @@ from typing import Any
 
 BOM = b"\xef\xbb\xbf"
 DELIMITERS = ",;\t"
+# Célula grande (stack trace, payload embutido) é lida inteira; a Sanitização corta em 8 KB.
+csv.field_size_limit(16 * 1024 * 1024)
 
 
 @dataclass(frozen=True)
@@ -19,17 +25,21 @@ class Line:
     reason: str | None = None
 
 
-def decode(data: bytes) -> str:
-    """UTF-8, com ou sem BOM; senão Latin-1 (exportações do SAP), que aceita qualquer byte."""
-    data = data.removeprefix(BOM)
+def decode(raw: bytes) -> str:
     try:
-        return data.decode("utf-8")
+        return raw.decode("utf-8")
     except UnicodeDecodeError:
-        return data.decode("latin-1")
+        return raw.decode("latin-1")
 
 
-def read_ndjson(text: str) -> Iterator[Line]:
-    for number, raw in enumerate(text.splitlines(), 1):
+def text_lines(data: bytes) -> Iterator[str]:
+    """Linhas decodificadas uma a uma, sem copiar o arquivo inteiro para uma lista."""
+    for raw in io.BytesIO(data.removeprefix(BOM)):
+        yield decode(raw)
+
+
+def read_ndjson(data: bytes) -> Iterator[Line]:
+    for number, raw in enumerate(text_lines(data), 1):
         if not raw.strip():
             continue
         try:
@@ -43,9 +53,10 @@ def read_ndjson(text: str) -> Iterator[Line]:
             yield Line(number, reason="linha não é um objeto JSON")
 
 
-def read_json(text: str) -> Iterator[Line]:
+def read_json(data: bytes) -> Iterator[Line]:
+    # Um documento JSON só se lê inteiro; o tamanho já é limitado a 50 MB na Importação.
     try:
-        value = json.loads(text)
+        value = json.loads(decode(data.removeprefix(BOM)))
     except ValueError:
         yield Line(1, reason="JSON inválido")
         return
@@ -57,24 +68,31 @@ def read_json(text: str) -> Iterator[Line]:
             yield Line(number, reason="item não é um objeto JSON")
 
 
-def read_csv(text: str) -> Iterator[Line]:
-    header = text.partition("\n")[0]
+def read_csv(data: bytes) -> Iterator[Line]:
+    lines = text_lines(data)
+    header = next(lines, "")
     delimiter = max(DELIMITERS, key=header.count)
-    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
-    columns = next(reader, None)
-    if not columns:
+    names = [name.strip() for name in next(csv.reader([header], delimiter=delimiter), [])]
+    if not names:
         return
-    names = [column.strip() for column in columns]
-    for row in reader:
+    reader = csv.reader(lines, delimiter=delimiter)
+    while True:
+        try:
+            row = next(reader)
+        except StopIteration:
+            return
+        except csv.Error:
+            yield Line(reader.line_num + 1, reason="linha CSV malformada")
+            continue
+        number = reader.line_num + 1
         if not any(cell.strip() for cell in row):
             continue
         if len(row) != len(names):
-            yield Line(reader.line_num, reason="número de colunas diferente do cabeçalho")
+            yield Line(number, reason="número de colunas diferente do cabeçalho")
             continue
-        yield Line(reader.line_num, record=dict(zip(names, row, strict=True)))
+        yield Line(number, record=dict(zip(names, row, strict=True)))
 
 
 def read_records(data: bytes, file_format: str) -> Iterator[Line]:
-    text = decode(data)
     readers = {"ndjson": read_ndjson, "json": read_json, "csv": read_csv}
-    yield from readers[file_format](text)
+    yield from readers[file_format](data)

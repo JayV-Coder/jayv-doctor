@@ -119,3 +119,16 @@ def test_atributos_respeitam_o_contrato() -> None:
 
 def test_operacao_padrao_quando_a_fonte_nao_informa() -> None:
     assert event({"timestamp": "2026-11-02T14:05:00Z"})["operation"] == "desconhecida"
+
+
+@pytest.mark.parametrize("raw", [float("nan"), float("inf"), 1e20, -1e20])
+def test_data_numerica_absurda_vira_rejeicao_e_nao_excecao(raw: float) -> None:
+    with pytest.raises(RejectedLineError, match="data"):
+        to_event({"timestamp": raw}, INTEGRATION, SOURCE, now=NOW)
+
+
+def test_mensagem_de_evento_sem_erro_fica_nos_atributos_pela_chave_usada() -> None:
+    payload = event(
+        {"timestamp": "2026-11-02T14:05:00Z", "text": "a", "message": "b", "severity": "info"}
+    )
+    assert payload["attributes"] == {"text": "a", "message": "b"}

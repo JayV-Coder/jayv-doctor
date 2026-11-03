@@ -63,16 +63,19 @@ declare
   first_day date := date_trunc('month', day)::date;
   partition_name text := format('events_%s', to_char(first_day, 'YYYY_MM'));
 begin
-  if to_regclass(format('doctor.%I', partition_name)) is null then
-    begin
-      execute format(
-        'create table doctor.%I partition of doctor.events for values from (%L) to (%L)',
-        partition_name, first_day::text || ' 00:00:00+00', (first_day + interval '1 month')::date::text || ' 00:00:00+00'
-      );
-    exception when duplicate_table then
-      null;
-    end;
+  -- Partição que já existe: nada a fazer, sem lock nenhum. Só a criação trava a tabela-mãe, e o
+  -- worker a chama numa transação curta, separada do insert do lote.
+  if to_regclass(format('doctor.%I', partition_name)) is not null then
+    return partition_name;
   end if;
+  begin
+    execute format(
+      'create table doctor.%I partition of doctor.events for values from (%L) to (%L)',
+      partition_name, first_day::text || ' 00:00:00+00', (first_day + interval '1 month')::date::text || ' 00:00:00+00'
+    );
+  exception when duplicate_table then
+    return partition_name;
+  end;
   execute format('alter table doctor.%I enable row level security', partition_name);
   execute format('revoke all on doctor.%I from anon, authenticated', partition_name);
   return partition_name;
@@ -81,6 +84,10 @@ $$;
 
 revoke all on function doctor.ensure_event_partition(date) from public, anon, authenticated;
 grant execute on function doctor.ensure_event_partition(date) to service_role;
+
+-- Prazo do worker que pegou a Importação: outra entrega da mesma mensagem espera, e só assume
+-- depois que o prazo vence (worker morto). O worker renova o prazo a cada lote gravado.
+alter table doctor.imports add column processing_started_at timestamptz;
 
 -- Linhas da Importação que não viraram Evento, com o motivo. Sem o conteúdo da linha: ele
 -- pode ter dado pessoal, e o Log bruto original continua no Storage até a retenção.

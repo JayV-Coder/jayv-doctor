@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(16);
+select plan(18);
 
 select has_table('doctor', 'events', 'tabela doctor.events existe');
 select is(
@@ -45,6 +45,14 @@ create function tests.event(tenant uuid, integration uuid, dedup text) returns v
     '{"provider": "manual", "service": "importacao"}', 'BAPI', 'ERROR', dedup)
 $$;
 select tests.event('00000000-0000-4000-8000-00000000ac01', '00000000-0000-4000-8000-0000000001a1', 'd1');
+insert into doctor.raw_log_objects (id, tenant_id, storage_path, sha256, size_bytes, source)
+values ('00000000-0000-4000-8000-0000000002a1', '00000000-0000-4000-8000-00000000ac01',
+  '00000000-0000-4000-8000-00000000ac01/imports/x/upload.csv', repeat('a', 64), 10, 'import');
+insert into doctor.imports (id, tenant_id, integration_id, raw_log_object_id, filename, size_bytes, sha256, format, status)
+values ('00000000-0000-4000-8000-0000000003a1', '00000000-0000-4000-8000-00000000ac01',
+  '00000000-0000-4000-8000-0000000001a1', '00000000-0000-4000-8000-0000000002a1', 'f.csv', 10, repeat('a', 64), 'csv', 'done');
+insert into doctor.import_rejections (tenant_id, import_id, line_number, reason)
+values ('00000000-0000-4000-8000-00000000ac01', '00000000-0000-4000-8000-0000000003a1', 3, 'JSON inválido');
 select tests.event('00000000-0000-4000-8000-00000000be01', '00000000-0000-4000-8000-0000000001b1', 'd1');
 
 select throws_ok(
@@ -81,6 +89,12 @@ select tests.authenticate_as(
   '00000000-0000-4000-8000-0000000b0001', '00000000-0000-4000-8000-00000000be01', 'viewer'
 );
 select is((select count(*)::int from doctor.events), 1, 'a outra Organização vê só o seu');
+select is_empty($$select 1 from doctor.import_rejections$$, 'nem as rejeições de Importação da outra');
+select tests.clear_authentication();
+select tests.authenticate_as(
+  '00000000-0000-4000-8000-0000000a0001', '00000000-0000-4000-8000-00000000ac01', 'viewer'
+);
+select is((select count(*)::int from doctor.import_rejections), 1, 'cada Organização lê as próprias rejeições');
 select tests.clear_authentication();
 
 select * from finish();

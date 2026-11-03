@@ -196,7 +196,11 @@ async def test_reentrega_e_queda_no_meio_nao_duplicam(
     # Worker caiu depois de gravar e antes do ack: a Importação ficou em processing.
     async with engine.begin() as connection:
         await connection.execute(
-            text("update doctor.imports set status = 'processing' where id = :i"), {"i": import_id}
+            text(
+                "update doctor.imports set status = 'processing',"
+                " processing_started_at = now() - interval '1 hour' where id = :i"
+            ),
+            {"i": import_id},
         )
     assert await run(engine, import_id, path, NDJSON) == "done"
 
@@ -256,4 +260,68 @@ async def test_csv_latin1(engine: AsyncEngine, tenant: dict[str, str]) -> None:
         "severity": "ERROR",
         "message": "Pedido não encontrado",
         "operation": "BAPI_SALESORDER",
+    }
+
+
+@pytest.mark.asyncio
+async def test_data_numerica_que_passa_no_luhn_nao_vira_cartao(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    data = b"ts;data_hora;docnum;mensagem\n1793628300005;x;20261102140500;ok\n"
+    data += b";20261102140500;1;ok\n"
+    import_id, path = await uploaded_import(engine, tenant, data, "csv")
+    assert await run(engine, import_id, path, data) == "done"
+    result = await row(
+        engine, "select accepted, rejected from doctor.imports where id = :i", i=import_id
+    )
+    assert dict(result) == {"accepted": 2, "rejected": 0}
+    execution = await scalar(
+        engine,
+        "select string_agg(execution_id, ',' order by execution_id) from doctor.events"
+        " where raw_log_object_id = (select raw_log_object_id from doctor.imports where id = :i)",
+        i=import_id,
+    )
+    assert execution == "1,20261102140500"
+
+
+@pytest.mark.asyncio
+async def test_segunda_entrega_durante_o_processamento_espera_a_vez(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    from aid_ingestion.pipeline import BusyError, claim
+
+    import_id, path = await uploaded_import(engine, tenant, NDJSON)
+    assert await claim(engine, import_id) is not None
+    with pytest.raises(BusyError):
+        await run(engine, import_id, path, NDJSON)
+    # Prazo vencido (worker morto): a próxima entrega assume.
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "update doctor.imports set processing_started_at = now() - interval '1 hour'"
+                " where id = :i"
+            ),
+            {"i": import_id},
+        )
+    assert await run(engine, import_id, path, NDJSON) == "done"
+
+
+@pytest.mark.asyncio
+async def test_erro_inesperado_encerra_a_importacao_como_falha(
+    engine: AsyncEngine, tenant: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aid_ingestion.pipeline as pipeline
+
+    def broken(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("bug")
+
+    monkeypatch.setattr(pipeline, "to_event", broken)
+    import_id, path = await uploaded_import(engine, tenant, NDJSON)
+    assert await run(engine, import_id, path, NDJSON) == "failed"
+    result = await row(
+        engine, "select status, error from doctor.imports where id = :i", i=import_id
+    )
+    assert dict(result) == {
+        "status": "failed",
+        "error": "Erro inesperado ao processar o arquivo. Importe de novo.",
     }

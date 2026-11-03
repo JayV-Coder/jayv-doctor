@@ -1,22 +1,27 @@
-"""Importação → Eventos: lê o Log bruto, sanitiza, mapeia para o Contrato v1, deduplica e grava.
+"""Importação → Eventos: lê o Log bruto, mapeia para o Contrato v1, sanitiza, deduplica e grava.
 
 Roda como job de plataforma (`service_role`, ADR-0004): o tenant vem da própria Importação, nunca
 do conteúdo. Idempotente: Importação já encerrada é ignorada; se o worker cair no meio, a nova
-entrega refaz tudo, e o `dedup_key` impede Evento repetido. Os contadores finais saem do banco,
-não da memória, para continuarem certos depois de uma queda.
+entrega refaz tudo depois que o prazo do primeiro vence, e o `dedup_key` impede Evento repetido.
+Os contadores finais saem do banco, não da memória, para continuarem certos depois de uma queda.
+
+Erro de infraestrutura (banco, rede) sobe e o Pub/Sub reentrega. Qualquer outro erro encerra a
+Importação como `failed`: repetir não adiantaria, e ela não pode ficar presa em `processing`.
 """
 
 import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+import httpx
 from aid_contracts.events import EventValidationError, validate_event
 from aid_security import Sanitizer, derive_tenant_key
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from aid_ingestion.mapping import RejectedLineError, to_event
@@ -24,6 +29,25 @@ from aid_ingestion.parsing import Line, read_records
 
 BATCH = 500
 FINISHED = ("done", "failed", "rejected")
+# Maior que o timeout do worker (300 s): antes disso, outra entrega não assume a Importação.
+LEASE = timedelta(minutes=6)
+UNEXPECTED = "Erro inesperado ao processar o arquivo. Importe de novo."
+# Campos do contrato que não passam pelo Sanitizer: data, IDs técnicos e metadados. Um número
+# de 13 a 19 dígitos (epoch em ms, IDoc) passaria no Luhn e viraria "cartão".
+TECHNICAL = {
+    "schema_version",
+    "event_id",
+    "integration_id",
+    "timestamp",
+    "source",
+    "severity",
+    "execution_id",
+    "trace_id",
+}
+
+
+class BusyError(RuntimeError):
+    """Outra entrega está processando a Importação, dentro do prazo: tente mais tarde."""
 
 
 class ObjectStore:
@@ -128,12 +152,11 @@ class Importer:
         self.totals.lines += 1
         reason = line.reason
         if line.record is not None:
-            record, report = self.sanitizer.sanitize(line.record)
-            self.totals.secrets += sum(
-                count for kind, count in report.counts.items() if kind != "referencia"
-            )
             try:
-                payload = to_event(record, self.job.integration_id, self.source)
+                mapped = to_event(line.record, self.job.integration_id, self.source)
+                free = {key: value for key, value in mapped.items() if key not in TECHNICAL}
+                cleaned, report = self.sanitizer.sanitize(free)
+                payload = {**mapped, **cleaned}
                 validate_event(payload)
             except RejectedLineError as exc:
                 reason = str(exc)
@@ -141,6 +164,9 @@ class Importer:
                 # A mensagem do validador pode ecoar o conteúdo da linha: fica só o motivo.
                 reason = "registro fora do Contrato de evento"
             else:
+                self.totals.secrets += sum(
+                    count for kind, count in report.counts.items() if kind != "referencia"
+                )
                 batch.events.append(event_row(self.job, payload, report.as_dict()))
                 self.totals.valid += 1
                 return
@@ -155,14 +181,17 @@ class Importer:
         )
 
     async def flush(self, batch: Batch) -> None:
-        async with self.engine.begin() as connection:
-            await platform(connection)
-            months = {row["timestamp"].date().replace(day=1) for row in batch.events}
-            for month in sorted(months - self.partitions):
+        months = {row["timestamp"].date().replace(day=1) for row in batch.events}
+        for month in sorted(months - self.partitions):
+            # Transação própria e curta: criar partição trava a tabela-mãe.
+            async with self.engine.begin() as connection:
+                await platform(connection)
                 await connection.execute(
                     text("select doctor.ensure_event_partition(:day)"), {"day": month}
                 )
-                self.partitions.add(month)
+            self.partitions.add(month)
+        async with self.engine.begin() as connection:
+            await platform(connection)
             if batch.events:
                 await connection.execute(INSERT_EVENT, batch.events)
             if batch.rejections:
@@ -170,8 +199,8 @@ class Importer:
             # Progresso parcial para a tela (Realtime em imports); o número final vem do banco.
             await connection.execute(
                 text(
-                    "update doctor.imports set total_lines = :lines, rejected = :rejected"
-                    " where id = cast(:id as uuid)"
+                    "update doctor.imports set total_lines = :lines, rejected = :rejected,"
+                    " processing_started_at = now() where id = cast(:id as uuid)"
                 ),
                 {
                     "lines": self.totals.lines,
@@ -189,20 +218,22 @@ async def claim(engine: AsyncEngine, import_id: str) -> Job | None:
             text(
                 "select i.id::text as import_id, i.tenant_id::text, i.integration_id::text,"
                 " i.raw_log_object_id::text, r.storage_path, i.sha256, i.format as file_format,"
-                " i.status"
+                " i.status, i.processing_started_at > now() - cast(:lease as interval) as busy"
                 " from doctor.imports i join doctor.raw_log_objects r on r.id = i.raw_log_object_id"
                 " where i.id = cast(:id as uuid) for update of i"
             ),
-            {"id": import_id},
+            {"id": import_id, "lease": LEASE},
         )
         found = result.mappings().first()
         if found is None or found["status"] in FINISHED or found["status"] == "pending":
             return None
+        if found["status"] == "processing" and found["busy"]:
+            raise BusyError(import_id)
         await connection.execute(
             text(
                 "update doctor.imports set status = 'processing', total_lines = 0, accepted = 0,"
-                " rejected = 0, duplicates = 0, secrets_removed = 0, error = null"
-                " where id = cast(:id as uuid)"
+                " rejected = 0, duplicates = 0, secrets_removed = 0, error = null,"
+                " processing_started_at = now() where id = cast(:id as uuid)"
             ),
             {"id": import_id},
         )
@@ -210,7 +241,7 @@ async def claim(engine: AsyncEngine, import_id: str) -> Job | None:
             text("delete from doctor.import_rejections where import_id = cast(:id as uuid)"),
             {"id": import_id},
         )
-        return Job(**{key: value for key, value in found.items() if key != "status"})
+        return Job(**{key: value for key, value in found.items() if key not in ("status", "busy")})
 
 
 async def fail(engine: AsyncEngine, job: Job, reason: str) -> str:
@@ -263,6 +294,13 @@ async def finish(engine: AsyncEngine, job: Job, totals: Totals) -> None:
         )
 
 
+def transient(exc: Exception) -> bool:
+    """Falha de infraestrutura, que outra entrega pode resolver."""
+    if isinstance(exc, OperationalError | httpx.HTTPError | OSError):
+        return True
+    return isinstance(exc, DBAPIError) and exc.connection_invalidated
+
+
 async def process_import(
     payload: Mapping[str, Any], engine: AsyncEngine, store: ObjectStore, master_key: bytes
 ) -> str:
@@ -270,6 +308,15 @@ async def process_import(
     job = await claim(engine, str(payload["import_id"]))
     if job is None:
         return "ignored"
+    try:
+        return await ingest(job, engine, store, master_key)
+    except Exception as exc:
+        if transient(exc):
+            raise
+        return await fail(engine, job, UNEXPECTED)
+
+
+async def ingest(job: Job, engine: AsyncEngine, store: ObjectStore, master_key: bytes) -> str:
     data = await store.read(job.storage_path)
     if data is None:
         return await fail(engine, job, "Log bruto não encontrado no armazenamento")

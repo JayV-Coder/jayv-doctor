@@ -5,6 +5,7 @@ contrato tem uma lista de nomes aceitos, e o que sobra vira `attributes`. Linha 
 é rejeitada com o motivo, que vai para `import_rejections`.
 """
 
+import math
 import re
 import uuid
 from collections.abc import Mapping
@@ -111,8 +112,16 @@ def pick(record: Mapping[str, Any], keys: tuple[str, ...]) -> tuple[str, Any] | 
 
 def parse_timestamp(value: Any, now: datetime) -> datetime:
     if isinstance(value, int | float) and not isinstance(value, bool):
+        if not math.isfinite(value):
+            raise RejectedLineError("data ilegível")
         seconds = value / 1000 if value > 1e11 else value
-        moment = datetime.fromtimestamp(seconds, UTC)
+        try:
+            moment = datetime.fromtimestamp(seconds, UTC)
+        except (ValueError, OverflowError, OSError) as exc:
+            raise RejectedLineError("data fora do intervalo aceito") from exc
+    elif isinstance(value, str) and value.strip().isdigit() and len(value.strip()) in (10, 13):
+        # Epoch em texto (CSV não tem tipo): 10 dígitos são segundos, 13 são milissegundos.
+        return parse_timestamp(int(value.strip()), now)
     elif isinstance(value, str):
         moment = parse_text_timestamp(value.strip())
     else:
@@ -216,11 +225,14 @@ def to_event(
     moment = parse_timestamp(timestamp[1], now)
     used = {timestamp[0]}
 
+    taken: dict[tuple[str, ...], str] = {}
+
     def take(keys: tuple[str, ...], limit: int) -> str | None:
         found = pick(record, keys)
         if found is None:
             return None
         used.add(found[0])
+        taken[keys] = found[0]
         return str(found[1])[:limit]
 
     severity = severity_of(record)
@@ -253,7 +265,8 @@ def to_event(
     if error:
         payload["error"] = error
     elif message:
-        used.discard(next(key for key in record if str(key).lower() in MESSAGE_KEYS))
+        # Sem erro, a mensagem fica nos atributos, pela chave que de fato foi lida.
+        used.discard(taken[MESSAGE_KEYS])
     attributes = attributes_of(record, used)
     if attributes:
         payload["attributes"] = attributes

@@ -55,3 +55,22 @@ def test_json_invalido_inteiro_vira_uma_rejeicao() -> None:
 def test_linhas_em_branco_sao_ignoradas() -> None:
     result = list(read_records(b'{"a": 1}\n\n  \n{"b": 2}\n', "ndjson"))
     assert [line.number for line in result] == [1, 4]
+
+
+def test_celula_enorme_no_csv_vira_rejeicao_da_linha() -> None:
+    data = b"timestamp;mensagem\n2026-11-02T14:05:00Z;ok\n2026-11-02T14:05:01Z;" + b"x" * 200_000
+    data += b"\n2026-11-02T14:05:02Z;fim\n"
+    result = list(read_records(data, "csv"))
+    assert [line.record is not None for line in result] == [True, True, True]
+
+
+def test_codificacao_decidida_por_linha() -> None:
+    data = '{"m": "ação"}\n'.encode() + '{"m": "não"}\n'.encode("latin-1")
+    result = list(read_records(data, "ndjson"))
+    assert [line.record for line in result] == [{"m": "ação"}, {"m": "não"}]
+
+
+def test_csv_com_aspas_e_quebra_de_linha_no_campo() -> None:
+    data = b'timestamp,mensagem\n2026-11-02T14:05:00Z,"linha 1\nlinha 2"\n'
+    result = list(read_records(data, "csv"))
+    assert result[0].record == {"timestamp": "2026-11-02T14:05:00Z", "mensagem": "linha 1\nlinha 2"}

@@ -32,7 +32,14 @@ Fluxo:
    3. sanitiza (`aid_security`) e mapeia para o Contrato de evento v1, aceitando nomes de campo comuns de SAP, Salesforce e GCP. Data sem fuso é tratada como horário de São Paulo;
    4. grava `doctor.events` sem repetir Evento (`dedup_key`).
 
-   As linhas que não viram Evento ficam em `import_rejections`, com o número da linha e o motivo, sem o conteúdo. No fim, a Importação vira `done`, com `total_lines`, `accepted`, `rejected`, `duplicates` e `secrets_removed`, e uma mensagem `correlation.requested` vai para a outbox. A mensagem pode chegar repetida: Importação já encerrada é ignorada, e a que ficou em `processing` depois de uma queda é refeita sem duplicar.
+   As linhas que não viram Evento ficam em `import_rejections`, com o número da linha e o motivo, sem o conteúdo. No fim, a Importação vira `done`, com `total_lines`, `accepted`, `rejected`, `duplicates` e `secrets_removed`, e uma mensagem `correlation.requested` vai para a outbox. A mensagem pode chegar repetida:
+   - Importação já encerrada é ignorada;
+   - se outra entrega estiver processando, a nova espera o prazo de 6 minutos (renovado a cada lote) e volta pela fila;
+   - a Importação que ficou em `processing` depois de uma queda é refeita sem duplicar.
+
+   Erro de infraestrutura (banco, rede, Storage) faz a mensagem ser reentregue. Qualquer outro erro encerra a Importação como `failed`, com "Erro inesperado ao processar o arquivo. Importe de novo.". Uma linha ruim nunca derruba a Importação: vira rejeição.
+
+   Campos técnicos (data, `execution_id`, `trace_id`) não passam pelo Sanitizer, porque uma data em milissegundos ou um número de IDoc passaria no Luhn e sumiria como "cartão". O resto do Evento (operação, erro, atributos) é sanitizado depois do mapeamento.
 
 O tenant e o caminho no Storage nunca vêm do payload: campos extras viram `422`. No Storage, só quem importa lê o Log bruto, e só na pasta da Organização ativa. O objeto só entra no caminho de uma Importação `pending` da própria Organização.
 

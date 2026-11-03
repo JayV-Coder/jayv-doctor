@@ -8,7 +8,7 @@ from typing import Any
 from aid_db import supavisor_engine
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from aid_ingestion.pipeline import process_import
+from aid_ingestion.pipeline import process_batch, process_import
 from aid_ingestion.storage import SupabaseObjectStore
 
 Handler = Callable[[Mapping[str, Any]], Awaitable[None]]
@@ -29,10 +29,13 @@ def master_key() -> bytes:
 
 
 async def ingestion_raw(payload: Mapping[str, Any]) -> None:
-    # Por enquanto só Importações; lotes da API (POST /ingestion/events) entram na parte 3 do #12.
-    if "import_id" not in payload:
-        raise ValueError("mensagem ingestion.raw sem import_id")
-    await process_import(payload, engine(), store(), master_key())
+    # Importação manual (Log bruto no Storage) ou lote de POST /ingestion/events (no banco).
+    if "import_id" in payload:
+        await process_import(payload, engine(), store(), master_key())
+    elif "batch_id" in payload:
+        await process_batch(payload, engine(), master_key())
+    else:
+        raise ValueError("mensagem ingestion.raw sem import_id nem batch_id")
 
 
 TOPICS: dict[str, Handler] = {"ingestion.raw": ingestion_raw}

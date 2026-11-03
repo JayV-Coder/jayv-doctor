@@ -251,3 +251,47 @@ async def test_admin_rebaixado_com_jwt_antigo_recebe_403_e_nao_404(
         with pytest.raises(ApiError) as denied:
             await attempt
         assert denied.value.status == 403
+
+
+@pytest.mark.asyncio
+async def test_token_de_ingestao_grava_lote_no_tenant_do_token_sem_service_role(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from aid_api.ingestion.repo import IngestionRepository
+    from aid_api.ingestion.service import new_token
+    from aid_api.integrations.repo import IntegrationRepository
+
+    first, _ = tenants
+    await add_admin(engine, first, user)
+    admin = claims_for(first, user, "admin", "aal2")
+    integration = await IntegrationRepository(engine).create(
+        admin,
+        NewIntegration(name="Notas", source_system="sap", target_system="gcp", environment="prd"),
+    )
+    token, token_hash, prefix = new_token()
+    repository = IngestionRepository()
+    import aid_api.core.db as db
+
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    await repository.create_token(admin, "SAP PI", integration.id, token_hash, prefix)
+    identity = await repository.identify(token_hash)
+    assert (identity.tenant_id, identity.integration_id) == (first, integration.id)
+    batch_id = await repository.accept(token_hash, [{"event_id": "e1"}])
+
+    async with engine.begin() as connection:
+        row = (
+            await connection.execute(
+                text(
+                    "select b.tenant_id::text, b.event_count, o.topic"
+                    " from doctor.ingestion_batches b"
+                    " join doctor.outbox_messages o on o.payload ->> 'batch_id' = b.id::text"
+                    " where b.id = cast(:b as uuid)"
+                ),
+                {"b": batch_id},
+            )
+        ).one()
+        await connection.execute(
+            text("delete from doctor.outbox_messages where tenant_id = :t"), {"t": first}
+        )
+    assert (row.tenant_id, row.event_count, row.topic) == (first, 1, "ingestion.raw")
+    assert token.startswith(prefix)

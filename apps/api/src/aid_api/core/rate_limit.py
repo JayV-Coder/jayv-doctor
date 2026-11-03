@@ -62,7 +62,12 @@ async def rate_limit(
     claims: Annotated[Claims, Depends(get_claims)],
     limiter: Annotated[TokenBucketLimiter, Depends(get_limiter)],
 ) -> None:
-    wait = limiter.allow(f"{claims.tenant_id}:{claims.sub}")
+    check_rate(limiter, f"{claims.tenant_id}:{claims.sub}")
+
+
+def check_rate(limiter: TokenBucketLimiter, key: str) -> None:
+    """Para quem não tem sessão de Usuário (ex.: token de ingestão), com a própria chave."""
+    wait = limiter.allow(key)
     if wait > 0:
         raise ApiError(
             429,

@@ -92,6 +92,7 @@ class Sanitizer:
         rules: Rules | None = None,
         reference_fields: Iterable[str] = (),
         reference_key: bytes | None = None,
+        exclude_kinds: Iterable[str] = (),
     ) -> None:
         self.rules = rules or Rules()
         self.reference_fields = frozenset(name.lower() for name in reference_fields)
@@ -107,7 +108,14 @@ class Sanitizer:
             check = public_ip if self.rules.allow_private_ips else valid_ip
             ips.append(Detector("ip", IPV4, check, hints=(".",), needs_digit=True))
         # A ordem é a prioridade: em trechos sobrepostos vale o primeiro detector.
-        self.detectors: tuple[Detector, ...] = (*SECRETS, *extras, *PERSONAL, *ips)
+        # `exclude_kinds`: para identificadores técnicos (IDoc, execution_id), em que um número
+        # que passa no Luhn é um id, não um cartão.
+        skip = frozenset(exclude_kinds)
+        self.detectors: tuple[Detector, ...] = tuple(
+            detector
+            for detector in (*SECRETS, *extras, *PERSONAL, *ips)
+            if detector.kind not in skip
+        )
         # Uma varredura só acha as pistas presentes no texto (o lookahead pega as sobrepostas);
         # detector sem pista presente não roda.
         hints = sorted({hint for detector in self.detectors for hint in detector.hints})

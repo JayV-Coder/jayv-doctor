@@ -809,6 +809,43 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/audit-logs/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Search Audit */
+    post: operations["search_audit_api_v1_audit_logs_search_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/audit-logs/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export Audit
+     * @description CSV de até 50 mil registros, gerado enquanto é enviado.
+     */
+    post: operations["export_audit_api_v1_audit_logs_export_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -822,6 +859,71 @@ export interface components {
     AcceptedInvitation: {
       /** Tenant Id */
       tenant_id: string;
+    };
+    /** AuditEntry */
+    AuditEntry: {
+      /** Id */
+      id: string;
+      /**
+       * Occurred At
+       * Format: date-time
+       */
+      occurred_at: string;
+      /**
+       * Actor Type
+       * @enum {string}
+       */
+      actor_type: "user" | "system" | "worker";
+      /** Actor Id */
+      actor_id: string | null;
+      /** Actor Label */
+      actor_label: string | null;
+      /** Action */
+      action: string;
+      /** Category */
+      category: ("security" | "diagnosis" | "connectors" | "data" | "incidents") | null;
+      /** Resource Type */
+      resource_type: string | null;
+      /** Resource Id */
+      resource_id: string | null;
+      /** Before */
+      before: {
+        [key: string]: unknown;
+      } | null;
+      /** After */
+      after: {
+        [key: string]: unknown;
+      } | null;
+      /** Ip */
+      ip: string | null;
+    };
+    /** AuditPage */
+    AuditPage: {
+      /** Items */
+      items: components["schemas"]["AuditEntry"][];
+      /** Next Cursor */
+      next_cursor: string | null;
+    };
+    /**
+     * AuditSearch
+     * @description Filtros no corpo (POST): o termo pode ser o e-mail de um Usuário.
+     */
+    AuditSearch: {
+      /** Q */
+      q?: string | null;
+      /** Category */
+      category?: ("security" | "diagnosis" | "connectors" | "data" | "incidents") | null;
+      /** Since */
+      since?: string | null;
+      /** Until */
+      until?: string | null;
+      /** Cursor */
+      cursor?: string | null;
+      /**
+       * Limit
+       * @default 50
+       */
+      limit: number;
     };
     /** Bucket */
     Bucket: {
@@ -4188,6 +4290,74 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["DiagnosisSettings"];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  search_audit_api_v1_audit_logs_search_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AuditSearch"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AuditPage"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  export_audit_api_v1_audit_logs_export_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AuditSearch"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Validation Error */
       422: {

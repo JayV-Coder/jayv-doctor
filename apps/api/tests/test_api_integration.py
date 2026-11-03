@@ -528,7 +528,7 @@ async def test_download_do_log_bruto_exige_analyst(
             await connection.execute(
                 text(
                     "select action, actor_id::text, resource_id from doctor.audit_logs"
-                    " where tenant_id = :t order by id"
+                    " where tenant_id = :t and action like 'raw_log.%' order by id"
                 ),
                 {"t": first},
             )
@@ -882,3 +882,49 @@ async def test_revisao_auditada_e_promocao_do_incidente_resolvido(
     with pytest.raises(ApiError) as again:
         await repository.promote(analyst, incident)
     assert again.value.code == "already_promoted"
+
+
+@pytest.mark.asyncio
+async def test_auditoria_registra_a_troca_de_papel_com_a_requisicao_e_so_o_gestor_le(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aid_api.core.db as db
+    import aid_api.core.request_meta as request_meta
+    from aid_api.audit.repo import AuditRepository
+    from aid_api.audit.schemas import AuditSearch
+
+    first, _ = tenants
+    await add_admin(engine, first, user)
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    token = request_meta._meta.set(
+        {"ip": "177.10.0.1", "user_agent": "Mozilla/5.0", "request_id": "req-audit"}
+    )
+    try:
+        admin = claims_for(first, user, "admin", aal="aal2")
+        async with tenant_tx(admin, engine) as connection:
+            await connection.execute(
+                text("select doctor.switch_organization(cast(:t as uuid))"), {"t": first}
+            )
+    finally:
+        request_meta._meta.reset(token)
+
+    repository = AuditRepository()
+    page = await repository.search(admin, AuditSearch(category="security"))
+    [entry] = [item for item in page.items if item.action == "org.switched"]
+    assert (entry.actor_id, entry.ip) == (user, "177.10.0.1")
+    assert entry.actor_label is not None
+    found = await repository.search(admin, AuditSearch(q=entry.actor_label))
+    assert any(item.action == "org.switched" for item in found.items)
+    # O add_admin passou pelos triggers: o Vínculo novo está na trilha, com o after.
+    created = await repository.search(admin, AuditSearch(q="membership.created"))
+    assert created.items[0].after is not None
+    assert created.items[0].after["role"] == "admin"
+    assert (await repository.search(admin, AuditSearch(category="diagnosis"))).items == []
+    with pytest.raises(ApiError) as denied:
+        await repository.search(claims_for(first, user, "admin", aal="aal1"), AuditSearch())
+    assert denied.value.status == 403
+    exported = [item async for item in repository.export(admin, AuditSearch(category="security"))]
+    assert any(item.action == "org.switched" for item in exported)
+    # A exportação também fica na trilha.
+    audited = await repository.search(admin, AuditSearch(q="audit.exported"))
+    assert [item.action for item in audited.items] == ["audit.exported"]

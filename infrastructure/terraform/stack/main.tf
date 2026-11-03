@@ -387,6 +387,28 @@ resource "google_cloud_scheduler_job" "dashboard_stats" {
   depends_on = [module.project]
 }
 
+# Trilha de auditoria (#28): login e MFA do Supabase Auth e as partições dos próximos meses.
+resource "google_cloud_scheduler_job" "audit_auth_events" {
+  project          = var.project_id
+  region           = var.region
+  name             = "${local.name_prefix}-audit-auth-events"
+  schedule         = "40 3 * * *"
+  time_zone        = "Etc/UTC"
+  attempt_deadline = "300s"
+
+  http_target {
+    http_method = "POST"
+    uri         = "${module.workers["correlation"].uri}/audit/auth-events"
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = module.workers["correlation"].uri
+    }
+  }
+
+  depends_on = [module.project]
+}
+
 resource "google_cloud_scheduler_job" "outbox_relay" {
   project          = var.project_id
   region           = var.region

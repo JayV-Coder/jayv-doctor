@@ -421,3 +421,17 @@ def test_vertex_bloqueio_de_seguranca_e_recusa_e_sem_metadata_nao_repete() -> No
 
     with pytest.raises(LLMUnavailableError):
         complete(VertexProvider(project="p", transport=httpx.MockTransport(offline)))
+
+
+def test_lotes_de_embedding_respeitam_itens_e_tokens() -> None:
+    from aid_diagnosis_engine.llm.guards import token_batches
+
+    # ~800 tokens cada: o limite de tokens corta antes do de itens.
+    texts = ["x" * 2800] * 50
+    batches = token_batches(texts, 250, 15_000)
+    assert sum(len(batch) for batch in batches) == 50
+    assert all(len(batch) <= 18 for batch in batches)
+    assert [len(b) for b in token_batches(["a"] * 5, 2, 10_000)] == [2, 2, 1]
+    # Um texto maior que o limite vai sozinho, sem lote vazio.
+    assert [len(b) for b in token_batches(["x" * 100_000, "y"], 10, 1_000)] == [1, 1]
+    assert token_batches([], 10, 10) == []

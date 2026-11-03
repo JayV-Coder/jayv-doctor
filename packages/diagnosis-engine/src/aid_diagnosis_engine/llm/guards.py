@@ -56,6 +56,22 @@ def estimate_tokens(text: str) -> int:
     return int(len(text) / CHARS_PER_TOKEN) + 1
 
 
+def token_batches(texts: Sequence[str], max_items: int, max_tokens: int) -> list[Sequence[str]]:
+    """Lotes para a API de embedding, sem passar do limite de itens nem do de tokens por pedido
+    (um texto maior que o limite vai sozinho; o provedor o trunca)."""
+    batches: list[Sequence[str]] = []
+    start, tokens = 0, 0
+    for index, item in enumerate(texts):
+        size = estimate_tokens(item)
+        if index > start and (index - start >= max_items or tokens + size > max_tokens):
+            batches.append(texts[start:index])
+            start, tokens = index, 0
+        tokens += size
+    if start < len(texts):
+        batches.append(texts[start:])
+    return batches
+
+
 def within_budget(items: Sequence[Untrusted], budget_tokens: int) -> list[Untrusted]:
     """As Evidências chegam em ordem de relevância; entram enquanto couberem no orçamento de
     entrada (60 mil tokens por padrão). O resto fica de fora, inteiro: nada é cortado no meio."""

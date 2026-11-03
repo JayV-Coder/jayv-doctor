@@ -70,6 +70,8 @@ jobs:
             echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$key"
             echo "NEXT_PUBLIC_SITE_URL=http://127.0.0.1:3000"
           } | tee apps/web/.env.local >> "$GITHUB_ENV"
+          # Só para o script que indexa o E2E da Base de conhecimento; fora do .env.local.
+          echo "SUPABASE_SERVICE_ROLE_KEY=$(supabase status -o json | jq -r .SECRET_KEY)" >> "$GITHUB_ENV"
       - run: pnpm --filter @aid/web exec playwright install --with-deps chromium
       - run: pnpm --filter @aid/web test:e2e
       # Na falha, os prints e traces mostram a diferença (inclusive dos snapshots visuais).
@@ -98,7 +100,8 @@ jobs:
             workers/relay/tests/test_relay.py \
             workers/connectors/tests/test_connector_sync.py \
             workers/correlation/tests/test_correlation_worker.py \
-            workers/diagnosis/tests/test_rules_worker.py
+            workers/diagnosis/tests/test_rules_worker.py \
+            packages/knowledge/tests/test_knowledge_db.py
 
   terraform:
     name: Terraform (fmt, validate, tflint, test)

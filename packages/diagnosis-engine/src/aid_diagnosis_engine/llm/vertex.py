@@ -22,6 +22,7 @@ from aid_diagnosis_engine.llm.base import (
     Usage,
 )
 from aid_diagnosis_engine.llm.client import validate_output
+from aid_diagnosis_engine.llm.guards import token_batches
 
 REGION = "southamerica-east1"
 MODELS: dict[Tier, str] = {"reasoning": "gemini-2.5-pro", "fast": "gemini-2.5-flash"}
@@ -30,7 +31,9 @@ MODELS: dict[Tier, str] = {"reasoning": "gemini-2.5-pro", "fast": "gemini-2.5-fl
 THINKING_BUDGET: dict[Tier, int] = {"reasoning": 2048, "fast": 0}
 EMBEDDING_MODEL = "text-embedding-005"
 DIMENSIONS = 768
-EMBED_BATCH = 64
+# Limites do text-embedding-005 por pedido: 250 textos e 20 mil tokens (com folga).
+EMBED_BATCH = 250
+EMBED_BATCH_TOKENS = 15_000
 METADATA_URL = (
     "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token"
 )
@@ -42,6 +45,7 @@ REFUSALS = {"SAFETY", "RECITATION", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "
 class VertexProvider:
     name = "vertex"
     embedding_dimensions = DIMENSIONS
+    embedding_model = EMBEDDING_MODEL
 
     def __init__(
         self,
@@ -153,13 +157,12 @@ class VertexProvider:
 
     async def embed(self, texts: Sequence[str], *, input_type: InputType) -> list[list[float]]:
         vectors: list[list[float]] = []
-        for start in range(0, len(texts), EMBED_BATCH):
+        for batch in token_batches(texts, EMBED_BATCH, EMBED_BATCH_TOKENS):
             found = await self.post(
                 f"{self.base(EMBEDDING_MODEL)}:predict",
                 {
                     "instances": [
-                        {"content": text, "task_type": TASKS[input_type]}
-                        for text in texts[start : start + EMBED_BATCH]
+                        {"content": text, "task_type": TASKS[input_type]} for text in batch
                     ]
                 },
             )

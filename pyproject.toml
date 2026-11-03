@@ -9,7 +9,7 @@ requires-python = ">=3.12,<3.13"
 package = false
 
 [tool.uv.workspace]
-members = ["apps/api", "packages/connectors", "packages/contracts", "packages/correlation", "packages/db", "packages/diagnosis-engine", "packages/security", "workers/connectors", "workers/correlation", "workers/diagnosis", "workers/ingestion", "workers/relay", "workers/runtime"]
+members = ["apps/api", "packages/connectors", "packages/contracts", "packages/correlation", "packages/db", "packages/diagnosis-engine", "packages/knowledge", "packages/security", "workers/connectors", "workers/correlation", "workers/diagnosis", "workers/ingestion", "workers/relay", "workers/runtime"]
 
 [dependency-groups]
 dev = [
@@ -60,6 +60,8 @@ files = [
     "packages/correlation/tests",
     "packages/diagnosis-engine/src",
     "packages/diagnosis-engine/tests",
+    "packages/knowledge/src",
+    "packages/knowledge/tests",
     "workers/correlation/src",
     "workers/correlation/tests",
     "workers/diagnosis/src",
@@ -84,7 +86,7 @@ root_package = "aid_api"
 [[tool.importlinter.contracts]]
 name = "Módulos independentes sobre o core"
 type = "layers"
-layers = ["aid_api.main", "aid_api.health | aid_api.orgs | aid_api.integrations | aid_api.imports | aid_api.ingestion | aid_api.connectors | aid_api.executions | aid_api.incidents | aid_api.dashboard", "aid_api.core"]
+layers = ["aid_api.main", "aid_api.health | aid_api.orgs | aid_api.integrations | aid_api.imports | aid_api.ingestion | aid_api.connectors | aid_api.executions | aid_api.incidents | aid_api.dashboard | aid_api.knowledge", "aid_api.core"]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib --strict-markers"

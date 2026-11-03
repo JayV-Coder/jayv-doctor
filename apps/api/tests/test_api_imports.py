@@ -75,7 +75,7 @@ class FakeStorage(Storage):
         self.signed: list[tuple[str, str]] = []
         self.read: list[str] = []
 
-    async def sign_upload(self, token: str, path: str) -> str:
+    async def sign_upload(self, token: str, path: str, bucket: str = "doctor-raw-logs") -> str:
         self.signed.append((token, path))
         return f"https://storage.test/upload/{path}?token=assinado"
 
@@ -227,7 +227,7 @@ def test_arquivo_vazio_no_storage_e_recusado() -> None:
 
 def test_erro_do_storage_vira_503() -> None:
     class Down(FakeStorage):
-        async def sign_upload(self, token: str, path: str) -> str:
+        async def sign_upload(self, token: str, path: str, bucket: str = "doctor-raw-logs") -> str:
             raise ApiError(503, "storage_unavailable", "Armazenamento indisponível.")
 
     response = client(claims("analyst"), storage=Down()).post(

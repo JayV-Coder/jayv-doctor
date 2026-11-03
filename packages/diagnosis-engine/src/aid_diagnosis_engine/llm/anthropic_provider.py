@@ -61,6 +61,10 @@ class AnthropicProvider:
     def embedding_dimensions(self) -> int:
         return self.embeddings.dimensions
 
+    @property
+    def embedding_model(self) -> str:
+        return self.embeddings.model
+
     async def complete_structured(
         self,
         *,

@@ -14,6 +14,7 @@ members = [
     "aid-diagnosis-engine",
     "aid-diagnosis-worker",
     "aid-ingestion",
+    "aid-knowledge",
     "aid-relay",
     "aid-security",
     "aid-worker",
@@ -28,6 +29,7 @@ dependencies = [
     { name = "aid-connectors" },
     { name = "aid-contracts" },
     { name = "aid-db" },
+    { name = "aid-knowledge" },
     { name = "aid-security" },
     { name = "asyncpg" },
     { name = "fastapi" },
@@ -46,6 +48,7 @@ requires-dist = [
     { name = "aid-connectors", editable = "packages/connectors" },
     { name = "aid-contracts", editable = "packages/contracts" },
     { name = "aid-db", editable = "packages/db" },
+    { name = "aid-knowledge", editable = "packages/knowledge" },
     { name = "aid-security", editable = "packages/security" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "fastapi", specifier = ">=0.162" },
@@ -175,6 +178,7 @@ source = { editable = "workers/diagnosis" }
 dependencies = [
     { name = "aid-db" },
     { name = "aid-diagnosis-engine" },
+    { name = "aid-knowledge" },
     { name = "fastapi" },
     { name = "sqlalchemy", extra = ["asyncio"] },
 ]
@@ -183,6 +187,7 @@ dependencies = [
 requires-dist = [
     { name = "aid-db", editable = "packages/db" },
     { name = "aid-diagnosis-engine", editable = "packages/diagnosis-engine" },
+    { name = "aid-knowledge", editable = "packages/knowledge" },
     { name = "fastapi", specifier = ">=0.162" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
 ]
@@ -208,6 +213,25 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+]
+
+[[package]]
+name = "aid-knowledge"
+version = "0.1.0"
+source = { editable = "packages/knowledge" }
+dependencies = [
+    { name = "aid-db" },
+    { name = "aid-diagnosis-engine" },
+    { name = "aid-security" },
+    { name = "pypdf" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aid-db", editable = "packages/db" },
+    { name = "aid-diagnosis-engine", editable = "packages/diagnosis-engine" },
+    { name = "aid-security", editable = "packages/security" },
+    { name = "pypdf", specifier = ">=5.0" },
 ]
 
 [[package]]
@@ -1528,6 +1552,15 @@ wheels = [
 [package.optional-dependencies]
 crypto = [
     { name = "cryptography" },
+]
+
+[[package]]
+name = "pypdf"
+version = "6.21.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1e/e1/ec8f4d155c997c45917153a5521e60d6ee6389d68abdcbc8e44e564caffc/pypdf-6.21.4.tar.gz", hash = "sha256:c8817e3f888d47a087872ded69812c1ef30cacb871d6e053e0c00bbaf0bc2163", size = 7109255, upload-time = "2026-10-28T17:00:54.81Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3f/4b/77e8ad4ac42c9d93600f40541a50e9feb3a61d2bbee2d76f659346072051/pypdf-6.21.4-py3-none-any.whl", hash = "sha256:33e4fb41ca352810eb4e9838aa0d82d6888a5f8bf682f43e99cce5faa666255c", size = 410430, upload-time = "2026-10-28T17:00:53.146Z" },
 ]
 
 [[package]]

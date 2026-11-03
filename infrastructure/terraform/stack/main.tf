@@ -6,7 +6,7 @@ locals {
     # O Log bruto chega a 50 MB e é lido inteiro: 1 GiB de folga para o parse e a Sanitização.
     ingestion   = { secrets = ["supabase-db-url", "hmac-master-key", "supabase-service-role-key"], memory = "1Gi", timeout = "300s" }
     correlation = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "300s" }
-    diagnosis   = { secrets = ["supabase-db-url", "anthropic-api-key", "voyage-api-key"], memory = "1Gi", timeout = "600s" }
+    diagnosis   = { secrets = ["supabase-db-url", "anthropic-api-key", "voyage-api-key", "supabase-service-role-key"], memory = "1Gi", timeout = "600s" }
     connectors  = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "600s" }
     # Relay da outbox: o único que publica nos tópicos, chamado pelo Cloud Scheduler.
     relay = { secrets = ["supabase-db-url"], memory = "256Mi", timeout = "60s" }
@@ -21,13 +21,16 @@ locals {
     # Execução fechada vai para as Regras (ticket #18), no worker de diagnóstico.
     "rules.evaluate" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
     # Consumidos de verdade no #24 e nos alertas (v0.3); até lá o worker só confirma.
-    "incident.opened"     = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
-    "incident.updated"    = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    "incident.opened"  = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    "incident.updated" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    # Indexação de documentos da Base de conhecimento (#23).
+    "knowledge.index"     = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
     "diagnosis.requested" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
     "connector.sync"      = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
   }
 
-  api_secrets = ["supabase-db-url", "hmac-master-key", "smtp-url"]
+  # voyage-api-key: a busca da Base de conhecimento gera o embedding da pergunta (#23).
+  api_secrets = ["supabase-db-url", "hmac-master-key", "smtp-url", "voyage-api-key"]
 
   secret_env = {
     "supabase-db-url"   = "SUPABASE_DB_URL"
@@ -324,6 +327,36 @@ resource "google_cloud_scheduler_job" "correlation_close" {
     oidc_token {
       service_account_email = google_service_account.scheduler.email
       audience              = module.workers["correlation"].uri
+    }
+  }
+
+  depends_on = [module.project]
+}
+
+resource "google_cloud_run_v2_service_iam_member" "scheduler_invoker_diagnosis" {
+  project  = var.project_id
+  location = var.region
+  name     = module.workers["diagnosis"].name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.scheduler.email}"
+}
+
+# Reindexação da Base de conhecimento quando o provedor de IA de uma Organização muda (#23).
+resource "google_cloud_scheduler_job" "knowledge_reindex" {
+  project          = var.project_id
+  region           = var.region
+  name             = "${local.name_prefix}-knowledge-reindex"
+  schedule         = "17 * * * *"
+  time_zone        = "Etc/UTC"
+  attempt_deadline = "120s"
+
+  http_target {
+    http_method = "POST"
+    uri         = "${module.workers["diagnosis"].uri}/knowledge/reindex"
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = module.workers["diagnosis"].uri
     }
   }
 

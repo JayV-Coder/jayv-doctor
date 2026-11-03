@@ -22,6 +22,10 @@ class FakeProvider:
     def embedding_dimensions(self) -> int:
         return DIMENSIONS
 
+    @property
+    def embedding_model(self) -> str:
+        return "fake"
+
     async def complete_structured(
         self,
         *,

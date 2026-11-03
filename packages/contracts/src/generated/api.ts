@@ -628,6 +628,97 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/knowledge/documents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Documents */
+    get: operations["list_documents_api_v1_knowledge_documents_get"];
+    put?: never;
+    /** Create Document */
+    post: operations["create_document_api_v1_knowledge_documents_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/knowledge/global": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Global */
+    get: operations["list_global_api_v1_knowledge_global_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/knowledge/documents/{target}/finish": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Finish Document */
+    post: operations["finish_document_api_v1_knowledge_documents__target__finish_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/knowledge/documents/{target}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Delete Document */
+    delete: operations["delete_document_api_v1_knowledge_documents__target__delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/knowledge/search": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Search Knowledge
+     * @description Híbrida (vetor + texto, RRF) com o embedding do provedor da Organização; com o provedor
+     *     fora, só o texto, em vez de falhar. O provedor sai numa transação curta e o embedding é
+     *     gerado fora dela: nenhuma conexão do banco fica presa esperando a API de IA.
+     */
+    post: operations["search_knowledge_api_v1_knowledge_search_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -789,6 +880,13 @@ export interface components {
     CreatedInvitation: {
       /** Id */
       id: string;
+    };
+    /** CreatedKnowledgeDocument */
+    CreatedKnowledgeDocument: {
+      /** Id */
+      id: string;
+      /** Upload Url */
+      upload_url: string;
     };
     /** CreatedOrganization */
     CreatedOrganization: {
@@ -999,6 +1097,17 @@ export interface components {
         [key: string]: string[];
       };
       incident: components["schemas"]["IncidentRef"] | null;
+    };
+    /** GlobalDocument */
+    GlobalDocument: {
+      /** Id */
+      id: string;
+      /** Slug */
+      slug: string;
+      /** Title */
+      title: string;
+      /** Chunk Count */
+      chunk_count: number;
     };
     /** HTTPValidationError */
     HTTPValidationError: {
@@ -1380,6 +1489,75 @@ export interface components {
        */
       expires_at: string;
     };
+    /** KnowledgeDocument */
+    KnowledgeDocument: {
+      /** Id */
+      id: string;
+      /** Title */
+      title: string;
+      /**
+       * Source
+       * @enum {string}
+       */
+      source: "upload" | "incident";
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "pending" | "indexing" | "ready" | "failed";
+      /** Content Type */
+      content_type: string | null;
+      /** Size Bytes */
+      size_bytes: number | null;
+      /** Chunk Count */
+      chunk_count: number;
+      /** Error */
+      error: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+    };
+    /** KnowledgeHit */
+    KnowledgeHit: {
+      /**
+       * Origin
+       * @enum {string}
+       */
+      origin: "tenant" | "global";
+      /** Document Id */
+      document_id: string;
+      /** Title */
+      title: string;
+      /** Heading */
+      heading: string | null;
+      /** Excerpt */
+      excerpt: string;
+    };
+    /**
+     * KnowledgeQuery
+     * @description Pergunta no corpo (POST), não na URL: pode citar dado do cliente.
+     */
+    KnowledgeQuery: {
+      /** Q */
+      q: string;
+      /**
+       * K
+       * @default 5
+       */
+      k: number;
+    };
+    /** KnowledgeResults */
+    KnowledgeResults: {
+      /** Items */
+      items: components["schemas"]["KnowledgeHit"][];
+      /**
+       * Mode
+       * @enum {string}
+       */
+      mode: "hybrid" | "text";
+    };
     /** Kpi */
     Kpi: {
       /** Value */
@@ -1528,6 +1706,24 @@ export interface components {
        * @enum {string}
        */
       role: "owner" | "admin" | "analyst" | "viewer";
+    };
+    /** NewKnowledgeDocument */
+    NewKnowledgeDocument: {
+      /** Title */
+      title: string;
+      /** Filename */
+      filename: string;
+      /**
+       * Content Type
+       * @enum {string}
+       */
+      content_type:
+        | "application/pdf"
+        | "text/markdown"
+        | "text/plain"
+        | "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      /** Size Bytes */
+      size_bytes: number;
     };
     /** NewOrganization */
     NewOrganization: {
@@ -3199,6 +3395,203 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Dashboard"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_documents_api_v1_knowledge_documents_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["KnowledgeDocument"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_document_api_v1_knowledge_documents_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NewKnowledgeDocument"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreatedKnowledgeDocument"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_global_api_v1_knowledge_global_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["GlobalDocument"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  finish_document_api_v1_knowledge_documents__target__finish_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  delete_document_api_v1_knowledge_documents__target__delete: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  search_knowledge_api_v1_knowledge_search_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["KnowledgeQuery"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["KnowledgeResults"];
         };
       };
       /** @description Validation Error */

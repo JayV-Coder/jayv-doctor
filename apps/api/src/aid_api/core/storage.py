@@ -24,9 +24,22 @@ def unavailable() -> ApiError:
     return ApiError(503, "storage_unavailable", "Armazenamento indisponível. Tente de novo.")
 
 
+def object_missing(response: httpx.Response) -> bool:
+    try:
+        body = response.json()
+    except ValueError:
+        return False
+    return bool(body.get("error") == "not_found" or body.get("message") == "Object not found")
+
+
 class Storage:
-    async def sign_upload(self, token: str, path: str) -> str:
+    async def sign_upload(self, token: str, path: str, bucket: str = BUCKET) -> str:
         """URL assinada para o navegador subir o arquivo direto no Storage."""
+        raise NotImplementedError
+
+    async def delete(self, token: str, path: str, bucket: str) -> None:
+        """Apaga o objeto (a política do bucket confere o Papel); ausente não é erro. Falha sobe
+        como 503, para quem chamou não apagar o registro e o arquivo ficar órfão."""
         raise NotImplementedError
 
     async def head(self, token: str, path: str, limit: int) -> Head | None:
@@ -46,14 +59,14 @@ class SupabaseStorage(Storage):
     def headers(self, token: str) -> dict[str, str]:
         return {"authorization": f"Bearer {token}", "apikey": self.key}
 
-    def object_path(self, path: str) -> str:
-        return f"{BUCKET}/{quote(path)}"
+    def object_path(self, path: str, bucket: str = BUCKET) -> str:
+        return f"{bucket}/{quote(path)}"
 
-    async def sign_upload(self, token: str, path: str) -> str:
+    async def sign_upload(self, token: str, path: str, bucket: str = BUCKET) -> str:
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT) as client:
                 response = await client.post(
-                    f"{self.base}/object/upload/sign/{self.object_path(path)}",
+                    f"{self.base}/object/upload/sign/{self.object_path(path, bucket)}",
                     headers=self.headers(token),
                 )
         except httpx.HTTPError as exc:
@@ -61,6 +74,22 @@ class SupabaseStorage(Storage):
         if response.status_code != 200:
             raise unavailable()
         return f"{self.base}{response.json()['url']}"
+
+    async def delete(self, token: str, path: str, bucket: str) -> None:
+        try:
+            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+                response = await client.delete(
+                    f"{self.base}/object/{self.object_path(path, bucket)}",
+                    headers=self.headers(token),
+                )
+        except httpx.HTTPError as exc:
+            raise unavailable() from exc
+        # Objeto que já não existe é sucesso (repetir a remoção é seguro); outro 400 é recusa.
+        if response.status_code in (200, 204) or response.status_code == 404:
+            return
+        if response.status_code == 400 and object_missing(response):
+            return
+        raise unavailable()
 
     async def sign_download(self, token: str, path: str, seconds: int) -> str:
         try:

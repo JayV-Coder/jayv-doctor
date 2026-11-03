@@ -91,7 +91,7 @@ def test_troca_de_organizacao_responde_204() -> None:
     assert repository.switched == [TENANT_ID]
 
 
-def test_troca_sem_vinculo_responde_403() -> None:
+def test_troca_sem_vinculo_responde_404() -> None:
     response: Any = client(FakeRepository(not_a_member())).post(f"/api/v1/orgs/{TENANT_ID}/switch")
-    assert response.status_code == 403
+    assert response.status_code == 404
     assert response.json()["code"] == "not_a_member"

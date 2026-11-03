@@ -47,7 +47,8 @@ def slug_taken() -> ApiError:
 
 
 def not_a_member() -> ApiError:
-    return ApiError(403, "not_a_member", "Você não tem Vínculo com esta Organização.")
+    # 404 como todo recurso de outra Organização (#27): a resposta é a mesma se ela nem existe.
+    return ApiError(404, "not_a_member", "Você não tem Vínculo com esta Organização.")
 
 
 @asynccontextmanager

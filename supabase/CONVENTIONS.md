@@ -54,3 +54,4 @@ using (tenant_id = (select doctor.current_tenant_id()))
   - `tests.clear_authentication()`;
   - `tests.create_tenant(id, slug)`, `tests.add_member(tenant, user, role)` e `tests.create_user(id, email, metadata)`.
 - Testes rodam só na stack local: o único projeto hospedado tem dados reais do jayv-coder.
+- O inventário `30_conventions.test.sql` reprova tabela nova sem RLS, sem `tenant_id`, sem `unique (tenant_id, id)` ou com FK não composta, e função `security definer` sem `search_path` fixo ou executável por `public`. Exceção nova entra na lista do teste, com o motivo. A matriz `31_isolation_matrix.test.sql` cobre toda tabela com `tenant_id` sozinha: inclua uma linha de B para a tabela nova na fixture.

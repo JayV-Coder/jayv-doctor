@@ -19,6 +19,9 @@ create table doctor.knowledge_documents (
   status text not null default 'pending' check (status in ('pending', 'indexing', 'ready', 'failed')),
   chunk_count integer not null default 0 check (chunk_count >= 0),
   embedding_model text,
+  -- Reindexação pedida (troca de provedor ou indexação que não terminou): o documento segue
+  -- `ready` e achável pelo texto até os Fragmentos novos chegarem.
+  reindex_queued_at timestamptz,
   error text check (char_length(error) <= 500),
   created_by uuid default auth.uid() references auth.users (id) on delete set null,
   created_at timestamptz not null default now(),
@@ -171,7 +174,9 @@ using (
   and (select doctor.has_member_role('owner', 'admin', 'analyst'))
 );
 
--- Documento novo: Analyst ou acima; o caminho no Storage sai do tenant da claim e do id.
+-- Documento novo: Analyst ou acima; o caminho no Storage sai do tenant da claim, do id e do
+-- formato. O nome do arquivo fica fora da chave: o Storage recusa acento e símbolos nela, e o
+-- título já guarda o nome para a tela.
 create function doctor.create_knowledge_document(title text, filename text, content_type text, size_bytes bigint)
 returns table (id uuid, storage_path text)
 language plpgsql
@@ -189,7 +194,12 @@ begin
   if filename !~ '^[^/\\]{1,200}$' then
     raise exception 'nome de arquivo inválido' using errcode = '22023';
   end if;
-  path := tenant::text || '/' || new_id::text || '/' || filename;
+  path := tenant::text || '/' || new_id::text || '/document.' || case create_knowledge_document.content_type
+    when 'application/pdf' then 'pdf'
+    when 'text/markdown' then 'md'
+    when 'text/plain' then 'txt'
+    else 'docx'
+  end;
   insert into doctor.knowledge_documents (id, tenant_id, title, source, storage_path, content_type, size_bytes)
   values (new_id, tenant, btrim(create_knowledge_document.title), 'upload', path,
     create_knowledge_document.content_type, create_knowledge_document.size_bytes);

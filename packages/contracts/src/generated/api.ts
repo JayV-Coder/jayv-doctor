@@ -709,7 +709,8 @@ export interface paths {
     /**
      * Search Knowledge
      * @description Híbrida (vetor + texto, RRF) com o embedding do provedor da Organização; com o provedor
-     *     fora, só o texto, em vez de falhar.
+     *     fora, só o texto, em vez de falhar. O provedor sai numa transação curta e o embedding é
+     *     gerado fora dela: nenhuma conexão do banco fica presa esperando a API de IA.
      */
     post: operations["search_knowledge_api_v1_knowledge_search_post"];
     delete?: never;

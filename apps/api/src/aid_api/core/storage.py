@@ -24,13 +24,22 @@ def unavailable() -> ApiError:
     return ApiError(503, "storage_unavailable", "Armazenamento indisponível. Tente de novo.")
 
 
+def object_missing(response: httpx.Response) -> bool:
+    try:
+        body = response.json()
+    except ValueError:
+        return False
+    return bool(body.get("error") == "not_found" or body.get("message") == "Object not found")
+
+
 class Storage:
     async def sign_upload(self, token: str, path: str, bucket: str = BUCKET) -> str:
         """URL assinada para o navegador subir o arquivo direto no Storage."""
         raise NotImplementedError
 
     async def delete(self, token: str, path: str, bucket: str) -> None:
-        """Apaga o objeto (a política do bucket confere o Papel); ausente não é erro."""
+        """Apaga o objeto (a política do bucket confere o Papel); ausente não é erro. Falha sobe
+        como 503, para quem chamou não apagar o registro e o arquivo ficar órfão."""
         raise NotImplementedError
 
     async def head(self, token: str, path: str, limit: int) -> Head | None:
@@ -75,8 +84,12 @@ class SupabaseStorage(Storage):
                 )
         except httpx.HTTPError as exc:
             raise unavailable() from exc
-        if response.status_code not in (200, 204, 400, 404):
-            raise unavailable()
+        # Objeto que já não existe é sucesso (repetir a remoção é seguro); outro 400 é recusa.
+        if response.status_code in (200, 204) or response.status_code == 404:
+            return
+        if response.status_code == 400 and object_missing(response):
+            return
+        raise unavailable()
 
     async def sign_download(self, token: str, path: str, seconds: int) -> str:
         try:

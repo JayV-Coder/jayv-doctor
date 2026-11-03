@@ -2,6 +2,7 @@ from typing import Any
 
 import pytest
 from aid_api.core.auth import Claims, get_claims
+from aid_api.core.errors import ApiError
 from aid_api.core.storage import Storage, get_storage
 from aid_api.knowledge.repo import KnowledgeRepository, get_knowledge_repository
 from aid_api.knowledge.router import get_provider_for
@@ -23,9 +24,11 @@ class FakeRepository(KnowledgeRepository):
         self.calls.append(("create", new))
         return DOC, f"{TENANT_ID}/{DOC}/runbook.md"
 
-    async def delete(self, claims: Claims, target: str) -> str | None:
+    async def storage_path(self, claims: Claims, target: str) -> str | None:
+        return f"{TENANT_ID}/{DOC}/document.md"
+
+    async def delete(self, claims: Claims, target: str) -> None:
         self.calls.append(("delete", target))
-        return f"{TENANT_ID}/{DOC}/runbook.md"
 
     async def llm_provider(self, claims: Claims) -> str:
         return "anthropic"
@@ -38,13 +41,16 @@ class FakeRepository(KnowledgeRepository):
 
 
 class FakeStorage(Storage):
-    def __init__(self) -> None:
+    def __init__(self, fail: bool = False) -> None:
         self.deleted: list[tuple[str, str]] = []
+        self.fail = fail
 
     async def sign_upload(self, token: str, path: str, bucket: str = "x") -> str:
         return f"https://storage.test/{bucket}/{path}"
 
     async def delete(self, token: str, path: str, bucket: str) -> None:
+        if self.fail:
+            raise ApiError(503, "storage_unavailable", "Armazenamento indisponível.")
         self.deleted.append((bucket, path))
 
 
@@ -114,7 +120,22 @@ def test_remover_apaga_o_arquivo_do_bucket() -> None:
         f"/api/v1/knowledge/documents/{DOC}"
     )
     assert response.status_code == 204
-    assert storage.deleted == [("doctor-knowledge", f"{TENANT_ID}/{DOC}/runbook.md")]
+    assert storage.deleted == [("doctor-knowledge", f"{TENANT_ID}/{DOC}/document.md")]
+
+
+def test_storage_fora_nao_apaga_o_registro() -> None:
+    repository = FakeRepository()
+    response = client(repository, "analyst", FakeStorage(fail=True)).delete(
+        f"/api/v1/knowledge/documents/{DOC}"
+    )
+    assert response.status_code == 503
+    assert ("delete", DOC) not in repository.calls
+
+
+class OtherModel(FakeProvider):
+    @property
+    def embedding_model(self) -> str:
+        return "modelo-desconhecido"
 
 
 def test_busca_hibrida_e_so_texto_com_o_provedor_fora() -> None:
@@ -129,3 +150,8 @@ def test_busca_hibrida_e_so_texto_com_o_provedor_fora() -> None:
     assert response.json()["mode"] == "text"
     text_only = repository.calls[-1]
     assert text_only == ("search", ("VL10 bloqueado", False, None))
+    # Vetor de modelo que a busca não conhece não conta como busca semântica.
+    response = client(repository, provider=OtherModel()).post(
+        "/api/v1/knowledge/search", json={"q": "VL10 bloqueado"}
+    )
+    assert response.json()["mode"] == "text"

@@ -647,14 +647,14 @@ isOneToOne: false
                   ]
                 },"knowledge_documents": {
                   Row: {
-                    "chunk_count": number,"content_type": string | null,"created_at": string,"created_by": string | null,"embedding_model": string | null,"error": string | null,"id": string,"incident_id": string | null,"size_bytes": number | null,"source": string,"status": string,"storage_path": string | null,"tenant_id": string,"title": string,"updated_at": string
+                    "chunk_count": number,"content_type": string | null,"created_at": string,"created_by": string | null,"embedding_model": string | null,"error": string | null,"id": string,"incident_id": string | null,"reindex_queued_at": string | null,"size_bytes": number | null,"source": string,"status": string,"storage_path": string | null,"tenant_id": string,"title": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "chunk_count"?: number,"content_type"?: string | null,"created_at"?: string,"created_by"?: string | null,"embedding_model"?: string | null,"error"?: string | null,"id"?: string,"incident_id"?: string | null,"size_bytes"?: number | null,"source": string,"status"?: string,"storage_path"?: string | null,"tenant_id": string,"title": string,"updated_at"?: string
+                    "chunk_count"?: number,"content_type"?: string | null,"created_at"?: string,"created_by"?: string | null,"embedding_model"?: string | null,"error"?: string | null,"id"?: string,"incident_id"?: string | null,"reindex_queued_at"?: string | null,"size_bytes"?: number | null,"source": string,"status"?: string,"storage_path"?: string | null,"tenant_id": string,"title": string,"updated_at"?: string
                   }
                   Update: {
-                    "chunk_count"?: number,"content_type"?: string | null,"created_at"?: string,"created_by"?: string | null,"embedding_model"?: string | null,"error"?: string | null,"id"?: string,"incident_id"?: string | null,"size_bytes"?: number | null,"source"?: string,"status"?: string,"storage_path"?: string | null,"tenant_id"?: string,"title"?: string,"updated_at"?: string
+                    "chunk_count"?: number,"content_type"?: string | null,"created_at"?: string,"created_by"?: string | null,"embedding_model"?: string | null,"error"?: string | null,"id"?: string,"incident_id"?: string | null,"reindex_queued_at"?: string | null,"size_bytes"?: number | null,"source"?: string,"status"?: string,"storage_path"?: string | null,"tenant_id"?: string,"title"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {

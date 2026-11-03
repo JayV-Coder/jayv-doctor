@@ -483,7 +483,73 @@ async def test_indexa_documento_e_reindexa_quando_o_modelo_muda(
     assert await reindex_stale(engine, provider_for) >= 1
     queued = await rows(
         engine,
-        "select status from doctor.knowledge_documents where id = :d",
+        "select d.status, d.reindex_queued_at is not null as queued,"
+        " (select count(*) from doctor.outbox_messages o where o.topic = 'knowledge.index'"
+        " and o.payload ->> 'document_id' = :d) as messages"
+        " from doctor.knowledge_documents d where d.id = cast(:d as uuid)",
         d=document,
     )
-    assert queued[0]["status"] == "indexing"
+    # Segue `ready` (achável pelo texto) até reindexar; o pedido não se repete na hora seguinte.
+    assert (queued[0]["status"], queued[0]["queued"], queued[0]["messages"]) == ("ready", True, 1)
+    await reindex_stale(engine, provider_for)
+    again = await rows(
+        engine,
+        "select count(*) as n from doctor.outbox_messages where topic = 'knowledge.index'"
+        " and payload ->> 'document_id' = :d",
+        d=document,
+    )
+    assert again[0]["n"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("data", "failure", "status"),
+    [
+        (b"%PDF-1.4 corrompido", None, "failed"),
+        (b"# Doc\n\ntexto", "unavailable", "failed"),
+        (b"# Doc\n\ntexto", "transient", "indexing"),
+    ],
+)
+async def test_falha_definitiva_marca_o_documento_e_passageira_reentrega(
+    engine: AsyncEngine, tenant: dict[str, str], data: bytes, failure: str | None, status: str
+) -> None:
+    from aid_diagnosis_engine.llm.base import LLMTransientError, LLMUnavailableError
+    from aid_diagnosis_engine.llm.fake import FakeProvider
+    from aid_diagnosis_worker.knowledge import index
+
+    document = str(uuid4())
+    kind = "application/pdf" if data.startswith(b"%PDF") else "text/markdown"
+    await run(
+        engine,
+        "insert into doctor.knowledge_documents (id, tenant_id, title, source, storage_path,"
+        " content_type, size_bytes, status) values (:d, :t, 'Doc', 'upload', :p, :c, 40,"
+        " 'indexing')",
+        d=document,
+        t=tenant["tenant"],
+        p=f"{tenant['tenant']}/{document}/document.md",
+        c=kind,
+    )
+
+    class Store:
+        async def read(self, path: str) -> bytes | None:
+            return data
+
+    class Provider(FakeProvider):
+        async def embed(self, texts: Any, *, input_type: Any) -> list[list[float]]:
+            if failure == "transient":
+                raise LLMTransientError("429")
+            raise LLMUnavailableError("chave inválida")
+
+    provider = Provider() if failure else FakeProvider()
+    if failure == "transient":
+        with pytest.raises(LLMTransientError):
+            await index(engine, {"document_id": document}, Store(), lambda name: provider)
+    else:
+        assert await index(engine, {"document_id": document}, Store(), lambda n: provider) == (
+            "failed"
+        )
+    found = await rows(
+        engine, "select status, error from doctor.knowledge_documents where id = :d", d=document
+    )
+    assert found[0]["status"] == status
+    assert (found[0]["error"] is None) == (status == "indexing")

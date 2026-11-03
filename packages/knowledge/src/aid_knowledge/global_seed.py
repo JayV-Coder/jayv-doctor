@@ -1,7 +1,9 @@
 """Base global v1: os textos de `global_base/` (escritos pela equipe, sem copiar documentação
 proprietária) viram documentos e Fragmentos da Base global. Roda como job de plataforma no
-deploy (`python -m aid_knowledge.global_seed`); só refaz o documento cujo texto mudou, e gera os
-embeddings com o provedor padrão quando há credencial (sem ela, a busca usa só o texto)."""
+deploy (`python -m aid_knowledge.global_seed`); refaz o documento cujo texto mudou ou que ainda
+não tem os embeddings do provedor padrão, e apaga o que saiu de `global_base/`. Sem credencial,
+grava só o texto (a busca usa só o texto) e a próxima rodada com credencial completa os vetores;
+com o provedor fora, a rodada falha e nada fica gravado pela metade."""
 
 import asyncio
 import hashlib
@@ -10,7 +12,7 @@ import os
 from importlib import resources
 
 from aid_db import platform_role, supavisor_engine
-from aid_diagnosis_engine.llm.base import LLMError, LLMProvider
+from aid_diagnosis_engine.llm.base import LLMProvider
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -31,28 +33,37 @@ def documents() -> list[tuple[str, str, str]]:
 
 
 async def sync(engine: AsyncEngine, provider: LLMProvider | None = None) -> int:
-    """Devolve quantos documentos foram (re)gravados."""
+    """Devolve quantos documentos foram (re)gravados ou apagados."""
     changed = 0
     for slug, title, body in documents():
         version = hashlib.sha256(body.encode()).hexdigest()[:16]
         chunks = chunk_text(body)
         vectors: list[list[float] | None] = [None] * len(chunks)
         model: str | None = None
+        wanted = provider.embedding_model if provider is not None else None
         async with engine.begin() as connection:
             await platform_role(connection)
-            current = await connection.scalar(
-                text("select version from doctor.global_knowledge_documents where slug = :s"),
-                {"s": slug},
-            )
-        if current == version:
+            current = (
+                await connection.execute(
+                    text(
+                        "select d.version, (select min(c.embedding_model)"
+                        " from doctor.global_knowledge_chunks c where c.document_id = d.id)"
+                        " from doctor.global_knowledge_documents d where d.slug = :s"
+                    ),
+                    {"s": slug},
+                )
+            ).first()
+        if (
+            current is not None
+            and current[0] == version
+            and (wanted is None or current[1] == wanted)
+        ):
             continue
         if provider is not None:
-            try:
-                indexed = await embed_chunks(provider, chunks)
-                vectors = [item.embedding for item in indexed]
-                model = provider.embedding_model
-            except LLMError:
-                vectors = [None] * len(chunks)
+            # Erro do provedor sobe: a versão não é gravada sem os vetores e a próxima rodada refaz.
+            indexed = await embed_chunks(provider, chunks)
+            vectors = [item.embedding for item in indexed]
+            model = provider.embedding_model
         async with engine.begin() as connection:
             await platform_role(connection)
             document_id = await connection.scalar(
@@ -93,7 +104,14 @@ async def sync(engine: AsyncEngine, provider: LLMProvider | None = None) -> int:
                 ],
             )
         changed += 1
-    return changed
+    slugs = [slug for slug, _, _ in documents()]
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        removed = await connection.execute(
+            text("delete from doctor.global_knowledge_documents where slug <> all(:slugs)"),
+            {"slugs": slugs},
+        )
+    return changed + (removed.rowcount or 0)
 
 
 def main() -> None:

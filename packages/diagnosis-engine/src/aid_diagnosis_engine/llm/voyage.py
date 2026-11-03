@@ -7,12 +7,15 @@ from collections.abc import Sequence
 import httpx
 
 from aid_diagnosis_engine.llm.base import InputType, LLMTransientError, LLMUnavailableError
+from aid_diagnosis_engine.llm.guards import token_batches
 
 URL = "https://api.voyageai.com/v1/embeddings"
 MODEL = "voyage-3"
 DIMENSIONS = 1024
 # Textos por pedido (o limite da API é maior; lotes menores falham menos de uma vez).
-BATCH = 64
+# Limites do voyage-3 por pedido: 1000 textos e 120 mil tokens (com folga na estimativa).
+BATCH = 128
+BATCH_TOKENS = 100_000
 
 
 class VoyageEmbeddings:
@@ -27,8 +30,8 @@ class VoyageEmbeddings:
 
     async def embed(self, texts: Sequence[str], *, input_type: InputType) -> list[list[float]]:
         vectors: list[list[float]] = []
-        for start in range(0, len(texts), BATCH):
-            vectors.extend(await self._embed(texts[start : start + BATCH], input_type))
+        for batch in token_batches(texts, BATCH, BATCH_TOKENS):
+            vectors.extend(await self._embed(batch, input_type))
         return vectors
 
     async def _embed(self, texts: Sequence[str], input_type: InputType) -> list[list[float]]:

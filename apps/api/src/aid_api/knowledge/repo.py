@@ -65,18 +65,21 @@ class KnowledgeRepository:
             ).one()
             return row.id, row.storage_path
 
-    async def pending_path(self, claims: Claims, target: str) -> str:
+    async def storage_path(self, claims: Claims, target: str) -> str | None:
+        """Caminho do arquivo (documento de Incidente não tem); 404 se o documento não existe."""
         async with translated_tx(claims, ERRORS) as connection:
-            path = await connection.scalar(
-                text(
-                    "select storage_path from doctor.knowledge_documents"
-                    " where id = cast(:d as uuid) and status = 'pending'"
-                ),
-                {"d": target},
-            )
-        if path is None:
+            row = (
+                await connection.execute(
+                    text(
+                        "select storage_path from doctor.knowledge_documents"
+                        " where id = cast(:d as uuid)"
+                    ),
+                    {"d": target},
+                )
+            ).first()
+        if row is None:
             raise not_found()
-        return str(path)
+        return str(row.storage_path) if row.storage_path else None
 
     async def finish(self, claims: Claims, target: str) -> None:
         async with translated_tx(claims, ERRORS) as connection:
@@ -84,12 +87,11 @@ class KnowledgeRepository:
                 text("select doctor.finish_knowledge_upload(cast(:d as uuid))"), {"d": target}
             )
 
-    async def delete(self, claims: Claims, target: str) -> str | None:
+    async def delete(self, claims: Claims, target: str) -> None:
         async with translated_tx(claims, ERRORS) as connection:
-            path = await connection.scalar(
+            await connection.execute(
                 text("select doctor.delete_knowledge_document(cast(:d as uuid))"), {"d": target}
             )
-        return str(path) if path else None
 
     async def llm_provider(self, claims: Claims) -> str:
         async with translated_tx(claims, ERRORS) as connection:

@@ -39,11 +39,11 @@ select throws_ok(
   '42501', null, 'cliente não escreve na Base global'
 );
 create temporary table created as
-select * from doctor.create_knowledge_document('Runbook', 'runbook.md', 'text/markdown', 100);
+select * from doctor.create_knowledge_document('Configuração SAP [v2]', 'Configuração SAP [v2].md', 'text/markdown', 100);
 select matches(
   (select storage_path from created),
-  '^00000000-0000-4000-8000-00000000ac01/[0-9a-f-]{36}/runbook\.md$',
-  'caminho no Storage sai da Organização do JWT'
+  '^00000000-0000-4000-8000-00000000ac01/[0-9a-f-]{36}/document\.md$',
+  'caminho no Storage sai da Organização do JWT, sem o nome do arquivo'
 );
 select tests.clear_authentication();
 

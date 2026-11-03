@@ -29,6 +29,12 @@ class Hit:
     content: str
 
 
+def vector_usable(embedding: Sequence[float] | None, model: str | None) -> bool:
+    """O vetor da pergunta só entra na busca se o modelo é conhecido e a dimensão bate."""
+    dim = DIMENSIONS.get(model or "")
+    return embedding is not None and dim is not None and len(embedding) == dim
+
+
 def vector_literal(values: Sequence[float]) -> str:
     return "[" + ",".join(f"{value:.7g}" for value in values) + "]"
 
@@ -72,8 +78,12 @@ async def search(
         ("tenant", _text_sql("knowledge_chunks", "knowledge_documents", tenant_scope)),
         ("global", _text_sql("global_knowledge_chunks", "global_knowledge_documents", "")),
     ]
-    dim = DIMENSIONS.get(model or "")
-    if embedding is not None and dim is not None and len(embedding) == dim:
+    if embedding is not None and vector_usable(embedding, model):
+        dim = DIMENSIONS[model or ""]
+        # O índice HNSW é de todas as Organizações: sem a varredura iterativa (pgvector 0.8), o
+        # filtro de tenant viria depois dos 40 vizinhos mais próximos e a Organização pequena
+        # ficaria sem resultado vetorial.
+        await connection.execute(text("set local hnsw.iterative_scan = relaxed_order"))
         params.update({"model": model, "vector": vector_literal(embedding)})
         lists += [
             ("tenant", _vector_sql("knowledge_chunks", "knowledge_documents", tenant_scope, dim)),

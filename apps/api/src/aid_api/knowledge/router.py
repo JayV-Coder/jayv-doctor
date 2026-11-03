@@ -1,11 +1,12 @@
 """Rotas da Base de conhecimento (ticket #23). Todo Papel lê e busca; Analyst ou acima envia e
 remove documentos. O arquivo sobe direto do navegador para o Storage, como nas Importações."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from typing import Annotated
 from uuid import UUID
 
 from aid_diagnosis_engine.llm import LLMError, LLMProvider, provider_for
+from aid_knowledge.store import vector_usable
 from fastapi import APIRouter, Depends, Response, status
 
 from aid_api.core.auth import Claims, get_bearer_token, require_role
@@ -84,9 +85,12 @@ async def finish_document(target: UUID, claims: Operator, repository: Repository
 async def delete_document(
     target: UUID, claims: Operator, token: Token, repository: Repository, storage: StorageDep
 ) -> Response:
-    path = await repository.delete(claims, str(target))
+    # Arquivo primeiro: se o Storage falhar, o registro fica e a remoção pode ser repetida; o
+    # contrário deixaria o original (nunca sanitizado) no bucket sem caminho para apagá-lo.
+    path = await repository.storage_path(claims, str(target))
     if path:
         await storage.delete(token, path, BUCKET)
+    await repository.delete(claims, str(target))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -95,24 +99,17 @@ async def search_knowledge(
     query: KnowledgeQuery, claims: Viewer, repository: Repository, providers: ProviderFor
 ) -> KnowledgeResults:
     """Híbrida (vetor + texto, RRF) com o embedding do provedor da Organização; com o provedor
-    fora, só o texto, em vez de falhar."""
+    fora, só o texto, em vez de falhar. O provedor sai numa transação curta e o embedding é
+    gerado fora dela: nenhuma conexão do banco fica presa esperando a API de IA."""
     provider = providers(await repository.llm_provider(claims))
     embedding: list[float] | None = None
     try:
-        [embedding] = await _embed(provider.embed, query.q)
+        [embedding] = await provider.embed([query.q], input_type="query")
     except LLMError:
         embedding = None
+    model = provider.embedding_model
+    hybrid = vector_usable(embedding, model)
     items = await repository.search(
-        claims,
-        query.q,
-        query.k,
-        embedding,
-        provider.embedding_model if embedding is not None else None,
+        claims, query.q, query.k, embedding if hybrid else None, model if hybrid else None
     )
-    return KnowledgeResults(items=items, mode="hybrid" if embedding is not None else "text")
-
-
-async def _embed(
-    embed: Callable[..., Awaitable[list[list[float]]]], text: str
-) -> list[list[float]]:
-    return await embed([text], input_type="query")
+    return KnowledgeResults(items=items, mode="hybrid" if hybrid else "text")

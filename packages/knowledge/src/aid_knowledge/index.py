@@ -10,8 +10,6 @@ from aid_security.sanitizer import Sanitizer
 from aid_knowledge.chunking import Chunk, chunk_text
 from aid_knowledge.extract import extract_text
 
-BATCH = 64
-
 
 @dataclass(frozen=True)
 class IndexedChunk:
@@ -20,12 +18,9 @@ class IndexedChunk:
 
 
 async def embed_chunks(provider: LLMProvider, chunks: Sequence[Chunk]) -> list[IndexedChunk]:
-    indexed: list[IndexedChunk] = []
-    for start in range(0, len(chunks), BATCH):
-        part = chunks[start : start + BATCH]
-        vectors = await provider.embed([c.content for c in part], input_type="document")
-        indexed.extend(IndexedChunk(c, v) for c, v in zip(part, vectors, strict=True))
-    return indexed
+    """O provedor divide em lotes conforme os limites de itens e tokens da API dele."""
+    vectors = await provider.embed([c.content for c in chunks], input_type="document")
+    return [IndexedChunk(c, v) for c, v in zip(chunks, vectors, strict=True)]
 
 
 async def index_document(

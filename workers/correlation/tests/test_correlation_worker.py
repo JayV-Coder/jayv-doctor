@@ -64,7 +64,14 @@ async def new_tenant(engine: AsyncEngine) -> dict[str, str]:
 
 
 async def drop_tenant(engine: AsyncEngine, ids: dict[str, str]) -> None:
-    for table in ("events", "execution_merges", "executions", "outbox_messages", "integrations"):
+    for table in (
+        "execution_stats_hourly",
+        "events",
+        "execution_merges",
+        "executions",
+        "outbox_messages",
+        "integrations",
+    ):
         await run(engine, f"delete from doctor.{table} where tenant_id = :t", t=ids["tenant"])  # noqa: S608
     await run(engine, "delete from doctor.tenants where id = :t", t=ids["tenant"])
     await run(engine, "delete from public.organizations where id = :t", t=ids["tenant"])
@@ -332,3 +339,23 @@ async def test_muitos_pendentes_pedem_continuacao(
     )
     assert queued == [{"payload": {"integration_id": tenant["integration"]}}]
     assert await correlate(engine, tenant) == 1
+
+
+@pytest.mark.asyncio
+async def test_agregado_do_dashboard_e_idempotente_e_segue_a_execucao(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    from aid_correlation_worker.stats import refresh_stats
+
+    await insert(engine, tenant, 0, execution_id="ok")
+    await insert(engine, tenant, 1000, "ERROR", execution_id="falha")
+    await correlate(engine, tenant)
+    for _ in range(2):
+        await refresh_stats(engine)
+    (hour,) = await rows(
+        engine,
+        "select total, failed, by_category from doctor.execution_stats_hourly where tenant_id = :t",
+        t=tenant["tenant"],
+    )
+    assert (hour["total"], hour["failed"]) == (2, 1)
+    assert hour["by_category"] == {"UNCLASSIFIED": 1}

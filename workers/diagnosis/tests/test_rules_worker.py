@@ -65,6 +65,7 @@ async def tenant(engine: AsyncEngine) -> AsyncIterator[dict[str, str]]:
     )
     yield ids
     for table in (
+        "execution_stats_hourly",
         "incident_history",
         "incident_comments",
         "incident_executions",

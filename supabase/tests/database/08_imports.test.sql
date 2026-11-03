@@ -125,7 +125,8 @@ select throws_ok(
 select throws_ok($$select 1 from doctor.outbox_messages$$, '42501', null, 'a outbox não é lida pelo cliente');
 select tests.clear_authentication();
 select results_eq(
-  $$select topic, tenant_id::text, payload ->> 'import_id' from doctor.outbox_messages$$,
+  $$select topic, tenant_id::text, payload ->> 'import_id' from doctor.outbox_messages
+    where payload ->> 'import_id' = (select id::text from created)$$,
   format($$values ('ingestion.raw'::text, '00000000-0000-4000-8000-00000000ac01'::text, %L::text)$$, (select id from created)),
   'mensagem ingestion.raw na outbox, com o tenant da Importação'
 );

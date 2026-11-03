@@ -79,10 +79,15 @@ jobs:
           name: playwright-test-results
           path: apps/web/test-results
           retention-days: 7
-      - name: Testes de integração da API
+      - name: Testes de integração da API e do worker de ingestão
         env:
           INTEGRATION_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
-        run: uv run pytest apps/api/tests/test_api_integration.py
+          SUPABASE_URL: http://127.0.0.1:54321
+        run: |
+          SUPABASE_SERVICE_ROLE_KEY="$(supabase status -o json | jq -r .SECRET_KEY)" uv run pytest \
+            apps/api/tests/test_api_integration.py \
+            workers/ingestion/tests/test_ingestion_pipeline.py \
+            workers/ingestion/tests/test_ingestion_storage.py
 
   terraform:
     name: Terraform (fmt, validate, tflint, test)

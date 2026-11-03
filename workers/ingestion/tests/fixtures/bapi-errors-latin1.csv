@@ -1,0 +1,3 @@
+timestamp;operacao;severidade;mensagem
+2026-11-02T14:05:00Z;BAPI_SALESORDER;erro;Pedido não encontrado
+linha;quebrada

@@ -3,7 +3,8 @@ locals {
 
   # Privilégio mínimo: o que cada serviço lê e publica é declarado aqui.
   workers = {
-    ingestion   = { secrets = ["supabase-db-url", "hmac-master-key"], memory = "512Mi", timeout = "300s" }
+    # O Log bruto chega a 50 MB e é lido inteiro: 1 GiB de folga para o parse e a Sanitização.
+    ingestion   = { secrets = ["supabase-db-url", "hmac-master-key", "supabase-service-role-key"], memory = "1Gi", timeout = "300s" }
     correlation = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "300s" }
     diagnosis   = { secrets = ["supabase-db-url", "anthropic-api-key"], memory = "1Gi", timeout = "600s" }
     connectors  = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "600s" }
@@ -26,6 +27,8 @@ locals {
     "anthropic-api-key" = "ANTHROPIC_API_KEY"
     "hmac-master-key"   = "HMAC_MASTER_KEY"
     "smtp-url"          = "SMTP_URL"
+    # Só o worker de ingestão: lê o Log bruto no Storage como job de plataforma.
+    "supabase-service-role-key" = "SUPABASE_SERVICE_ROLE_KEY"
   }
 
   service_accounts = merge(
@@ -159,9 +162,12 @@ module "workers" {
   memory                = each.value.memory
   timeout               = each.value.timeout
   deletion_protection   = var.environment == "prod"
-  env                   = { WORKER_NAME = each.key }
-  secret_env            = { for secret in each.value.secrets : local.secret_env[secret] => secret }
-  depends_on            = [module.secrets]
+  env = {
+    WORKER_NAME  = each.key
+    SUPABASE_URL = trimsuffix(var.supabase_jwt_issuer, "/auth/v1")
+  }
+  secret_env = { for secret in each.value.secrets : local.secret_env[secret] => secret }
+  depends_on = [module.secrets]
 }
 
 # Identidade que o Pub/Sub apresenta aos workers.

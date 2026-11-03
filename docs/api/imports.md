@@ -26,7 +26,20 @@ Fluxo:
    - UTF-8 com ou sem BOM, ou Latin-1.
 
    Se o conteúdo não bater com a extensão, a Importação vira `rejected` com "Conteúdo não corresponde ao formato", e o objeto é registrado como Log bruto já vencido, para a retenção apagá-lo. Se bater, ainda confere a duplicidade de novo: duas abas podem subir o mesmo arquivo ao mesmo tempo, e a segunda a concluir vira duplicada. Não sendo duplicada, vira `uploaded`, o Log bruto passa a valer 30 dias e uma mensagem `ingestion.raw` vai para a outbox, tudo na mesma transação.
-5. O worker de ingestão (ticket #12) faz o parse completo em streaming, a Sanitização e a deduplicação. Ele também preenche `total_lines`, `accepted`, `rejected`, `duplicates` e `secrets_removed`, e leva o status a `processing`, `done` ou `failed`.
+5. O worker de ingestão (`workers/ingestion`) consome `ingestion.raw`:
+   1. confere o sha256 do Log bruto: se não bater, a Importação vira `failed` "Arquivo diferente do que foi enviado";
+   2. lê linha a linha: NDJSON, JSON (lista ou objeto) ou CSV (`,`, `;` ou tab; UTF-8 ou Latin-1);
+   3. sanitiza (`aid_security`) e mapeia para o Contrato de evento v1, aceitando nomes de campo comuns de SAP, Salesforce e GCP. Data sem fuso é tratada como horário de São Paulo;
+   4. grava `doctor.events` sem repetir Evento (`dedup_key`).
+
+   As linhas que não viram Evento ficam em `import_rejections`, com o número da linha e o motivo, sem o conteúdo. No fim, a Importação vira `done`, com `total_lines`, `accepted`, `rejected`, `duplicates` e `secrets_removed`, e uma mensagem `correlation.requested` vai para a outbox. A mensagem pode chegar repetida:
+   - Importação já encerrada é ignorada;
+   - se outra entrega estiver processando, a nova espera o prazo de 6 minutos (renovado a cada lote) e volta pela fila;
+   - a Importação que ficou em `processing` depois de uma queda é refeita sem duplicar.
+
+   Erro de infraestrutura (banco, rede, Storage) faz a mensagem ser reentregue. Qualquer outro erro encerra a Importação como `failed`, com "Erro inesperado ao processar o arquivo. Importe de novo.". Uma linha ruim nunca derruba a Importação: vira rejeição.
+
+   Campos técnicos (data, `execution_id`, `trace_id`) não passam pelo Sanitizer, porque uma data em milissegundos ou um número de IDoc passaria no Luhn e sumiria como "cartão". O resto do Evento (operação, erro, atributos) é sanitizado depois do mapeamento.
 
 O tenant e o caminho no Storage nunca vêm do payload: campos extras viram `422`. No Storage, só quem importa lê o Log bruto, e só na pasta da Organização ativa. O objeto só entra no caminho de uma Importação `pending` da própria Organização.
 

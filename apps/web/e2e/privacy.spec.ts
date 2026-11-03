@@ -21,7 +21,10 @@ test("retenção, envio ao LLM, subprocessadores, titular e exclusão total", as
 
   const llm = page.getByRole("switch", { name: /Enviar evidências ao LLM/ });
   await expect(llm).toBeChecked();
+  // A mudança é otimista: espera a Server Action responder antes de recarregar.
+  const saved = page.waitForResponse((response) => response.request().method() === "POST");
   await llm.uncheck();
+  await saved;
   await page.reload();
   await expect(page.getByRole("switch", { name: /Enviar evidências ao LLM/ })).not.toBeChecked();
 

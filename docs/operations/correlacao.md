@@ -25,4 +25,4 @@ Cada Execução fechada põe `rules.evaluate` (`execution_id`, `integration_id`)
 
 ## Agregado do Dashboard
 
-O Cloud Scheduler chama `POST /stats` a cada 10 min (`aid-dashboard-stats`): `doctor.refresh_execution_stats` recalcula as horas tocadas desde 25 min antes (`docs/api/dashboard.md`). O worker de Regras marca a Execução como alterada quando a põe num Incidente, para a categoria entrar na hora certa.
+O Cloud Scheduler chama `POST /stats` a cada 10 min (`aid-dashboard-stats`): `doctor.refresh_execution_stats` drena a fila de horas que os triggers anotaram e as recalcula (`docs/api/dashboard.md`).

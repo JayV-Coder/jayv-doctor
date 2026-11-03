@@ -72,6 +72,7 @@ export function DashboardView({
           <span className="row-between">
             <span className="small">
               {incidentCode(critical.number)} · {statusLabel(critical.status).toLowerCase()} há{" "}
+              {ageText(critical.first_seen_at, now)} · última ocorrência há{" "}
               {ageText(critical.last_seen_at, now)}
             </span>
             <Chip tone={severityTone(critical.severity)}>{severityLabel(critical.severity)}</Chip>

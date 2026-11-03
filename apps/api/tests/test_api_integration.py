@@ -728,9 +728,7 @@ async def test_dashboard_bate_com_as_consultas_de_controle(
                 },
             )
         await connection.execute(text("set local role service_role"))
-        await connection.execute(
-            text("select doctor.refresh_execution_stats(now() - interval '1 day')")
-        )
+        await connection.execute(text("select doctor.refresh_execution_stats()"))
     monkeypatch.setattr(db, "get_engine", lambda: engine)
     board = await DashboardRepository().load(claims_for(first, user), "24h", None, None, now)
     assert board.executions.value == 4

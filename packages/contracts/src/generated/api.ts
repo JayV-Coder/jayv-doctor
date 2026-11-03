@@ -1193,6 +1193,11 @@ export interface components {
        */
       environment: "prd" | "hml" | "dev";
       /**
+       * First Seen At
+       * Format: date-time
+       */
+      first_seen_at: string;
+      /**
        * Last Seen At
        * Format: date-time
        */

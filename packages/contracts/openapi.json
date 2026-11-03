@@ -4447,6 +4447,11 @@
             "enum": ["prd", "hml", "dev"],
             "title": "Environment"
           },
+          "first_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "First Seen At"
+          },
           "last_seen_at": {
             "type": "string",
             "format": "date-time",
@@ -4467,6 +4472,7 @@
           "category",
           "integration_name",
           "environment",
+          "first_seen_at",
           "last_seen_at",
           "execution_count"
         ],

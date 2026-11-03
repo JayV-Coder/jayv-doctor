@@ -189,6 +189,20 @@ isOneToOne: false
       referencedColumns: ["tenant_id","id"]
     }
                   ]
+                },"execution_stats_dirty": {
+                  Row: {
+                    "hour": string,"integration_id": string,"queued_at": string,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "hour": string,"integration_id": string,"queued_at"?: string,"tenant_id": string
+                  }
+                  Update: {
+                    "hour"?: string,"integration_id"?: string,"queued_at"?: string,"tenant_id"?: string
+                  }
+                  Relationships: [
+
+                  ]
                 },"execution_stats_hourly": {
                   Row: {
                     "by_category": NonNullable<Json>,"failed": number,"hour": string,"id": string,"integration_id": string,"tenant_id": string,"total": number,"updated_at": string
@@ -863,7 +877,7 @@ isOneToOne: false
 { Args: { "action": string,"target": string,"tenant": string }; Returns: undefined
                            },
 "refresh_execution_stats":
-{ Args: { "since": string }; Returns: number
+{ Args: { "batch"?: number }; Returns: number
                            },
 "remove_member":
 { Args: { "target": string }; Returns: undefined
@@ -910,6 +924,9 @@ isOneToOne: false
                            },
 "update_member_role":
 { Args: { "role": string,"target": string }; Returns: undefined
+                           },
+"utc_hour":
+{ Args: { "moment": string }; Returns: string
                            }
           }
           Enums: {

@@ -17,4 +17,4 @@
 
 ## Agregado
 
-Execuções e falhas saem de `doctor.execution_stats_hourly`, recalculada pelo worker de correlação (`POST /stats`, Cloud Scheduler a cada 10 min; o `pg_cron` do projeto é do jayv-coder). Cada rodada recalcula do zero as horas tocadas desde 25 min antes (Execução alterada ou que entrou num Incidente), então repetir não conta duas vezes e fusões e reaberturas se acertam. O atraso máximo fica em torno de 10 min.
+Execuções e falhas saem de `doctor.execution_stats_hourly` (horas em UTC). Triggers em `executions` e `incident_executions` anotam a hora antiga e a nova de toda mudança que mexe no agregado numa fila (`execution_stats_dirty`); o worker de correlação a drena (`POST /stats`, Cloud Scheduler a cada 10 min; o `pg_cron` do projeto é do jayv-coder) e recalcula cada hora do zero. Repetir não conta duas vezes; uma Execução que muda de hora sai da antiga e entra na nova; uma falha longa do job só atrasa, porque a fila espera. O atraso máximo fica em torno de 10 min. A série vem completa: intervalo sem falha aparece com zero.

@@ -324,14 +324,6 @@ async def evaluate_execution(engine: AsyncEngine, payload: Mapping[str, Any]) ->
             await lock(connection, f"doctor.incident:{execution.integration_id}:{category}")
         await detach(connection, execution.tenant_id, links)
         incident = await attach(connection, execution, found) if found else None
-        # A categoria da Execução mudou (ou saiu): o agregado do Dashboard recalcula a hora dela.
-        await connection.execute(
-            text(
-                "update doctor.executions set updated_at = now()"
-                " where tenant_id = cast(:t as uuid) and id = cast(:x as uuid)"
-            ),
-            {"t": execution.tenant_id, "x": execution.id},
-        )
         for left in sorted({link.incident_id for link in links} - {incident}):
             await outbox(
                 connection,

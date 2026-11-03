@@ -2,6 +2,8 @@ import Link from "next/link";
 import { DashboardView } from "@/components/dashboard/dashboard-view";
 import { PendingInvitationNotice } from "@/components/pending-invitation-notice";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { ReloadButton } from "@/components/ui/reload-button";
 import { getMe, listIntegrations } from "@/lib/api";
 import { getDashboard } from "@/lib/dashboard/api";
 import { isManager } from "@/lib/orgs/labels";
@@ -45,10 +47,10 @@ export default async function HomePage({
       ) : board ? (
         <DashboardView board={board} period={period} environment={environment} />
       ) : (
-        <EmptyState title="Nenhuma Execução recebida">
-          O painel mostra Execuções, taxa de erro e Incidentes abertos assim que a primeira
-          Integração enviar eventos.
-        </EmptyState>
+        // Sem a resposta da API, não dá para dizer que não há dados.
+        <ErrorState title="Não foi possível carregar o painel" action={<ReloadButton />}>
+          O serviço não respondeu. Tente de novo em instantes.
+        </ErrorState>
       )}
     </>
   );

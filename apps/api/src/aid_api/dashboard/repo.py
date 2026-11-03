@@ -28,7 +28,8 @@ SPANS: dict[str, timedelta] = {
 
 INCIDENT_ROW = (
     "n.id::text as id, n.number, n.title, n.severity, n.status, n.category,"
-    " i.name as integration_name, i.environment, n.last_seen_at, n.execution_count"
+    " i.name as integration_name, i.environment, n.first_seen_at, n.last_seen_at,"
+    " n.execution_count"
     " from doctor.incidents n"
     " join doctor.integrations i on i.tenant_id = n.tenant_id and i.id = n.integration_id"
 )
@@ -48,39 +49,63 @@ def scope(environment: str | None, integration_id: UUID | None) -> tuple[str, di
 
 
 async def totals(
-    connection: AsyncConnection, extra: str, params: dict[str, Any], start: datetime, end: datetime
-) -> tuple[int, int]:
+    connection: AsyncConnection,
+    extra: str,
+    params: dict[str, Any],
+    previous: datetime,
+    start: datetime,
+    end: datetime,
+) -> tuple[int, int, int, int]:
+    """(total, falhas) do período e do anterior, numa consulta só."""
     row = (
         await connection.execute(
             text(
-                "select coalesce(sum(s.total), 0)::int as total,"  # noqa: S608
-                " coalesce(sum(s.failed), 0)::int as failed"
+                "select"  # noqa: S608
+                " coalesce(sum(s.total) filter (where s.hour >= :start), 0)::int as total,"
+                " coalesce(sum(s.failed) filter (where s.hour >= :start), 0)::int as failed,"
+                " coalesce(sum(s.total) filter (where s.hour < :start), 0)::int as before_total,"
+                " coalesce(sum(s.failed) filter (where s.hour < :start), 0)::int as before_failed"
                 " from doctor.execution_stats_hourly s join doctor.integrations i"
                 " on i.tenant_id = s.tenant_id and i.id = s.integration_id"
-                f" where s.hour >= :start and s.hour < :end{extra}"
+                f" where s.hour >= :previous and s.hour < :end{extra}"
             ),
-            {**params, "start": start, "end": end},
+            {**params, "previous": previous, "start": start, "end": end},
         )
     ).one()
-    return row.total, row.failed
+    return row.total, row.failed, row.before_total, row.before_failed
 
 
 async def mttr(
-    connection: AsyncConnection, extra: str, params: dict[str, Any], start: datetime, end: datetime
-) -> float | None:
-    """Média de resolved_at - first_seen_at dos resolvidos no período, em minutos. Reaberto
-    perde o resolved_at e só conta de novo quando voltar a ser resolvido."""
-    value = await connection.scalar(
-        text(
-            "select avg(extract(epoch from (n.resolved_at - n.first_seen_at)) / 60)"  # noqa: S608
-            " from doctor.incidents n join doctor.integrations i"
-            " on i.tenant_id = n.tenant_id and i.id = n.integration_id"
-            " where n.status = 'resolved' and n.resolved_at >= :start"
-            f" and n.resolved_at < :end{extra}"
-        ),
-        {**params, "start": start, "end": end},
-    )
-    return round(float(value), 1) if value is not None else None
+    connection: AsyncConnection,
+    extra: str,
+    params: dict[str, Any],
+    previous: datetime,
+    start: datetime,
+    end: datetime,
+) -> tuple[float | None, float | None]:
+    """Média de resolved_at - first_seen_at dos resolvidos em cada período, em minutos.
+    Reaberto perde o resolved_at e só conta de novo quando voltar a ser resolvido."""
+    row = (
+        await connection.execute(
+            text(
+                "select"  # noqa: S608
+                " avg(extract(epoch from (n.resolved_at - n.first_seen_at)) / 60)"
+                "  filter (where n.resolved_at >= :start) as current,"
+                " avg(extract(epoch from (n.resolved_at - n.first_seen_at)) / 60)"
+                "  filter (where n.resolved_at < :start) as before"
+                " from doctor.incidents n join doctor.integrations i"
+                " on i.tenant_id = n.tenant_id and i.id = n.integration_id"
+                " where n.status = 'resolved' and n.resolved_at >= :previous"
+                f" and n.resolved_at < :end{extra}"
+            ),
+            {**params, "previous": previous, "start": start, "end": end},
+        )
+    ).one()
+
+    def minutes(value: Any) -> float | None:
+        return round(float(value), 1) if value is not None else None
+
+    return minutes(row.current), minutes(row.before)
 
 
 class DashboardRepository:
@@ -97,23 +122,38 @@ class DashboardRepository:
         bucket: Literal["hour", "day"] = "hour" if period == "24h" else "day"
         extra, params = scope(environment, integration_id)
         async with translated_tx(claims, {}) as connection:
-            total, failed = await totals(connection, extra, params, start, now)
-            before_total, before_failed = await totals(connection, extra, params, previous, start)
-            current_mttr = await mttr(connection, extra, params, start, now)
-            previous_mttr = await mttr(connection, extra, params, previous, start)
+            total, failed, before_total, before_failed = await totals(
+                connection, extra, params, previous, start, now
+            )
+            current_mttr, previous_mttr = await mttr(
+                connection, extra, params, previous, start, now
+            )
+            # Série completa, em UTC: intervalo sem falha aparece como zero, não some.
             failures = [
                 Bucket.model_validate(dict(row))
                 for row in (
                     await connection.execute(
                         text(
-                            "select date_trunc(:bucket, s.hour) as start,"  # noqa: S608
+                            "with series as (select generate_series("  # noqa: S608
+                            " date_trunc(:bucket, cast(:start as timestamptz), 'UTC'),"
+                            " date_trunc(:bucket, cast(:end as timestamptz), 'UTC'),"
+                            " cast(:step as interval)) as start),"
+                            " sums as (select date_trunc(:bucket, s.hour, 'UTC') as start,"
                             " sum(s.total)::int as total, sum(s.failed)::int as failed"
                             " from doctor.execution_stats_hourly s join doctor.integrations i"
                             " on i.tenant_id = s.tenant_id and i.id = s.integration_id"
-                            f" where s.hour >= :start and s.hour < :end{extra}"
-                            " group by 1 order by 1"
+                            f" where s.hour >= :start and s.hour < :end{extra} group by 1)"
+                            " select series.start, coalesce(sums.total, 0) as total,"
+                            " coalesce(sums.failed, 0) as failed"
+                            " from series left join sums using (start) order by 1"
                         ),
-                        {**params, "bucket": bucket, "start": start, "end": now},
+                        {
+                            **params,
+                            "bucket": bucket,
+                            "step": timedelta(hours=1) if bucket == "hour" else timedelta(days=1),
+                            "start": start,
+                            "end": now,
+                        },
                     )
                 ).mappings()
             ]

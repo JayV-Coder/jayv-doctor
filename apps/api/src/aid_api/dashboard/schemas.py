@@ -35,6 +35,7 @@ class IncidentRow(BaseModel):
     category: str
     integration_name: str
     environment: Literal["prd", "hml", "dev"]
+    first_seen_at: datetime
     last_seen_at: datetime
     execution_count: int
 

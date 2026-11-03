@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request, status
 
-from aid_api.core.auth import Claims, require_aal2_claims, require_role
+from aid_api.core.auth import Claims, require_manager
 from aid_api.core.idempotency import Idempotent, IdempotentRoute
 from aid_api.core.permissions import MANAGE_CONNECTORS
 from aid_api.core.rate_limit import TokenBucketLimiter, check_rate, get_limiter, rate_limit
@@ -21,13 +21,7 @@ from aid_api.ingestion.schemas import (
 Repository = Annotated[IngestionRepository, Depends(get_ingestion_repository)]
 
 
-def require_manager(
-    claims: Annotated[Claims, Depends(require_role(*MANAGE_CONNECTORS))],
-) -> Claims:
-    return require_aal2_claims(claims)
-
-
-Manager = Annotated[Claims, Depends(require_manager)]
+Manager = Annotated[Claims, Depends(require_manager(*MANAGE_CONNECTORS))]
 
 tokens = APIRouter(
     prefix="/api/v1/ingestion-tokens",

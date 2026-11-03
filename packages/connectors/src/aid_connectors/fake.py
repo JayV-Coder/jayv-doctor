@@ -52,6 +52,8 @@ class FakeConnector:
             errors["pages"] = "de 0 a 1000"
         if not isinstance(size, int) or not 1 <= size <= 500:
             errors["page_size"] = "de 1 a 500"
+        if "fail" in config and not isinstance(config["fail"], dict):
+            errors["fail"] = "objeto {page, kind, times}"
         return errors
 
     async def test_connection(self, secret: Secret, config: Mapping[str, Any]) -> TestResult:

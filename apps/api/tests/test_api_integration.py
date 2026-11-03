@@ -295,3 +295,54 @@ async def test_token_de_ingestao_grava_lote_no_tenant_do_token_sem_service_role(
         )
     assert (row.tenant_id, row.event_count, row.topic) == (first, 1, "ingestion.raw")
     assert token.startswith(prefix)
+
+
+@pytest.mark.asyncio
+async def test_conector_criado_pela_api_guarda_a_credencial_so_no_vault(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from aid_api.connectors.repo import ConnectorRepository
+    from aid_api.connectors.schemas import ConnectorChange, NewConnector
+    from aid_api.integrations.repo import IntegrationRepository
+
+    first, _ = tenants
+    await add_admin(engine, first, user)
+    admin = claims_for(first, user, "admin", "aal2")
+    integration = await IntegrationRepository(engine).create(
+        admin,
+        NewIntegration(name="GCP", source_system="gcp", target_system="sap", environment="prd"),
+    )
+    import aid_api.core.db as db
+
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    repository = ConnectorRepository()
+    created = await repository.create(
+        admin,
+        NewConnector.model_validate(
+            {
+                "integration_id": integration.id,
+                "provider": "fake",
+                "name": "Fake",
+                "config": {"pages": 1},
+                "credential": "credencial-real",
+            }
+        ),
+    )
+    assert "credencial-real" not in created.model_dump_json()
+    await repository.update(
+        admin,
+        created.id,
+        ConnectorChange.model_validate({"credential": "trocada"}),
+        lambda provider, config: None,
+    )
+    async with engine.begin() as connection:
+        await connection.execute(text("set local role service_role"))
+        stored = await connection.scalar(
+            text("select doctor.get_connector_secret(cast(:c as uuid))"), {"c": created.id}
+        )
+        await connection.execute(text("reset role"))
+        await connection.execute(
+            text("delete from vault.secrets where name = 'doctor/connector/' || :c"),
+            {"c": created.id},
+        )
+    assert stored == "trocada"

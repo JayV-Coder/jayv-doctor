@@ -9,7 +9,8 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from aid_connector_worker.schedule import enqueue_due
-from aid_connector_worker.sync import REGISTRY, sync_connector
+from aid_connector_worker.sync import sync_connector
+from aid_connectors.registry import REGISTRY
 from aid_connectors.runtime import RetryPolicy
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
@@ -188,6 +189,10 @@ async def test_erro_de_autenticacao_pausa_o_conector(
     current = await state(engine, connector_id)
     assert current["status"] == "paused"
     assert current["last_error"] == "Credencial recusada pelo provedor (401)."
+    reason = await one(
+        engine, "select paused_reason from doctor.connectors where id = :c", c=connector_id
+    )
+    assert reason["paused_reason"] == "auth"
     assert await sync(engine, connector_id) == "ignored"
 
 
@@ -270,3 +275,26 @@ async def test_desativacao_durante_a_sincronizacao_vale(
     monkeypatch.setattr(module, "store_batch", disable_meanwhile)
     assert await sync(engine, connector_id) == "succeeded"
     assert (await state(engine, connector_id))["status"] == "disabled"
+
+
+@pytest.mark.asyncio
+async def test_config_nova_no_meio_da_sincronizacao_nao_herda_o_checkpoint_antigo(
+    engine: AsyncEngine, tenant: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aid_connector_worker.sync as module
+
+    connector_id = await connector(engine, tenant, {"pages": 3})
+    original = module.store_batch
+
+    async def config_changes(*args: Any, **kwargs: Any) -> None:
+        await run(
+            engine,
+            "update doctor.connectors set checkpoint = null, config_version = config_version + 1"
+            " where id = :c",
+            c=connector_id,
+        )
+        await original(*args, **kwargs)
+
+    monkeypatch.setattr(module, "store_batch", config_changes)
+    await sync(engine, connector_id)
+    assert (await state(engine, connector_id))["checkpoint"] is None

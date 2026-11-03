@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 
-from aid_api.core.auth import Claims, get_claims, require_aal2_claims, require_role
+from aid_api.core.auth import Claims, get_claims, require_manager
 from aid_api.core.idempotency import Idempotent, IdempotentRoute
 from aid_api.core.permissions import MANAGE_MEMBERS
 from aid_api.core.rate_limit import rate_limit
@@ -39,14 +39,8 @@ router = APIRouter(
 )
 
 
-def require_manager(
-    claims: Annotated[Claims, Depends(require_role(*MANAGE_MEMBERS))],
-) -> Claims:
-    return require_aal2_claims(claims)
-
-
 CurrentClaims = Annotated[Claims, Depends(get_claims)]
-Manager = Annotated[Claims, Depends(require_manager)]
+Manager = Annotated[Claims, Depends(require_manager(*MANAGE_MEMBERS))]
 Members = Annotated[MemberRepository, Depends(get_member_repository)]
 Organizations = Annotated[OrganizationRepository, Depends(get_organization_repository)]
 MailerDep = Annotated[Mailer, Depends(get_mailer)]

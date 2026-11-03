@@ -349,6 +349,144 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/connectors": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Connectors */
+    get: operations["list_connectors_api_v1_connectors_get"];
+    put?: never;
+    /** Create Connector */
+    post: operations["create_connector_api_v1_connectors_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/connectors/test": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Test New Connection */
+    post: operations["test_new_connection_api_v1_connectors_test_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/connectors/{target}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Connector */
+    get: operations["get_connector_api_v1_connectors__target__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update Connector */
+    patch: operations["update_connector_api_v1_connectors__target__patch"];
+    trace?: never;
+  };
+  "/api/v1/connectors/{target}/test": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Test Connection */
+    post: operations["test_connection_api_v1_connectors__target__test_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/connectors/{target}/sync": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Sync Connector */
+    post: operations["sync_connector_api_v1_connectors__target__sync_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/connectors/{target}/pause": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Pause Connector */
+    post: operations["pause_connector_api_v1_connectors__target__pause_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/connectors/{target}/resume": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Resume Connector */
+    post: operations["resume_connector_api_v1_connectors__target__resume_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/connectors/{target}/syncs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Syncs */
+    get: operations["list_syncs_api_v1_connectors__target__syncs_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -362,6 +500,83 @@ export interface components {
     AcceptedInvitation: {
       /** Tenant Id */
       tenant_id: string;
+    };
+    /**
+     * ConnectionTest
+     * @description Teste de um Conector salvo: a credencial salva não sai do Vault (ADR-0006) e vem aqui.
+     */
+    ConnectionTest: {
+      /**
+       * Credential
+       * Format: password
+       */
+      credential: string;
+    };
+    /** Connector */
+    Connector: {
+      /** Id */
+      id: string;
+      /** Integration Id */
+      integration_id: string;
+      /** Provider */
+      provider: string;
+      /** Name */
+      name: string;
+      /** Config */
+      config: {
+        [key: string]: unknown;
+      };
+      /** Status */
+      status: string;
+      /** Consecutive Failures */
+      consecutive_failures: number;
+      /** Sync Interval Seconds */
+      sync_interval_seconds: number;
+      /** Last Sync At */
+      last_sync_at: string | null;
+      /** Last Error */
+      last_error: string | null;
+      /**
+       * Next Run At
+       * Format: date-time
+       */
+      next_run_at: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+    };
+    /** ConnectorChange */
+    ConnectorChange: {
+      /** Name */
+      name?: string | null;
+      /** Config */
+      config?: {
+        [key: string]: unknown;
+      } | null;
+      /** Sync Interval Seconds */
+      sync_interval_seconds?: number | null;
+      /** Credential */
+      credential?: string | null;
+    };
+    /** ConnectorSync */
+    ConnectorSync: {
+      /** Id */
+      id: string;
+      /**
+       * Started At
+       * Format: date-time
+       */
+      started_at: string;
+      /** Finished At */
+      finished_at: string | null;
+      /** Status */
+      status: string;
+      /** Records */
+      records: number;
+      /** Error */
+      error: string | null;
     };
     /** CreatedImport */
     CreatedImport: {
@@ -561,6 +776,50 @@ export interface components {
       /** Mfa Enabled */
       mfa_enabled: boolean;
     };
+    /**
+     * NewConnectionTest
+     * @description Teste antes de salvar (assistente de configuração).
+     */
+    NewConnectionTest: {
+      /**
+       * Credential
+       * Format: password
+       */
+      credential: string;
+      /**
+       * Provider
+       * @enum {string}
+       */
+      provider: "fake" | "gcp" | "salesforce" | "sap";
+      /** Config */
+      config?: {
+        [key: string]: unknown;
+      };
+    };
+    /** NewConnector */
+    NewConnector: {
+      /**
+       * Integration Id
+       * Format: uuid
+       */
+      integration_id: string;
+      /**
+       * Provider
+       * @enum {string}
+       */
+      provider: "fake" | "gcp" | "salesforce" | "sap";
+      /** Name */
+      name: string;
+      /** Config */
+      config?: {
+        [key: string]: unknown;
+      };
+      /**
+       * Credential
+       * Format: password
+       */
+      credential: string;
+    };
     /** NewImport */
     NewImport: {
       /**
@@ -672,6 +931,13 @@ export interface components {
        * @enum {string}
        */
       role: "owner" | "admin" | "analyst" | "viewer";
+    };
+    /** TestResult */
+    TestResult: {
+      /** Ok */
+      ok: boolean;
+      /** Message */
+      message: string;
     };
     /** UploadUrl */
     UploadUrl: {
@@ -1507,6 +1773,347 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["IngestionResult"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_connectors_api_v1_connectors_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Connector"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_connector_api_v1_connectors_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NewConnector"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Connector"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  test_new_connection_api_v1_connectors_test_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NewConnectionTest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TestResult"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_connector_api_v1_connectors__target__get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Connector"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_connector_api_v1_connectors__target__patch: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ConnectorChange"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Connector"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  test_connection_api_v1_connectors__target__test_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ConnectionTest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TestResult"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  sync_connector_api_v1_connectors__target__sync_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  pause_connector_api_v1_connectors__target__pause_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  resume_connector_api_v1_connectors__target__resume_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_syncs_api_v1_connectors__target__syncs_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ConnectorSync"][];
         };
       };
       /** @description Validation Error */

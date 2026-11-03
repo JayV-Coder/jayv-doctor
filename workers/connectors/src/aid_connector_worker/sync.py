@@ -13,14 +13,12 @@ from datetime import timedelta
 from typing import Any
 
 from aid_connectors.base import Batch, Connector
-from aid_connectors.fake import FakeConnector
 from aid_connectors.runtime import RetryPolicy, SyncResult, run_sync
 from aid_db import platform_role
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 logger = logging.getLogger(__name__)
-REGISTRY: dict[str, type[Connector]] = {"fake": FakeConnector}
 # Sincronização em `running` há mais que isso é de um worker que morreu.
 LEASE = timedelta(minutes=10)
 FAILING_AFTER = 3
@@ -37,7 +35,7 @@ async def claim(engine: AsyncEngine, connector_id: str) -> tuple[Mapping[str, An
                 await connection.execute(
                     text(
                         "select id::text, tenant_id::text, integration_id::text, provider, config,"
-                        " status, checkpoint from doctor.connectors"
+                        " status, checkpoint, config_version from doctor.connectors"
                         " where id = cast(:c as uuid) for update"
                     ),
                     {"c": connector_id},
@@ -114,10 +112,15 @@ async def store_batch(
         )
         await connection.execute(
             text(
+                # Só se a config não mudou desde o começo: config nova recomeça do zero.
                 "update doctor.connectors set checkpoint = cast(:cp as jsonb)"
-                " where id = cast(:c as uuid)"
+                " where id = cast(:c as uuid) and config_version = :v"
             ),
-            {"cp": json.dumps(batch.checkpoint), "c": connector["id"]},
+            {
+                "cp": json.dumps(batch.checkpoint),
+                "c": connector["id"],
+                "v": connector["config_version"],
+            },
         )
         await connection.execute(
             text(
@@ -181,6 +184,8 @@ async def finish(
             text(
                 "update doctor.connectors set"
                 " status = case when status = 'disabled' then status else :status end,"
+                " paused_reason = case when :status = 'paused' and status <> 'disabled'"
+                " then 'auth' else paused_reason end,"
                 " next_run_at = now() + make_interval(secs => :seconds)"
                 " where id = cast(:c as uuid)"
             ),

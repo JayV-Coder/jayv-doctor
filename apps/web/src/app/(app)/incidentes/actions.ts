@@ -9,15 +9,20 @@ const MESSAGES: Record<string, string> = {
   invalid_assignee: "O responsável não é membro da Organização.",
   forbidden: "Seu papel não permite esta ação.",
   not_found: "Incidente não encontrado.",
-  validation_error: "Confira os campos: resolver exige a nota de resolução.",
 };
 const GENERIC = "Não foi possível concluir agora. Tente de novo.";
 
-async function send(path: string, init: RequestInit, refresh: string): Promise<string | null> {
+async function send(
+  path: string,
+  init: RequestInit,
+  refresh: string,
+  invalid: string,
+): Promise<string | null> {
   const response = await apiFetch(path, init).catch(() => null);
   if (!response) return "Sem conexão. Tente de novo.";
   if (!response.ok) {
     const { code } = (await response.json().catch(() => ({}))) as { code?: string };
+    if (code === "validation_error") return invalid;
     return MESSAGES[code ?? ""] ?? GENERIC;
   }
   revalidatePath(refresh);
@@ -54,6 +59,7 @@ export async function changeIncident(
     `/incidents/${encodeURIComponent(id)}`,
     { method: "PATCH", body: JSON.stringify(change) },
     `/incidentes/${id}`,
+    "Confira a mudança: resolver exige a nota de resolução.",
   );
 }
 
@@ -66,5 +72,6 @@ export async function addComment(
     `/incidents/${encodeURIComponent(id)}/comments`,
     { method: "POST", body: JSON.stringify({ body_md: body, mentions }) },
     `/incidentes/${id}`,
+    "O comentário precisa ter texto (até 4.000 caracteres).",
   );
 }

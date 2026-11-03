@@ -28,6 +28,16 @@ const ACTIONS: Record<string, string> = {
   reopened: "reaberto",
 };
 
+function historyText(entry: {
+  action: string;
+  from_value: string | null;
+  to_value: string | null;
+}) {
+  if (entry.action === "assignee") return "responsável alterado";
+  const label = entry.action === "severity" ? severityLabel : statusLabel;
+  return `${label(entry.from_value ?? "")} → ${label(entry.to_value ?? "")}`;
+}
+
 function when(iso: string): string {
   return `${formatDateTime(new Date(iso), "UTC")} UTC`;
 }
@@ -150,11 +160,7 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
             {incident.history.map((entry, index) => (
               <ListItem
                 key={index}
-                title={`${ACTIONS[entry.action] ?? entry.action}: ${
-                  entry.action === "assignee"
-                    ? "responsável alterado"
-                    : `${statusLabel(entry.from_value ?? "")} → ${statusLabel(entry.to_value ?? "")}`
-                }`}
+                title={`${ACTIONS[entry.action] ?? entry.action}: ${historyText(entry)}`}
                 detail={`${entry.actor_id ? (entry.actor_id === me?.id ? "você" : "membro") : "plataforma"} · ${when(entry.created_at)}${entry.note ? ` · ${entry.note}` : ""}`}
               />
             ))}

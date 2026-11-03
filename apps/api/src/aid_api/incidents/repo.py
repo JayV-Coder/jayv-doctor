@@ -1,13 +1,9 @@
 """Incidentes dentro de `tenant_tx`: leitura pelo RLS; mudanças e comentários pelas funções do
 banco, que conferem Analyst ou acima na tabela e validam a transição de status."""
 
-import base64
-import binascii
 import json
 import re
-from datetime import datetime
 from typing import Any
-from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
@@ -15,6 +11,7 @@ from sqlalchemy.engine import RowMapping
 from aid_api.core.auth import Claims
 from aid_api.core.db import translated_tx
 from aid_api.core.errors import ApiError
+from aid_api.core.pagination import decode_cursor, encode_cursor
 from aid_api.incidents.schemas import (
     Comment,
     HistoryEntry,
@@ -45,31 +42,17 @@ ERRORS = {
     "23514": lambda: ApiError(422, "validation_error", "Os dados enviados são inválidos."),
 }
 
-SUMMARY = (
+COLUMNS = (
     "n.id::text as id, n.number, n.title, n.category, n.severity, n.status, n.rule_code,"
     " n.rule_version, n.integration_id::text as integration_id, i.name as integration_name,"
     " i.environment, n.first_seen_at, n.last_seen_at, n.execution_count,"
     " n.assignee_id::text as assignee_id, n.resolved_at"
+)
+FROM = (
     " from doctor.incidents n"
     " join doctor.integrations i on i.tenant_id = n.tenant_id and i.id = n.integration_id"
 )
-
-
-def bad_cursor() -> ApiError:
-    return ApiError(422, "invalid_cursor", "Cursor de paginação inválido.")
-
-
-def encode_cursor(row: IncidentSummary) -> str:
-    raw = json.dumps([row.last_seen_at.isoformat(), row.id]).encode()
-    return base64.urlsafe_b64encode(raw).decode()
-
-
-def decode_cursor(cursor: str) -> tuple[datetime, str]:
-    try:
-        moment, target = json.loads(base64.urlsafe_b64decode(cursor.encode()))
-        return datetime.fromisoformat(moment), str(UUID(target))
-    except (ValueError, TypeError, binascii.Error) as exc:
-        raise bad_cursor() from exc
+SUMMARY = COLUMNS + FROM
 
 
 def filters(query: IncidentSearch, reference: str | None) -> tuple[list[str], dict[str, Any]]:
@@ -99,28 +82,29 @@ def filters(query: IncidentSearch, reference: str | None) -> tuple[list[str], di
         params["until"] = query.until
     if query.q:
         term = query.q.strip()
+        # Pelas Execuções do Incidente: execution_id, trace_id ou Referência (já em HMAC).
+        keys = [
+            "x.correlation_keys @> cast(:by_execution as jsonb)",
+            "x.correlation_keys @> cast(:by_trace as jsonb)",
+        ]
+        params["by_execution"] = json.dumps({"execution_id": [term]})
+        params["by_trace"] = json.dumps({"trace_id": [term]})
+        if reference:
+            keys.append("x.correlation_keys @> cast(:by_reference as jsonb)")
+            params["by_reference"] = json.dumps({"business_reference": [reference]})
+        matches = " or ".join(keys)
+        found = [
+            "exists (select 1 from doctor.incident_executions ie"  # noqa: S608
+            " join doctor.executions x"
+            "  on x.tenant_id = ie.tenant_id and x.id = ie.execution_id"
+            " where ie.tenant_id = n.tenant_id and ie.incident_id = n.id"
+            f" and ({matches}))"
+        ]
+        # "142" pode ser o INC-0142 ou um pedido curto: vale qualquer um dos dois.
         if (number := NUMBER.match(term)) is not None:
-            conditions.append("n.number = :number")
+            found.append("n.number = :number")
             params["number"] = int(number.group(1))
-        else:
-            # Pelas Execuções do Incidente: execution_id, trace_id ou Referência (já em HMAC).
-            keys = [
-                "x.correlation_keys @> cast(:by_execution as jsonb)",
-                "x.correlation_keys @> cast(:by_trace as jsonb)",
-            ]
-            params["by_execution"] = json.dumps({"execution_id": [term]})
-            params["by_trace"] = json.dumps({"trace_id": [term]})
-            if reference:
-                keys.append("x.correlation_keys @> cast(:by_reference as jsonb)")
-                params["by_reference"] = json.dumps({"business_reference": [reference]})
-            matches = " or ".join(keys)
-            conditions.append(
-                "exists (select 1 from doctor.incident_executions ie"  # noqa: S608
-                " join doctor.executions x"
-                "  on x.tenant_id = ie.tenant_id and x.id = ie.execution_id"
-                " where ie.tenant_id = n.tenant_id and ie.incident_id = n.id"
-                f" and ({matches}))"
-            )
+        conditions.append(f"({' or '.join(found)})")
     return conditions, params
 
 
@@ -159,22 +143,29 @@ class IncidentRepository:
                     )
                 ).mappings()
             ]
-            counts = {
-                row.status: row.total
-                for row in await connection.execute(
-                    text(
-                        "select n.status, count(*) as total from doctor.incidents n"  # noqa: S608
-                        " join doctor.integrations i"
-                        "  on i.tenant_id = n.tenant_id and i.id = n.integration_id"
-                        f"{where(common)} group by n.status"
-                    ),
-                    params,
-                )
-            }
+            # Os chips só usam as contagens da primeira página.
+            counts = (
+                {}
+                if query.cursor
+                else {
+                    row.status: row.total
+                    for row in await connection.execute(
+                        text(
+                            "select n.status, count(*) as total from doctor.incidents n"  # noqa: S608
+                            " join doctor.integrations i"
+                            "  on i.tenant_id = n.tenant_id and i.id = n.integration_id"
+                            f"{where(common)} group by n.status"
+                        ),
+                        params,
+                    )
+                }
+            )
         items = rows[: query.limit]
         more = len(rows) > query.limit
         return IncidentPage(
-            items=items, next_cursor=encode_cursor(items[-1]) if more else None, counts=counts
+            items=items,
+            next_cursor=encode_cursor(items[-1].last_seen_at, items[-1].id) if more else None,
+            counts=counts,
         )
 
     async def detail(self, claims: Claims, target: str) -> IncidentDetail:
@@ -183,7 +174,7 @@ class IncidentRepository:
                 (
                     await connection.execute(
                         text(
-                            f"select {SUMMARY.replace(' from ', ', n.resolution_note from ', 1)}"  # noqa: S608
+                            f"select {COLUMNS}, n.resolution_note{FROM}"
                             " where n.id = cast(:n as uuid)"
                         ),
                         {"n": target},

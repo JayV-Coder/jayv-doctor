@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(13);
+select plan(16);
 
 select tests.create_user('00000000-0000-4000-8000-0000000a0001', 'ana@acme.test');
 select tests.create_user('00000000-0000-4000-8000-0000000a0002', 'vera@acme.test');
@@ -25,7 +25,9 @@ select tests.incident('00000000-0000-4000-8000-0000000005a2', '00000000-0000-400
 select tests.incident('00000000-0000-4000-8000-0000000005b1', '00000000-0000-4000-8000-00000000be01', '00000000-0000-4000-8000-0000000001b1');
 
 select results_eq(
-  $$select number from doctor.incidents order by tenant_id, number$$,
+  $$select number from doctor.incidents
+    where tenant_id in ('00000000-0000-4000-8000-00000000ac01', '00000000-0000-4000-8000-00000000be01')
+    order by tenant_id, number$$,
   $$values (1), (2), (1)$$,
   'número sequencial por Organização'
 );
@@ -94,6 +96,26 @@ select throws_ok(
   'P0002', null, 'Incidente de outra Organização não existe para ela'
 );
 select tests.clear_authentication();
+
+insert into doctor.incident_comments (tenant_id, incident_id, body_md)
+values ('00000000-0000-4000-8000-00000000be01', '00000000-0000-4000-8000-0000000005b1', 'da varejo');
+insert into doctor.incident_history (tenant_id, incident_id, action)
+values ('00000000-0000-4000-8000-00000000be01', '00000000-0000-4000-8000-0000000005b1', 'status');
+select tests.authenticate_as('00000000-0000-4000-8000-0000000a0001', '00000000-0000-4000-8000-00000000ac01', 'analyst');
+select is(
+  (select count(*)::int from doctor.incident_comments where tenant_id <> '00000000-0000-4000-8000-00000000ac01'),
+  0, 'outra Organização não lê os comentários'
+);
+select is(
+  (select count(*)::int from doctor.incident_history where tenant_id <> '00000000-0000-4000-8000-00000000ac01'),
+  0, 'nem o histórico'
+);
+select tests.clear_authentication();
+select throws_ok(
+  $$insert into doctor.incident_comments (tenant_id, incident_id, body_md)
+    values ('00000000-0000-4000-8000-00000000ac01', '00000000-0000-4000-8000-0000000005b1', 'x')$$,
+  '23503', null, 'comentário nunca referencia Incidente de outra Organização'
+);
 
 select ok(
   exists (

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { FormMessage } from "@/components/auth-shell";
 import { Chip } from "@/components/ui/chip";
 import type { IncidentPage, IncidentSummary } from "@/lib/incidents/api";
@@ -30,6 +30,14 @@ export function IncidentList({
   const [searched, setSearched] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, startTransition] = useTransition();
+  // Sem busca nem "Carregar mais", a lista acompanha a página do servidor, que o Realtime
+  // atualiza; com elas, a pessoa está olhando outro recorte e ele não muda sozinho.
+  const browsing = useRef(false);
+  useEffect(() => {
+    if (browsing.current) return;
+    setItems(initial.items);
+    setCursor(initial.next_cursor);
+  }, [initial]);
   const now = new Date();
 
   function run(q: string | null, after: string | null) {
@@ -41,6 +49,7 @@ export function IncidentList({
       }
       setError(null);
       setSearched(q);
+      browsing.current = q !== null || after !== null;
       setItems((current) => (after ? [...current, ...page.items] : page.items));
       setCursor(page.next_cursor);
     });

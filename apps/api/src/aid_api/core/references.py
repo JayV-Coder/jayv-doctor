@@ -14,4 +14,4 @@ def reference_of(claims: Claims, term: str | None) -> str | None:
     master = os.environ.get("HMAC_MASTER_KEY")
     if not term or not master or claims.tenant_id is None:
         return None
-    return reference_hmac(derive_tenant_key(master.encode(), UUID(claims.tenant_id)), term.strip())
+    return reference_hmac(derive_tenant_key(master.encode(), UUID(claims.tenant_id)), term)

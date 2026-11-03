@@ -115,7 +115,7 @@ async def previous_links(connection: AsyncConnection, execution: Any) -> list[An
         await connection.execute(
             text(
                 "select ie.incident_id::text as incident_id, ie.execution_id::text as execution_id,"
-                " i.category from doctor.incident_executions ie join doctor.incidents i"
+                " i.category, i.status from doctor.incident_executions ie join doctor.incidents i"
                 " on i.tenant_id = ie.tenant_id and i.id = ie.incident_id"
                 " where ie.tenant_id = cast(:t as uuid) and ie.execution_id in ("
                 "  select id from doctor.executions where tenant_id = cast(:t as uuid)"
@@ -163,21 +163,25 @@ async def lock(connection: AsyncConnection, key: str) -> None:
 
 
 async def reopen(connection: AsyncConnection, execution: Any, found: RuleMatch) -> Any:
-    """Incidente resolvido há até 24 h com a mesma assinatura volta a `open` (ticket #20), com a
-    reabertura no histórico, em vez de nascer outro."""
+    """Incidente resolvido com a mesma assinatura volta a `open` (ticket #20), com a reabertura no
+    histórico, em vez de nascer outro, quando a Execução começou depois da resolução e até 24 h
+    depois dela. Execução de antes da correção (Importação antiga, fechamento atrasado) não
+    reabre nada: o tempo que conta é o dos Eventos, não o relógio."""
     resolved = (
         await connection.execute(
             text(
                 "select id::text, severity, execution_count from doctor.incidents"
                 " where tenant_id = cast(:t as uuid) and integration_id = cast(:i as uuid)"
                 " and category = :c and status = 'resolved'"
-                " and resolved_at >= now() - make_interval(secs => :reopen)"
+                " and resolved_at < :first"
+                " and :first <= resolved_at + make_interval(secs => :reopen)"
                 " order by resolved_at desc limit 1 for update"
             ),
             {
                 "t": execution.tenant_id,
                 "i": execution.integration_id,
                 "c": found.category,
+                "first": execution.first_event_at,
                 "reopen": REOPEN.total_seconds(),
             },
         )
@@ -305,6 +309,16 @@ async def evaluate_execution(engine: AsyncEngine, payload: Mapping[str, Any]) ->
         await save_matches(connection, execution.tenant_id, execution.id, matches)
         found = primary(matches)
         links = await previous_links(connection, execution)
+        # Já contada num Incidente resolvido ou descartado: a reavaliação não mexe nele (nem o
+        # reabre). Só ligações a Incidentes ativos são refeitas.
+        closed = [
+            link
+            for link in links
+            if link.execution_id == execution.id and link.status in ("resolved", "dismissed")
+        ]
+        if closed:
+            return str(closed[0].incident_id)
+        links = [link for link in links if link.status in ("open", "investigating")]
         categories = {link.category for link in links} | ({found.category} if found else set())
         for category in sorted(categories):
             await lock(connection, f"doctor.incident:{execution.integration_id}:{category}")

@@ -65,8 +65,10 @@ POSITIVE: dict[str, list[list[EventView]]] = {
     ],
     "INT-005": [
         [ev(error={"category": "BUSINESS_REJECTION"})],
-        [ev(error={"category": "UNKNOWN"}, attributes={"bapiret2": [{"type": "E", "id": "V1"}]})],
+        # Recusa só no RETURN da BAPI, sem erro de transporte.
+        [ev(error=None, attributes={"bapiret2": [{"type": "E", "id": "V1"}]}, severity="INFO")],
         [ev(error={"category": "UNKNOWN", "code": "VL 150"})],
+        [ev(error={"category": "UNKNOWN", "code": "VL150"})],
     ],
     "INT-006": [
         [ev(error={"category": "DUPLICATE"})],
@@ -108,6 +110,7 @@ NEGATIVE: dict[str, list[list[EventView]]] = {
         [ev(error={"category": "UNKNOWN", "http_status": 502})],
         [ev(error=None, attributes={"message": "timeout configurado em 30 s"}, severity="INFO")],
         [ev(error={"category": "AUTH", "http_status": 401})],
+        [ev(error={"category": "UNKNOWN", "message": "Lifetime outstanding balance invalid"})],
     ],
     "INT-004": [
         [ev(error={"category": "UNKNOWN", "http_status": 404})],
@@ -122,7 +125,7 @@ NEGATIVE: dict[str, list[list[EventView]]] = {
             )
         ],
         [ev(error={"category": "VALIDATION", "code": "SCHEMA"})],
-        [ev(error=None, attributes={"bapiret2": [{"type": "E"}]}, severity="INFO")],
+        [ev(error={"category": "UNKNOWN", "code": "VLAN_DOWN"})],
     ],
     "INT-006": [
         [ev(error={"category": "UNKNOWN", "http_status": 400})],
@@ -168,6 +171,17 @@ def test_catalogo_versionado_com_metadados() -> None:
         assert item.version == RULESET_VERSION
         assert item.description_pt
         assert item.severity_hint in ("low", "medium", "high", "critical")
+
+
+def test_int_007_aponta_so_o_envio_sem_confirmacao() -> None:
+    events = [
+        ev(1, attributes={"confirmation": "pending"}, severity="INFO"),
+        ev(2, attributes={"confirmation": "received"}, minutes=1, severity="INFO"),
+        ev(3, attributes={"confirmation": "pending"}, minutes=2, severity="INFO"),
+    ]
+    found = rule("INT-007").evaluate(execution(10), events)
+    assert found is not None
+    assert found.matched_event_ids == ("e-3",)
 
 
 def test_match_traz_versao_e_so_os_eventos_que_provam() -> None:

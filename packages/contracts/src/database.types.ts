@@ -245,14 +245,14 @@ isOneToOne: false
                   ]
                 },"incident_executions": {
                   Row: {
-                    "created_at": string,"execution_id": string,"incident_id": string,"tenant_id": string,"updated_at": string
+                    "created_at": string,"execution_id": string,"id": string,"incident_id": string,"tenant_id": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"execution_id": string,"incident_id": string,"tenant_id": string,"updated_at"?: string
+                    "created_at"?: string,"execution_id": string,"id"?: string,"incident_id": string,"tenant_id": string,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"execution_id"?: string,"incident_id"?: string,"tenant_id"?: string,"updated_at"?: string
+                    "created_at"?: string,"execution_id"?: string,"id"?: string,"incident_id"?: string,"tenant_id"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {

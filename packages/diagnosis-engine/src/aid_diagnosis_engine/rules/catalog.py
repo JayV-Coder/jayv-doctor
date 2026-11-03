@@ -17,10 +17,11 @@ RULESET_VERSION = "2026.10.1"
 # Prazo para a confirmação do destino chegar (INT-007).
 CONFIRMATION_DEADLINE = timedelta(minutes=5)
 
-TIMEOUT_TEXT = re.compile(r"time[d\s-]*out", re.IGNORECASE)
+TIMEOUT_TEXT = re.compile(r"\btime[d\s-]*out\b", re.IGNORECASE)
 DUPLICATE_TEXT = re.compile(r"duplicat|already exists|j[áa] existe", re.IGNORECASE)
-# Classes de mensagem do SAP SD/LE que indicam recusa de negócio (V1 vendas, VL remessas).
-SAP_REJECTION = re.compile(r"^(V1|VL)\b", re.IGNORECASE)
+# Classes de mensagem do SAP SD/LE que indicam recusa de negócio (V1 vendas, VL remessas), com ou
+# sem espaço antes do número ("VL 150", "VL150").
+SAP_REJECTION = re.compile(r"^(V1|VL)(?![A-Z])", re.IGNORECASE)
 
 
 def failed(event: EventView) -> bool:
@@ -58,10 +59,10 @@ def bapi_rejected(attributes: Mapping[str, Any]) -> bool:
 
 
 def business_rejection(event: EventView) -> bool:
-    return failed(event) and (
-        event.category == "BUSINESS_REJECTION"
-        or bapi_rejected(event.attributes)
-        or bool(SAP_REJECTION.match(event.code))
+    # A BAPI responde sem erro de transporte e a recusa vem só no RETURN: o BAPIRET2 basta.
+    return bapi_rejected(event.attributes) or (
+        failed(event)
+        and (event.category == "BUSINESS_REJECTION" or bool(SAP_REJECTION.match(event.code)))
     )
 
 
@@ -79,16 +80,16 @@ def confirmation(event: EventView) -> str | None:
 
 
 def unconfirmed(execution: ExecutionView, events: Sequence[EventView]) -> tuple[str, ...]:
-    """Envios (`confirmation = pending`) sem confirmação posterior, já fora do prazo."""
-    sent = [event for event in events if confirmation(event) == "pending"]
-    if not sent:
-        return ()
-    last = sent[-1]
-    confirmed = any(
-        confirmation(event) in ("received", "confirmed") and event.timestamp >= last.timestamp
+    """Envios (`confirmation = pending`) depois da última confirmação, já fora do prazo. Só eles
+    são a Evidência: um envio anterior, já confirmado, não prova nada."""
+    confirmed = [e.timestamp for e in events if confirmation(e) in ("received", "confirmed")]
+    since = max(confirmed) if confirmed else None
+    sent = [
+        event
         for event in events
-    )
-    if confirmed or execution.evaluated_at - last.timestamp < CONFIRMATION_DEADLINE:
+        if confirmation(event) == "pending" and (since is None or event.timestamp > since)
+    ]
+    if not sent or execution.evaluated_at - sent[-1].timestamp < CONFIRMATION_DEADLINE:
         return ()
     return tuple(event.id for event in sent)
 

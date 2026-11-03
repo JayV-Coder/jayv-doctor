@@ -44,6 +44,8 @@ create table doctor.rule_matches (
 );
 comment on table doctor.rule_matches is 'Regra que disparou numa Execução, com a versão e os Eventos que provam o sintoma.';
 
+-- Exceção à convenção (sem tenant_id na frente): serve à FK vinda do catálogo global, que confere
+-- se alguma Organização usa a versão antes de deixar apagá-la.
 create index rule_matches_rule_idx on doctor.rule_matches (rule_code, rule_version);
 
 create trigger rule_matches_set_updated_at
@@ -86,12 +88,14 @@ before update on doctor.incidents
 for each row execute function doctor.set_updated_at();
 
 create table doctor.incident_executions (
+  id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references doctor.tenants (id) on delete cascade,
   incident_id uuid not null,
   execution_id uuid not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  primary key (tenant_id, incident_id, execution_id),
+  unique (tenant_id, id),
+  unique (tenant_id, incident_id, execution_id),
   -- Uma Execução entra em um Incidente só (o do match mais severo).
   unique (tenant_id, execution_id),
   foreign key (tenant_id, incident_id) references doctor.incidents (tenant_id, id) on delete cascade,

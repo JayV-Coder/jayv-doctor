@@ -269,3 +269,112 @@ async def test_de_ponta_a_ponta_eventos_execucao_incidente(
     await evaluate_execution(engine, queued["payload"])
     (incident,) = await incidents(engine, tenant)
     assert (incident["category"], incident["execution_count"]) == ("TIMEOUT", 1)
+
+
+async def add_event(
+    engine: AsyncEngine, ids: dict[str, str], execution: str, at: datetime, **fields: Any
+) -> None:
+    await run(
+        engine,
+        "insert into doctor.events (id, tenant_id, integration_id, timestamp, schema_version,"
+        " source, operation, severity, dedup_key, error, attributes, execution_ref)"
+        ' values (:id, :t, :i, :at, \'1.0\', \'{"provider": "sap", "service": "PI"}\', \'BAPI\','
+        " :sev, :d, cast(:e as jsonb), cast(:a as jsonb), :x)",
+        id=str(uuid4()),
+        t=ids["tenant"],
+        i=ids["integration"],
+        at=at,
+        sev=fields.get("severity", "INFO"),
+        d=str(uuid4()),
+        e=json.dumps(fields["error"]) if "error" in fields else None,
+        a=json.dumps(fields.get("attributes", {})),
+        x=execution,
+    )
+    await run(
+        engine,
+        "update doctor.executions set last_event_at = greatest(last_event_at, :at),"
+        " closed_at = now() where id = :x",
+        at=at,
+        x=execution,
+    )
+
+
+@pytest.mark.asyncio
+async def test_reavaliacao_move_a_execucao_para_o_incidente_certo(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    execution = await closed_execution(engine, tenant, T0, None)
+    await run(
+        engine,
+        'update doctor.events set attributes = \'{"confirmation": "pending"}\''
+        " where execution_ref = :x",
+        x=execution,
+    )
+    first = await evaluate_execution(engine, {"execution_id": execution})
+    assert first is not None
+    # A confirmação chega tarde, junto com um 401: reabre, fecha e é avaliada de novo.
+    await add_event(
+        engine,
+        tenant,
+        execution,
+        T0 + timedelta(minutes=7),
+        severity="ERROR",
+        error={"category": "AUTH", "http_status": 401},
+        attributes={"confirmation": "received"},
+    )
+    second = await evaluate_execution(engine, {"execution_id": execution})
+    found = {i["category"]: i["execution_count"] for i in await incidents(engine, tenant)}
+    assert found == {"PENDING_CONFIRMATION": 0, "AUTH": 1}
+    assert second != first
+    codes = await rows(
+        engine,
+        "select rule_code from doctor.rule_matches where execution_id = :x order by rule_code",
+        x=execution,
+    )
+    assert [c["rule_code"] for c in codes] == ["INT-001"]
+
+
+@pytest.mark.asyncio
+async def test_execucao_aberta_ou_fundida_nao_e_avaliada(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    execution = await closed_execution(engine, tenant, T0, TIMEOUT_504)
+    await run(engine, "update doctor.executions set closed_at = null where id = :x", x=execution)
+    assert await evaluate_execution(engine, {"execution_id": execution}) is None
+    assert await incidents(engine, tenant) == []
+
+
+@pytest.mark.asyncio
+async def test_fusao_nao_conta_a_mesma_execucao_duas_vezes(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    absorbed = await closed_execution(engine, tenant, T0, TIMEOUT_504)
+    incident = await evaluate_execution(engine, {"execution_id": absorbed})
+    survivor = await closed_execution(engine, tenant, T0 - timedelta(seconds=5), None)
+    await run(
+        engine,
+        "update doctor.events set execution_ref = :s where execution_ref = :a",
+        s=survivor,
+        a=absorbed,
+    )
+    await run(
+        engine,
+        "update doctor.executions set merged_into = :s, event_count = 0 where id = :a",
+        s=survivor,
+        a=absorbed,
+    )
+    await run(
+        engine,
+        "update doctor.executions set last_event_at = :at, status = 'failed' where id = :s",
+        s=survivor,
+        at=T0,
+    )
+    assert await evaluate_execution(engine, {"execution_id": survivor}) == incident
+    (only,) = await incidents(engine, tenant)
+    assert only["execution_count"] == 1
+    linked = await rows(
+        engine,
+        "select execution_id::text as x from doctor.incident_executions where tenant_id = :t",
+        t=tenant["tenant"],
+    )
+    assert [link["x"] for link in linked] == [survivor]

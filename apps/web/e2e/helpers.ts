@@ -117,13 +117,14 @@ export async function fillOrganization(page: Page, name: string): Promise<void> 
 }
 
 // Owner sem fator é levado ao cadastro assim que o JWT traz o Papel.
-export async function enrollFactor(page: Page): Promise<void> {
+export async function enrollFactor(page: Page): Promise<string> {
   await expect(page).toHaveURL(/\/mfa\/cadastro/);
   await page.getByRole("button", { name: "Gerar QR code" }).click();
   const secret = await page.locator("code.secret").innerText();
   await fillOtp(page, totp(secret));
   await page.getByRole("button", { name: "Confirmar" }).click();
   await expect(page).toHaveURL(/\/seguranca/);
+  return secret;
 }
 
 export async function ownerWithOrganization(page: Page, name: string): Promise<string> {

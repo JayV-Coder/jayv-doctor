@@ -54,6 +54,10 @@ class Evidence(BaseModel):
     event_timestamp: datetime | None
     label: str
     finding: str
+    # Para o link da tela: o Evento a abrir (o próprio, ou o primeiro que a Regra apontou) e a
+    # Execução da Timeline. Nulos para a Base de conhecimento.
+    event_id: str | None
+    execution_id: str | None
 
 
 class Recommendation(BaseModel):

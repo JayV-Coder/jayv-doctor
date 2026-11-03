@@ -38,7 +38,7 @@ test("lista com contagem, muda status, comenta e resolve com nota", async ({ pag
 
   await card.click();
   await expect(page.getByRole("heading", { level: 2, name: /INC-0001 · Timeout/ })).toBeVisible();
-  await expect(page.getByRole("list", { name: "Evidências" })).toContainText("INT-003");
+  await expect(page.getByRole("list", { name: "Regras que dispararam" })).toContainText("INT-003");
   await expect(page.getByRole("list", { name: "Execuções vinculadas" })).toContainText("exec-123");
 
   await page.getByLabel("Mudar status").selectOption("investigating");
@@ -62,6 +62,6 @@ test("lista com contagem, muda status, comenta e resolve com nota", async ({ pag
   await expectNoHorizontalScroll(page);
 
   // Do Incidente ao Evento original: Evidência → Evento.
-  await page.getByRole("list", { name: "Evidências" }).getByRole("link").first().click();
+  await page.getByRole("list", { name: "Regras que dispararam" }).getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Evento original" })).toBeVisible();
 });

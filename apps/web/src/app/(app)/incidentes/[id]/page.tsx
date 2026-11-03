@@ -1,5 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import {
+  DiagnosisCard,
+  DiagnosisEvidence,
+  DiagnosisHypotheses,
+  DiagnosisRecommendations,
+} from "@/components/diagnosis/diagnosis-card";
+import { PollWhileActive } from "@/components/diagnosis/poll-while-active";
 import { LiveRefresh } from "@/components/live-refresh";
 import { Chip } from "@/components/ui/chip";
 import { ErrorState } from "@/components/ui/error-state";
@@ -11,12 +18,15 @@ import {
   executionTitle,
   statusLabel as executionStatus,
 } from "@/lib/executions/labels";
+import { getDiagnosis, listDiagnoses } from "@/lib/diagnoses/api";
+import { active, changes, statusText } from "@/lib/diagnoses/labels";
 import { formatDateTime } from "@/lib/format";
 import { getIncident, listComments } from "@/lib/incidents/api";
 import { incidentCode, severityLabel, severityTone, statusLabel } from "@/lib/incidents/labels";
 import { environmentLabel } from "@/lib/integrations/labels";
 import { CommentForm } from "./comment-form";
 import { IncidentControls } from "./incident-controls";
+import { NewDiagnosis } from "./new-diagnosis";
 
 export const metadata = { title: "Incidente · Integration AI Doctor" };
 
@@ -42,11 +52,22 @@ function when(iso: string): string {
   return `${formatDateTime(new Date(iso), "UTC")} UTC`;
 }
 
-// Base da Tela 6: o Diagnóstico com IA entra no #25; aqui ficam o fluxo, as Evidências das
-// Regras, as Execuções e a conversa da equipe.
-export default async function IncidentPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const [incident, comments, me] = await Promise.all([getIncident(id), listComments(id), getMe()]);
+// Tela 6: Diagnóstico (versão escolhida em ?versao=, a mais nova por padrão) e revisão à
+// esquerda; Evidências, Execuções, histórico e conversa à direita no desktop (≥ 1280 px).
+export default async function IncidentPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ versao?: string | string[] }>;
+}) {
+  const [{ id }, { versao }] = await Promise.all([params, searchParams]);
+  const [incident, comments, me, versions] = await Promise.all([
+    getIncident(id),
+    listComments(id),
+    getMe(),
+    listDiagnoses(id),
+  ]);
   if (incident === "not_found") notFound();
   if (incident === null) {
     return (
@@ -56,6 +77,13 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
     );
   }
   const operator = OPERATORS.includes(me?.active_role ?? "");
+  const chosen = versions?.find((item) => String(item.version) === versao) ?? versions?.[0] ?? null;
+  const previous = chosen ? versions?.find((item) => item.version === chosen.version - 1) : null;
+  const [diagnosis, before] = await Promise.all([
+    chosen ? getDiagnosis(chosen.id) : null,
+    previous ? getDiagnosis(previous.id) : null,
+  ]);
+  const differences = diagnosis && before ? changes(before, diagnosis) : [];
   const code = incidentCode(incident.number);
   const assignee =
     incident.assignee_id === null
@@ -67,6 +95,8 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
   return (
     <>
       <LiveRefresh table="incidents" id={incident.id} />
+      {diagnosis && <LiveRefresh table="diagnoses" id={diagnosis.id} />}
+      <PollWhileActive active={diagnosis ? active(diagnosis.status) : false} />
       <Link className="small" href="/incidentes">
         ‹ Incidentes
       </Link>
@@ -99,6 +129,7 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
           <b>Resolução:</b> {incident.resolution_note}
         </p>
       )}
+      {operator && <NewDiagnosis incidentId={incident.id} />}
       {operator && (
         <IncidentControls
           id={incident.id}
@@ -109,82 +140,123 @@ export default async function IncidentPage({ params }: { params: Promise<{ id: s
         />
       )}
 
-      <section className="win" aria-label="Diagnóstico">
-        <div className="win-head">
-          <span>diagnóstico</span>
+      <div className="incident-split">
+        <div>
+          {versions && versions.length > 1 && (
+            <nav className="versions" aria-label="Versões do Diagnóstico">
+              {versions.map((item) => (
+                <Link
+                  key={item.id}
+                  className="chip-link"
+                  aria-pressed={item.id === chosen?.id}
+                  href={`/incidentes/${incident.id}?versao=${String(item.version)}`}
+                >
+                  v{item.version} · {statusText(item.status)}
+                </Link>
+              ))}
+            </nav>
+          )}
+          {diagnosis ? (
+            <DiagnosisCard diagnosis={diagnosis} />
+          ) : (
+            <section className="win" aria-label="Diagnóstico">
+              <div className="win-head">
+                <span>diagnóstico</span>
+              </div>
+              <div className="win-body">
+                <p className="small">
+                  {versions === null
+                    ? "Não foi possível carregar o Diagnóstico."
+                    : "Ainda não há Diagnóstico. A classificação abaixo é das Regras determinísticas: aponta o sintoma, sem atribuir responsabilidade."}
+                </p>
+              </div>
+            </section>
+          )}
+          {before && diagnosis && !active(diagnosis.status) && (
+            <section className="card" aria-label="Diferenças entre versões">
+              <span className="label">Diferenças para a v{before.version}</span>
+              {differences.length === 0 ? (
+                <p className="small">Mesmo resultado da versão anterior.</p>
+              ) : (
+                <ul className="small">
+                  {differences.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+          {diagnosis && <DiagnosisHypotheses diagnosis={diagnosis} />}
+          {diagnosis && <DiagnosisRecommendations diagnosis={diagnosis} />}
         </div>
-        <div className="win-body">
-          <p className="small">
-            Ainda não há Diagnóstico. A classificação abaixo é das Regras determinísticas: aponta o
-            sintoma, sem atribuir responsabilidade.
-          </p>
-        </div>
-      </section>
-
-      <h2 className="label">Evidências · {incident.evidence.length}</h2>
-      <ul className="list" aria-label="Evidências">
-        {incident.evidence.map((item) => (
-          <ListItem
-            key={`${item.execution_id}-${item.rule_code}-${item.rule_version}`}
-            href={
-              item.matched_event_ids[0]
-                ? `/eventos/${item.matched_event_ids[0]}`
-                : `/execucoes/${item.execution_id}`
-            }
-            title={
-              <>
-                <Chip tone="info">{item.rule_code}</Chip> {item.description}
-              </>
-            }
-            detail={`${String(item.matched_event_ids.length)} ${item.matched_event_ids.length === 1 ? "Evento" : "Eventos"} · versão ${item.rule_version}`}
-          />
-        ))}
-      </ul>
-
-      <h2 className="label">Execuções vinculadas</h2>
-      <ul className="list" aria-label="Execuções vinculadas">
-        {incident.executions.map((execution) => (
-          <ListItem
-            key={execution.id}
-            href={`/execucoes/${execution.id}`}
-            title={executionTitle(execution.id, execution.correlation_keys)}
-            detail={`${executionStatus(execution.status)} · ${durationText(execution.duration_ms)} · ${when(execution.first_event_at)}`}
-          />
-        ))}
-      </ul>
-
-      {incident.history.length > 0 && (
-        <>
-          <h2 className="label">Histórico</h2>
-          <ul className="list" aria-label="Histórico">
-            {incident.history.map((entry, index) => (
+        <div>
+          {diagnosis && <DiagnosisEvidence diagnosis={diagnosis} />}
+          <h2 className="label">Regras que dispararam · {incident.evidence.length}</h2>
+          <ul className="list" aria-label="Regras que dispararam">
+            {incident.evidence.map((item) => (
               <ListItem
-                key={index}
-                title={`${ACTIONS[entry.action] ?? entry.action}: ${historyText(entry)}`}
-                detail={`${entry.actor_id ? (entry.actor_id === me?.id ? "você" : "membro") : "plataforma"} · ${when(entry.created_at)}${entry.note ? ` · ${entry.note}` : ""}`}
+                key={`${item.execution_id}-${item.rule_code}-${item.rule_version}`}
+                href={
+                  item.matched_event_ids[0]
+                    ? `/eventos/${item.matched_event_ids[0]}`
+                    : `/execucoes/${item.execution_id}`
+                }
+                title={
+                  <>
+                    <Chip tone="info">{item.rule_code}</Chip> {item.description}
+                  </>
+                }
+                detail={`${String(item.matched_event_ids.length)} ${item.matched_event_ids.length === 1 ? "Evento" : "Eventos"} · versão ${item.rule_version}`}
               />
             ))}
           </ul>
-        </>
-      )}
 
-      <h2 className="label">Comentários</h2>
-      {comments === null && (
-        <p className="muted small">Não foi possível carregar os comentários.</p>
-      )}
-      {comments?.length === 0 && <p className="muted small">Nenhum comentário ainda.</p>}
-      {comments && comments.length > 0 && (
-        <ul className="list" aria-label="Comentários">
-          {comments.map((comment) => (
-            <ListItem
-              key={comment.id}
-              title={comment.body_md}
-              detail={`${comment.author_id === me?.id ? "você" : "membro"} · ${when(comment.created_at)}`}
-            />
-          ))}
-        </ul>
-      )}
-      {operator && <CommentForm id={incident.id} />}
+          <h2 className="label">Execuções vinculadas</h2>
+          <ul className="list" aria-label="Execuções vinculadas">
+            {incident.executions.map((execution) => (
+              <ListItem
+                key={execution.id}
+                href={`/execucoes/${execution.id}`}
+                title={executionTitle(execution.id, execution.correlation_keys)}
+                detail={`${executionStatus(execution.status)} · ${durationText(execution.duration_ms)} · ${when(execution.first_event_at)}`}
+              />
+            ))}
+          </ul>
+
+          {incident.history.length > 0 && (
+            <>
+              <h2 className="label">Histórico</h2>
+              <ul className="list" aria-label="Histórico">
+                {incident.history.map((entry, index) => (
+                  <ListItem
+                    key={index}
+                    title={`${ACTIONS[entry.action] ?? entry.action}: ${historyText(entry)}`}
+                    detail={`${entry.actor_id ? (entry.actor_id === me?.id ? "você" : "membro") : "plataforma"} · ${when(entry.created_at)}${entry.note ? ` · ${entry.note}` : ""}`}
+                  />
+                ))}
+              </ul>
+            </>
+          )}
+
+          <h2 className="label">Comentários</h2>
+          {comments === null && (
+            <p className="muted small">Não foi possível carregar os comentários.</p>
+          )}
+          {comments?.length === 0 && <p className="muted small">Nenhum comentário ainda.</p>}
+          {comments && comments.length > 0 && (
+            <ul className="list" aria-label="Comentários">
+              {comments.map((comment) => (
+                <ListItem
+                  key={comment.id}
+                  title={comment.body_md}
+                  detail={`${comment.author_id === me?.id ? "você" : "membro"} · ${when(comment.created_at)}`}
+                />
+              ))}
+            </ul>
+          )}
+          {operator && <CommentForm id={incident.id} />}
+        </div>
+      </div>
     </>
   );
 }

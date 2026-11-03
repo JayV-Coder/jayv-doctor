@@ -99,10 +99,17 @@ class DiagnosisRepository:
             )
             evidence = await connection.execute(
                 text(
-                    "select rank, kind, coalesce(event_id, raw_log_object_id, chunk_id,"
-                    " global_chunk_id, rule_match_id)::text as ref_id, event_timestamp, label,"
-                    " finding from doctor.diagnosis_evidence"
-                    " where diagnosis_id = cast(:d as uuid) order by rank"
+                    "select e.rank, e.kind, coalesce(e.event_id, e.raw_log_object_id, e.chunk_id,"
+                    " e.global_chunk_id, e.rule_match_id)::text as ref_id, e.event_timestamp,"
+                    " e.label, e.finding,"
+                    " coalesce(e.event_id, m.matched_event_ids[1])::text as event_id,"
+                    " coalesce(ev.execution_ref, m.execution_id)::text as execution_id"
+                    " from doctor.diagnosis_evidence e"
+                    " left join doctor.rule_matches m"
+                    " on m.tenant_id = e.tenant_id and m.id = e.rule_match_id"
+                    " left join doctor.events ev on ev.tenant_id = e.tenant_id"
+                    " and ev.id = e.event_id and ev.timestamp = e.event_timestamp"
+                    " where e.diagnosis_id = cast(:d as uuid) order by e.rank"
                 ),
                 params,
             )

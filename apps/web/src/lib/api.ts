@@ -28,8 +28,10 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   return fetch(`${API_URL}/api/v1${path}`, {
     ...init,
     cache: "no-store",
+    // Headers de quem chama (ex.: Idempotency-Key) entram; a autorização é sempre a da sessão.
     headers: {
       "content-type": "application/json",
+      ...Object.fromEntries(new Headers(init.headers)),
       authorization: `Bearer ${data.session?.access_token ?? ""}`,
     },
   });

@@ -75,3 +75,18 @@ export async function addComment(
     "O comentário precisa ter texto (até 4.000 caracteres).",
   );
 }
+
+// A chave nasce no navegador ao abrir o pedido: clique duplo ou repetição da rede devolvem o
+// mesmo Diagnóstico.
+export async function requestDiagnosis(
+  id: string,
+  body: { mode: "hybrid" | "rules_only"; include_knowledge_base: boolean },
+  key: string,
+): Promise<string | null> {
+  return send(
+    `/incidents/${encodeURIComponent(id)}/diagnoses`,
+    { method: "POST", body: JSON.stringify(body), headers: { "Idempotency-Key": key } },
+    `/incidentes/${id}`,
+    "Confira o modo do Diagnóstico.",
+  );
+}

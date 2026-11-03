@@ -6,6 +6,7 @@ requires-python = "==3.12.*"
 members = [
     "aid-api",
     "aid-contracts",
+    "aid-ingestion",
     "aid-security",
     "aid-worker",
     "jayv-doctor",
@@ -60,6 +61,27 @@ requires-dist = [
 ]
 
 [[package]]
+name = "aid-ingestion"
+version = "0.0.0"
+source = { editable = "workers/ingestion" }
+dependencies = [
+    { name = "aid-contracts" },
+    { name = "aid-security" },
+    { name = "asyncpg" },
+    { name = "httpx" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aid-contracts", editable = "packages/contracts" },
+    { name = "aid-security", editable = "packages/security" },
+    { name = "asyncpg", specifier = ">=0.30" },
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+]
+
+[[package]]
 name = "aid-security"
 version = "0.1.0"
 source = { editable = "packages/security" }
@@ -69,12 +91,14 @@ name = "aid-worker"
 version = "0.0.0"
 source = { editable = "workers/runtime" }
 dependencies = [
+    { name = "aid-ingestion" },
     { name = "fastapi" },
     { name = "uvicorn" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "aid-ingestion", editable = "workers/ingestion" },
     { name = "fastapi", specifier = ">=0.162" },
     { name = "uvicorn", specifier = ">=0.54" },
 ]

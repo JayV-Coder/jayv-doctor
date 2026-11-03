@@ -5,9 +5,12 @@ movê-la para a DLQ. Por isso worker sem handler responde 501 em vez de confirma
 descartaria a mensagem. A validação do OIDC é do Cloud Run, com o `run.invoker` do Terraform.
 """
 
+import base64
+import json
 import logging
 import os
 from collections.abc import Awaitable, Callable, Mapping
+from typing import Any
 
 from fastapi import FastAPI, Response, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -30,8 +33,27 @@ class PushEnvelope(BaseModel):
 
 Handler = Callable[[PubSubMessage], Awaitable[None]]
 
-# Chave: nome do tópico. Um worker pode receber mais de um, com formatos diferentes.
-HANDLERS: dict[str, Handler] = {}
+PayloadHandler = Callable[[Mapping[str, Any]], Awaitable[None]]
+
+
+def json_handler(handler: PayloadHandler) -> Handler:
+    """O `data` do Pub/Sub é o JSON da outbox em base64. Inválido sobe como erro: a mensagem é
+    reentregue e, depois de 5 tentativas, vai para a DLQ, onde fica visível."""
+
+    async def handle(message: PubSubMessage) -> None:
+        await handler(json.loads(base64.b64decode(message.data)))
+
+    return handle
+
+
+def handlers_for(worker: str) -> dict[str, Handler]:
+    """Chave: nome do tópico. Um worker pode receber mais de um, com formatos diferentes. Cada
+    worker importa só o próprio pacote: a mesma imagem serve a todos (WORKER_NAME)."""
+    if worker == "ingestion":
+        from aid_ingestion.handlers import TOPICS
+
+        return {topic: json_handler(handler) for topic, handler in TOPICS.items()}
+    return {}
 
 
 def topic_of(subscription: str) -> str:
@@ -61,4 +83,5 @@ def create_app(worker: str, handlers: Mapping[str, Handler]) -> FastAPI:
     return app
 
 
-app = create_app(os.environ.get("WORKER_NAME", ""), HANDLERS)
+WORKER = os.environ.get("WORKER_NAME", "")
+app = create_app(WORKER, handlers_for(WORKER))

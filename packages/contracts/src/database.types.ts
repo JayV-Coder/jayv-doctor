@@ -5,7 +5,67 @@ export type Database = {
 
   "doctor": {
           Tables: {
-            "idempotency_keys": {
+            "events": {
+                  Row: {
+                    "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"dedup_key": string,"error"?: Json | null,"execution_id"?: string | null,"id": string,"ingested_at"?: string,"integration_id": string,"operation": string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id"?: string | null
+                  }
+                  Update: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "events_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "events_tenant_id_integration_id_fkey"
+      columns: ["tenant_id","integration_id"]
+isOneToOne: false
+      referencedRelation: "integrations"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "events_tenant_id_raw_log_object_id_fkey"
+      columns: ["tenant_id","raw_log_object_id"]
+isOneToOne: false
+      referencedRelation: "raw_log_objects"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"events_2026_10": {
+                  Row: {
+                    "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"dedup_key": string,"error"?: Json | null,"execution_id"?: string | null,"id": string,"ingested_at"?: string,"integration_id": string,"operation": string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id"?: string | null
+                  }
+                  Update: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"events_2026_11": {
+                  Row: {
+                    "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"dedup_key": string,"error"?: Json | null,"execution_id"?: string | null,"id": string,"ingested_at"?: string,"integration_id": string,"operation": string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id"?: string | null
+                  }
+                  Update: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"idempotency_keys": {
                   Row: {
                     "created_at": string,"id": string,"key": string,"request_hash": string,"response_body": string | null,"response_status": number | null,"tenant_id": string,"user_id": string
                   }
@@ -23,6 +83,32 @@ export type Database = {
 isOneToOne: false
       referencedRelation: "tenants"
       referencedColumns: ["id"]
+    }
+                  ]
+                },"import_rejections": {
+                  Row: {
+                    "created_at": string,"id": string,"import_id": string,"line_number": number,"reason": string,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"import_id": string,"line_number": number,"reason": string,"tenant_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"import_id"?: string,"line_number"?: number,"reason"?: string,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "import_rejections_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "import_rejections_tenant_id_import_id_fkey"
+      columns: ["tenant_id","import_id"]
+isOneToOne: false
+      referencedRelation: "imports"
+      referencedColumns: ["tenant_id","id"]
     }
                   ]
                 },"imports": {
@@ -239,6 +325,9 @@ isOneToOne: false
                            },
 "custom_access_token_hook":
 { Args: { "event": Json }; Returns: Json
+                           },
+"ensure_event_partition":
+{ Args: { "day": string }; Returns: string
                            },
 "finish_import":
 { Args: { "reason": string,"stored_size": number,"target": string }; Returns: undefined

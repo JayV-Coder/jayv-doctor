@@ -150,6 +150,15 @@ run "api_chama_o_storage_do_mesmo_projeto_com_a_chave_publicavel" {
   }
 }
 
+run "so_o_worker_de_ingestao_le_a_chave_de_servico" {
+  command = plan
+
+  assert {
+    condition     = contains(keys(module.secrets.accessors), "supabase-service-role-key/ingestion") && !contains(keys(module.secrets.accessors), "supabase-service-role-key/api") && !contains(keys(module.secrets.accessors), "supabase-service-role-key/correlation")
+    error_message = "A chave de serviço do Supabase é só do worker de ingestão."
+  }
+}
+
 run "chave_secreta_do_supabase_e_recusada" {
   command = plan
 

@@ -11,3 +11,4 @@ supabase/.temp/
 packages/contracts/src/database.types.ts
 # Fixtures de importação: arquivos de propósito inválidos ou em Latin-1.
 apps/api/tests/fixtures/
+workers/ingestion/tests/fixtures/

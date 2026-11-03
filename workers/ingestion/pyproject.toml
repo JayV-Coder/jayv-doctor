@@ -1,0 +1,20 @@
+[project]
+name = "aid-ingestion"
+version = "0.0.0"
+description = "Worker de ingestão: Log bruto → Sanitização → Contrato de evento v1 → events"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "aid-contracts",
+    "aid-security",
+    "asyncpg>=0.30",
+    "httpx>=0.28",
+    "sqlalchemy[asyncio]>=2.0",
+]
+
+[tool.uv.sources]
+aid-contracts = { workspace = true }
+aid-security = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.9.5,<0.10"]
+build-backend = "uv_build"

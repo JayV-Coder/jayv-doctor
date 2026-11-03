@@ -52,3 +52,34 @@ O conector `fake` aceita falhas injetadas pela config (`fail: {page, kind, times
 ## Credenciais
 
 Ficam no Supabase Vault (ADR-0006), com o nome `doctor/connector/<id>`, porque o Vault é do projeto inteiro. A tabela guarda só o `secret_id`, que o cliente nem consegue ler. A leitura é só pela `service_role`, sem papel novo no banco compartilhado (ADR-0009), e cada acesso chama `doctor.record_audit`, que o ticket #28 vai implementar.
+
+## Google Cloud Logging (`gcp`)
+
+Config:
+
+```json
+{
+  "project_id": "acme-integracoes",
+  "auth": "impersonation",
+  "service_account": "doctor-reader@acme-integracoes.iam.gserviceaccount.com",
+  "services": ["orders-sync"],
+  "min_severity": "WARNING",
+  "filter": "jsonPayload.app=\"orders\"",
+  "backfill_hours": 24,
+  "requests_per_minute": 60
+}
+```
+
+- **Acesso, preferencialmente sem chave (`impersonation`):** o cliente cria uma Service Account com `roles/logging.viewer` no projeto e concede à conta do `worker-connectors` da plataforma `roles/iam.serviceAccountTokenCreator` nela. A credencial do Conector fica sem uso; o assistente do ticket #16 manda `-`.
+- **Com chave (`key`):** a credencial é o JSON da Service Account, guardado no Vault.
+- **Coleta:** `entries.list` em ordem de `timestamp`, numa janela que vai do Checkpoint menos 30 s até agora menos 30 s. Os 30 s cobrem as entradas que chegam ao Logging atrasadas. O que repetir na sobreposição tem o mesmo `event_id` (derivado de `insertId` e `timestamp`) e a ingestão descarta. O primeiro backfill é de 24 h ou 7 dias.
+- **Cota:** pausa entre páginas para não passar de `requests_per_minute` (60 por padrão, a cota de leitura do Logging). `RESOURCE_EXHAUSTED` vira 429 e o runtime espera 60 s.
+- **Mapeamento:**
+  - `trace` → `trace_id`;
+  - `labels.execution_id` ou `jsonPayload.execution_id` → `execution_id`;
+  - `httpRequest.status` → `error.http_status`;
+  - `resource.labels.service_name` → `source.service`;
+  - severidades do Logging para as cinco do contrato;
+  - nanossegundos truncados em microssegundos.
+- **Teste de conexão sem `logging.viewer`:** a mensagem diz qual permissão falta (`logging.logEntries.list`), em qual Service Account e em qual projeto.
+- O enriquecimento com o Cloud Trace (opcional no ticket) fica para depois.

@@ -39,7 +39,7 @@ class IncidentSummary(BaseModel):
     rule_version: str
     integration_id: str
     integration_name: str
-    environment: str
+    environment: Literal["prd", "hml", "dev"]
     first_seen_at: datetime
     last_seen_at: datetime
     execution_count: int

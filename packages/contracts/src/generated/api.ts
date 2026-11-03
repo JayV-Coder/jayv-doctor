@@ -1026,8 +1026,11 @@ export interface components {
       integration_id: string;
       /** Integration Name */
       integration_name: string;
-      /** Environment */
-      environment: string;
+      /**
+       * Environment
+       * @enum {string}
+       */
+      environment: "prd" | "hml" | "dev";
       /**
        * First Seen At
        * Format: date-time
@@ -1154,8 +1157,11 @@ export interface components {
       integration_id: string;
       /** Integration Name */
       integration_name: string;
-      /** Environment */
-      environment: string;
+      /**
+       * Environment
+       * @enum {string}
+       */
+      environment: "prd" | "hml" | "dev";
       /**
        * First Seen At
        * Format: date-time

@@ -3954,6 +3954,7 @@
           },
           "environment": {
             "type": "string",
+            "enum": ["prd", "hml", "dev"],
             "title": "Environment"
           },
           "first_seen_at": {
@@ -4339,6 +4340,7 @@
           },
           "environment": {
             "type": "string",
+            "enum": ["prd", "hml", "dev"],
             "title": "Environment"
           },
           "first_seen_at": {

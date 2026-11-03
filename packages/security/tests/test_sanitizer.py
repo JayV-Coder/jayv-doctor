@@ -189,3 +189,9 @@ def test_regras_do_tenant_invalidas_sao_recusadas_na_configuracao() -> None:
     for pattern in ["(", r"\d*", "(a+)+$", "x" * 300]:
         with pytest.raises(ValueError, match="padrão"):
             Sanitizer(Rules(extra_patterns={"x": pattern}))
+
+
+def test_tipos_excluidos_nao_sao_detectados() -> None:
+    ids = Sanitizer(exclude_kinds=("cartao",))
+    assert ids.sanitize("IDoc 4111111111111111")[0] == "IDoc 4111111111111111"
+    assert ids.sanitize("dono ana@x.com")[0] == "dono [REMOVIDO:email]"

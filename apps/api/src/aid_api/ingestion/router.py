@@ -89,6 +89,19 @@ EVENTS_BODY = {
 }
 
 
+async def read_limited(request: Request) -> bytes:
+    """O corpo, sem passar de 1 MB na memória: recusa pelo Content-Length ou no meio da leitura."""
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > service.MAX_BYTES:
+        raise service.too_large()
+    body = bytearray()
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > service.MAX_BYTES:
+            raise service.too_large()
+    return bytes(body)
+
+
 # Sem JWT de Usuário: quem chama é um sistema externo, com `Authorization: Bearer aid_ing_…`.
 @events.post(
     "/events",
@@ -106,9 +119,11 @@ async def ingest_events(
     if scheme.lower() != "bearer" or not token.startswith(service.INGESTION_PREFIX):
         raise invalid_token()
     token_hash = service.hash_token(token)
-    check_rate(limiter, f"ingestion:{token_hash[:16]}")
-    batch = service.parse_batch(await request.body())
+    # Token conferido antes de ler o corpo e de gastar balde do rate limit: chamada com token
+    # inventado não faz a API guardar 1 MB nem expulsa os baldes de quem é de verdade.
     identity = await repository.identify(token_hash)
+    check_rate(limiter, f"ingestion:{identity.token_id}")
+    batch = service.parse_batch(await read_limited(request))
     accepted, rejected = service.split(batch, identity.integration_id)
     if accepted:
         await repository.accept(token_hash, accepted)

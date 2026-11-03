@@ -170,3 +170,21 @@ def test_so_owner_e_admin_com_mfa_gerenciam_tokens(role: str, aal: str) -> None:
         "/api/v1/ingestion-tokens", json={"name": "SAP PI", "integration_id": INTEGRATION_ID}
     )
     assert response.status_code == 403
+
+
+def test_timestamp_fora_da_janela_e_rejeitado_por_item() -> None:
+    response = post_events(
+        FakeRepository(), {"events": [event(timestamp="0001-01-01T00:00:00Z"), event()]}
+    )
+    body = response.json()
+    assert body["accepted"] == 1
+    assert body["rejected"] == [{"index": 0, "reason": "timestamp fora do intervalo aceito"}]
+
+
+def test_token_invalido_nao_le_o_corpo() -> None:
+    response = client(FakeRepository(invalid_token())).post(
+        "/api/v1/ingestion/events",
+        content=b"x" * (2 * 1024 * 1024),
+        headers={"authorization": f"Bearer {TOKEN}"},
+    )
+    assert response.status_code == 401

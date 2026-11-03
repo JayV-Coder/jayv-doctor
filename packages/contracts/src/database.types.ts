@@ -65,6 +65,20 @@ isOneToOne: false
                   Relationships: [
 
                   ]
+                },"events_2026_12": {
+                  Row: {
+                    "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"dedup_key": string,"error"?: Json | null,"execution_id"?: string | null,"id": string,"ingested_at"?: string,"integration_id": string,"operation": string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id"?: string | null
+                  }
+                  Update: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
                 },"idempotency_keys": {
                   Row: {
                     "created_at": string,"id": string,"key": string,"request_hash": string,"response_body": string | null,"response_status": number | null,"tenant_id": string,"user_id": string
@@ -151,14 +165,14 @@ isOneToOne: false
                   ]
                 },"ingestion_batches": {
                   Row: {
-                    "created_at": string,"event_count": number,"events": NonNullable<Json>,"expires_at": string,"id": string,"integration_id": string,"processed_at": string | null,"tenant_id": string,"token_id": string
+                    "created_at": string,"error": string | null,"event_count": number,"events": NonNullable<Json>,"expires_at": string,"failed_at": string | null,"id": string,"integration_id": string,"processed_at": string | null,"skipped": number,"tenant_id": string,"token_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"event_count": number,"events": NonNullable<Json>,"expires_at"?: string,"id"?: string,"integration_id": string,"processed_at"?: string | null,"tenant_id": string,"token_id": string
+                    "created_at"?: string,"error"?: string | null,"event_count": number,"events": NonNullable<Json>,"expires_at"?: string,"failed_at"?: string | null,"id"?: string,"integration_id": string,"processed_at"?: string | null,"skipped"?: number,"tenant_id": string,"token_id": string
                   }
                   Update: {
-                    "created_at"?: string,"event_count"?: number,"events"?: NonNullable<Json>,"expires_at"?: string,"id"?: string,"integration_id"?: string,"processed_at"?: string | null,"tenant_id"?: string,"token_id"?: string
+                    "created_at"?: string,"error"?: string | null,"event_count"?: number,"events"?: NonNullable<Json>,"expires_at"?: string,"failed_at"?: string | null,"id"?: string,"integration_id"?: string,"processed_at"?: string | null,"skipped"?: number,"tenant_id"?: string,"token_id"?: string
                   }
                   Relationships: [
                     {

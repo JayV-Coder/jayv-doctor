@@ -3,6 +3,7 @@
 import hashlib
 import json
 import secrets
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from aid_contracts.events import EventValidationError, validate_event
@@ -13,6 +14,9 @@ from aid_api.ingestion.schemas import RejectedEvent
 INGESTION_PREFIX = "aid_ing_"
 MAX_EVENTS = 500
 MAX_BYTES = 1024 * 1024
+# Mesma janela da Importação: fora dela, um token criaria partições de anos arbitrários.
+OLDEST = datetime(2000, 1, 1, tzinfo=UTC)
+FUTURE_TOLERANCE = timedelta(days=1)
 
 
 def new_token() -> tuple[str, str, str]:
@@ -49,9 +53,15 @@ def parse_batch(body: bytes) -> list[Any]:
     return events
 
 
+def in_window(timestamp: str, now: datetime) -> bool:
+    moment = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    return OLDEST <= moment <= now + FUTURE_TOLERANCE
+
+
 def split(
-    events: list[Any], integration_id: str
+    events: list[Any], integration_id: str, now: datetime | None = None
 ) -> tuple[list[dict[str, Any]], list[RejectedEvent]]:
+    now = now or datetime.now(UTC)
     accepted: list[dict[str, Any]] = []
     rejected: list[RejectedEvent] = []
     for index, item in enumerate(events):
@@ -70,6 +80,9 @@ def split(
             continue
         if item["integration_id"] != integration_id:
             rejected.append(RejectedEvent(index=index, reason="integration_id não é a do token"))
+            continue
+        if not in_window(item["timestamp"], now):
+            rejected.append(RejectedEvent(index=index, reason="timestamp fora do intervalo aceito"))
             continue
         accepted.append(item)
     return accepted, rejected

@@ -28,10 +28,13 @@ Content-Type: application/json
 
 - **Limites:** até 500 Eventos e 1 MB por lote. Acima disso, `413 batch_too_large`.
 - **Tenant:** vem do token. Qualquer Evento com `tenant_id` recusa o lote inteiro com `422 tenant_id_not_allowed`.
-- **Rejeição por item:** Evento fora do contrato, ou com `integration_id` diferente do token, é rejeitado individualmente. O motivo traz só os caminhos dos campos, nunca os valores.
-- **Processamento:** os aceitos viram um lote (`doctor.ingestion_batches`) com uma mensagem `ingestion.raw` na outbox, na mesma transação. O worker de ingestão sanitiza e grava `doctor.events`.
-- **Repetição:** pode reenviar o mesmo lote à vontade. A deduplicação usa tenant, fonte e `event_id`, então o mesmo Evento enviado 3 vezes fica uma vez só.
-- **Rate limit:** por token, `429` com `Retry-After`.
+- **Rejeição por item:** Evento fora do contrato, com `integration_id` diferente do token ou com `timestamp` fora da janela (de 2000 até amanhã) é rejeitado individualmente. O motivo traz só os caminhos dos campos, nunca os valores.
+- **Processamento:** os aceitos viram um lote (`doctor.ingestion_batches`) com uma mensagem `ingestion.raw` na outbox, na mesma transação. O worker de ingestão sanitiza e revalida cada Evento antes de gravar `doctor.events`:
+  - a sanitização cobre também `execution_id`, `trace_id` e `source`, que vêm do cliente;
+  - Evento que sai do contrato depois da sanitização é descartado e contado em `skipped`;
+  - erro permanente fica registrado no lote (`failed_at`, `error`).
+- **Repetição:** pode reenviar o mesmo lote à vontade. A deduplicação usa tenant, Integração, fonte e `event_id`, então o mesmo Evento enviado 3 vezes fica uma vez só.
+- **Rate limit:** por token, contado só depois de o token ser validado, com `429` e `Retry-After`. O corpo só é lido depois do token, e sem passar de 1 MB na memória.
 
 A API não usa `service_role` aqui: as funções do token (`doctor.resolve_ingestion_token` e `doctor.accept_ingestion_batch`) rodam como `anon` e são as únicas que `anon` executa no schema `doctor`. Há teste no pgTAP para isso.
 

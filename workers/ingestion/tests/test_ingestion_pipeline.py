@@ -412,3 +412,63 @@ async def test_mesmo_lote_da_api_tres_vezes_grava_uma_copia_de_cada_evento(
         b=batch_id,
     )
     assert outbox == 1
+
+
+@pytest.mark.asyncio
+async def test_lote_da_api_com_fuso_na_virada_do_mes_e_id_repetido_nao_cai(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    from aid_ingestion.pipeline import process_batch
+
+    events = [
+        # 30/11 23:30 em São Paulo já é dezembro em UTC: precisa da partição de dezembro.
+        api_event("0190f3a1-7b2c-7d4e-8f00-000000000001", timestamp="2026-11-30T23:30:00-03:00"),
+        # Mesmo event_id e data, outra fonte: colide na chave primária, não no dedup_key.
+        api_event(
+            "0190f3a1-7b2c-7d4e-8f00-000000000001",
+            timestamp="2026-11-30T23:30:00-03:00",
+            source={"provider": "salesforce", "service": "x"},
+        ),
+        api_event(
+            "0190f3a1-7b2c-7d4e-8f00-000000000002",
+            execution_id="pedido de ana.souza@acme.com.br",
+            source={"provider": "sap", "service": "PI", "resource": "cpf 529.982.247-25"},
+        ),
+    ]
+    batch_id = await api_batch(engine, tenant, events)
+    assert await process_batch({"batch_id": batch_id}, engine, MASTER) == "done"
+    stored = await scalar(
+        engine,
+        "select string_agg(coalesce(execution_id, '') || (source ->> 'resource'), '')"
+        " from doctor.events where tenant_id = :t",
+        t=tenant["tenant"],
+    )
+    assert "ana.souza" not in (stored or "")
+    assert "529.982" not in (stored or "")
+    december = await scalar(
+        engine,
+        "select count(*) from doctor.events where tenant_id = :t and timestamp >= '2026-12-01Z'",
+        t=tenant["tenant"],
+    )
+    assert december == 1
+
+
+@pytest.mark.asyncio
+async def test_lote_com_erro_permanente_fica_registrado(
+    engine: AsyncEngine, tenant: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aid_ingestion.pipeline as pipeline
+
+    def broken(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("bug")
+
+    monkeypatch.setattr(pipeline, "event_row", broken)
+    batch_id = await api_batch(engine, tenant, [api_event("0190f3a1-7b2c-7d4e-8f00-000000000003")])
+    assert await pipeline.process_batch({"batch_id": batch_id}, engine, MASTER) == "failed"
+    result = await row(
+        engine,
+        "select failed_at is not null as failed, error from doctor.ingestion_batches where id = :b",
+        b=batch_id,
+    )
+    assert dict(result) == {"failed": True, "error": "Erro inesperado ao processar o lote."}
+    assert await pipeline.process_batch({"batch_id": batch_id}, engine, MASTER) == "ignored"

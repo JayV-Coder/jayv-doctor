@@ -33,6 +33,11 @@ create table doctor.ingestion_batches (
   event_count integer not null,
   created_at timestamptz not null default now(),
   processed_at timestamptz,
+  -- Erro permanente no worker: o lote fica registrado em vez de sumir na DLQ.
+  failed_at timestamptz,
+  error text check (char_length(error) <= 500),
+  -- Eventos descartados na revalidação do worker (fora do contrato depois da Sanitização).
+  skipped integer not null default 0,
   -- Ainda não sanitizado: vence como o Log bruto, e a retenção (ticket #29) apaga.
   expires_at timestamptz not null default now() + interval '7 days',
   unique (tenant_id, id),
@@ -151,9 +156,9 @@ revoke all on function doctor.resolve_ingestion_token(text) from public;
 revoke all on function doctor.accept_ingestion_batch(text, jsonb) from public;
 grant execute on function doctor.create_ingestion_token(text, uuid, text, text) to authenticated;
 grant execute on function doctor.revoke_ingestion_token(uuid) to authenticated;
--- `anon` passa a enxergar o schema: função nova não nasce executável por public, e a que já era
--- (helper puro do caminho no Storage) deixa de ser.
-alter default privileges in schema doctor revoke execute on functions from public;
+-- `anon` passa a enxergar o schema. As funções do Doctor revogam `public` uma a uma; a única que
+-- ainda não revogava (helper puro do caminho no Storage) passa a revogar. O pgTAP confere que anon
+-- executa só as duas funções do token, então uma função nova esquecida quebra o CI.
 revoke all on function doctor.import_storage_path(uuid, uuid, text) from public;
 grant usage on schema doctor to anon;
 grant execute on function doctor.resolve_ingestion_token(text) to anon, authenticated;

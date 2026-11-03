@@ -75,17 +75,16 @@ export async function getEvent(
 ): Promise<EventDetail | "not_found" | null> {
   const query = at ? `?at=${encodeURIComponent(at)}` : "";
   return getOne<EventDetail>(`/events/${encodeURIComponent(id)}${query}`);
+}
+
 // Conectores da Organização ativa; `null` se a API não respondeu.
 export async function listConnectors(): Promise<Connector[] | null> {
   const response = await apiFetch("/connectors").catch(() => null);
   return response?.ok ? ((await response.json()) as Connector[]) : null;
 }
 
-// `"not_found"` quando não existe nesta Organização; `null` se a API não respondeu.
 export async function getConnector(id: string): Promise<Connector | "not_found" | null> {
-  const response = await apiFetch(`/connectors/${encodeURIComponent(id)}`).catch(() => null);
-  if (response?.status === 404 || response?.status === 422) return "not_found";
-  return response?.ok ? ((await response.json()) as Connector) : null;
+  return getOne<Connector>(`/connectors/${encodeURIComponent(id)}`);
 }
 
 // As 50 Sincronizações mais recentes de um Conector; `null` se a API não respondeu.

@@ -41,3 +41,6 @@ supabase/.temp/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Avaliação (#30): só o relatório Markdown é versionado; os brutos de cada rodada, não.
+tests/evaluation/reports/latest*.json*

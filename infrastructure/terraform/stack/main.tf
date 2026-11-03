@@ -263,6 +263,36 @@ resource "google_cloud_run_v2_service_iam_member" "scheduler_invoker" {
   member   = "serviceAccount:${google_service_account.scheduler.email}"
 }
 
+resource "google_cloud_run_v2_service_iam_member" "scheduler_invoker_connectors" {
+  project  = var.project_id
+  location = var.region
+  name     = module.workers["connectors"].name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.scheduler.email}"
+}
+
+# Agendador dos Conectores: enfileira connector.sync para os vencidos (o pg_cron é do jayv-coder).
+resource "google_cloud_scheduler_job" "connector_schedule" {
+  project          = var.project_id
+  region           = var.region
+  name             = "${local.name_prefix}-connector-schedule"
+  schedule         = "* * * * *"
+  time_zone        = "Etc/UTC"
+  attempt_deadline = "60s"
+
+  http_target {
+    http_method = "POST"
+    uri         = "${module.workers["connectors"].uri}/schedule"
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = module.workers["connectors"].uri
+    }
+  }
+
+  depends_on = [module.project]
+}
+
 resource "google_cloud_scheduler_job" "outbox_relay" {
   project          = var.project_id
   region           = var.region

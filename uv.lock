@@ -5,6 +5,8 @@ requires-python = "==3.12.*"
 [manifest]
 members = [
     "aid-api",
+    "aid-connector-worker",
+    "aid-connectors",
     "aid-contracts",
     "aid-db",
     "aid-ingestion",
@@ -48,6 +50,36 @@ requires-dist = [
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
     { name = "uvicorn", specifier = ">=0.54" },
 ]
+
+[[package]]
+name = "aid-connector-worker"
+version = "0.0.0"
+source = { editable = "workers/connectors" }
+dependencies = [
+    { name = "aid-connectors" },
+    { name = "aid-db" },
+    { name = "fastapi" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aid-connectors", editable = "packages/connectors" },
+    { name = "aid-db", editable = "packages/db" },
+    { name = "fastapi", specifier = ">=0.162" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+]
+
+[[package]]
+name = "aid-connectors"
+version = "0.1.0"
+source = { editable = "packages/connectors" }
+dependencies = [
+    { name = "aid-contracts" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "aid-contracts", editable = "packages/contracts" }]
 
 [[package]]
 name = "aid-contracts"
@@ -135,6 +167,7 @@ name = "aid-worker"
 version = "0.0.0"
 source = { editable = "workers/runtime" }
 dependencies = [
+    { name = "aid-connector-worker" },
     { name = "aid-ingestion" },
     { name = "aid-relay" },
     { name = "fastapi" },
@@ -143,6 +176,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aid-connector-worker", editable = "workers/connectors" },
     { name = "aid-ingestion", editable = "workers/ingestion" },
     { name = "aid-relay", editable = "workers/relay" },
     { name = "fastapi", specifier = ">=0.162" },

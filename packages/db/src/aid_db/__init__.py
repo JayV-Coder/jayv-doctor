@@ -2,7 +2,8 @@
 
 from uuid import uuid4
 
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
 
 
@@ -18,3 +19,8 @@ def supavisor_engine(url: str) -> AsyncEngine:
             "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
         },
     )
+
+
+async def platform_role(connection: AsyncConnection) -> None:
+    """Jobs de plataforma (workers) agem como service_role, nunca a API (ADR-0004)."""
+    await connection.execute(text("set local role service_role"))

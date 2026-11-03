@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+from aid_db import platform_role
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
@@ -95,7 +96,7 @@ async def drain(
     async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
         while time.monotonic() < deadline and not stats.stopped:
             async with engine.begin() as connection:
-                await connection.execute(text("set local role service_role"))
+                await platform_role(connection)
                 rows = (
                     await connection.execute(
                         text(

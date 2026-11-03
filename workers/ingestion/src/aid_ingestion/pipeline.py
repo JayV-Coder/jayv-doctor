@@ -19,9 +19,10 @@ from typing import Any
 
 import httpx
 from aid_contracts.events import EventValidationError, validate_event
+from aid_db import platform_role
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, OperationalError
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aid_ingestion.cleaning import EventSanitizer, secrets_removed
 from aid_ingestion.mapping import RejectedLineError, to_event
@@ -68,10 +69,6 @@ class Totals:
     valid: int = 0
     rejected: int = 0
     secrets: int = 0
-
-
-async def platform(connection: AsyncConnection) -> None:
-    await connection.execute(text("set local role service_role"))
 
 
 def dedup_key(tenant_id: str, payload: Mapping[str, Any], *, by_event_id: bool = False) -> str:
@@ -191,7 +188,7 @@ class Importer:
     async def flush(self, batch: Batch) -> None:
         await ensure_partitions(self.engine, batch.events, self.partitions)
         async with self.engine.begin() as connection:
-            await platform(connection)
+            await platform_role(connection)
             if batch.events:
                 await connection.execute(INSERT_EVENT, batch.events)
             if batch.rejections:
@@ -213,7 +210,7 @@ class Importer:
 async def claim(engine: AsyncEngine, import_id: str) -> Job | None:
     """Marca a Importação como `processing` e devolve o trabalho; `None` se já foi encerrada."""
     async with engine.begin() as connection:
-        await platform(connection)
+        await platform_role(connection)
         result = await connection.execute(
             text(
                 "select i.id::text as import_id, i.tenant_id::text, i.integration_id::text,"
@@ -246,7 +243,7 @@ async def claim(engine: AsyncEngine, import_id: str) -> Job | None:
 
 async def fail(engine: AsyncEngine, job: Job, reason: str) -> str:
     async with engine.begin() as connection:
-        await platform(connection)
+        await platform_role(connection)
         await connection.execute(
             text(
                 "update doctor.imports set status = 'failed', error = :e"
@@ -259,7 +256,7 @@ async def fail(engine: AsyncEngine, job: Job, reason: str) -> str:
 
 async def finish(engine: AsyncEngine, job: Job, totals: Totals) -> None:
     async with engine.begin() as connection:
-        await platform(connection)
+        await platform_role(connection)
         accepted = await connection.scalar(
             text(
                 "select count(*) from doctor.events where tenant_id = cast(:t as uuid)"
@@ -302,7 +299,7 @@ async def ensure_partitions(
     for month in sorted(months - known):
         # Transação própria e curta: criar partição trava a tabela-mãe.
         async with engine.begin() as connection:
-            await platform(connection)
+            await platform_role(connection)
             await connection.execute(
                 text("select doctor.ensure_event_partition(:day)"), {"day": month}
             )
@@ -311,7 +308,7 @@ async def ensure_partitions(
 
 async def fail_batch(engine: AsyncEngine, batch_id: str, reason: str) -> str:
     async with engine.begin() as connection:
-        await platform(connection)
+        await platform_role(connection)
         await connection.execute(
             text(
                 "update doctor.ingestion_batches set failed_at = now(), error = :e"
@@ -338,7 +335,7 @@ async def process_batch(payload: Mapping[str, Any], engine: AsyncEngine, master_
 
 async def ingest_batch(batch_id: str, engine: AsyncEngine, master_key: bytes) -> str:
     async with engine.begin() as connection:
-        await platform(connection)
+        await platform_role(connection)
         found = (
             await connection.execute(
                 text(
@@ -371,7 +368,7 @@ async def ingest_batch(batch_id: str, engine: AsyncEngine, master_key: bytes) ->
         )
     await ensure_partitions(engine, rows, set())
     async with engine.begin() as connection:
-        await platform(connection)
+        await platform_role(connection)
         # Trava o lote: duas entregas simultâneas não fecham o mesmo lote duas vezes.
         closed = await connection.scalar(
             text(

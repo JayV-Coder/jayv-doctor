@@ -9,7 +9,7 @@ requires-python = ">=3.12,<3.13"
 package = false
 
 [tool.uv.workspace]
-members = ["apps/api", "packages/contracts", "packages/db", "packages/security", "workers/ingestion", "workers/relay", "workers/runtime"]
+members = ["apps/api", "packages/connectors", "packages/contracts", "packages/db", "packages/security", "workers/connectors", "workers/ingestion", "workers/relay", "workers/runtime"]
 
 [dependency-groups]
 dev = [
@@ -36,6 +36,8 @@ select = ["E", "F", "W", "I", "N", "B", "UP", "SIM", "C4", "S", "PT", "RUF", "T2
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101"]
+# A suíte de contrato dos Conectores mora em src, para os pacotes de cada conector herdarem.
+"packages/connectors/src/aid_connectors/testing.py" = ["S101"]
 "scripts/**" = ["T20", "S603", "S607", "S608"]
 "packages/*/scripts/**" = ["T20", "S603", "S607"]
 # Gerado pelo datamodel-codegen; as docstrings vêm das descrições do schema.
@@ -50,11 +52,15 @@ warn_unreachable = true
 files = [
     "apps/api/src",
     "apps/api/tests",
+    "packages/connectors/src",
+    "packages/connectors/tests",
     "packages/contracts/python",
     "packages/contracts/tests",
     "packages/db/src",
     "packages/security/src",
     "packages/security/tests",
+    "workers/connectors/src",
+    "workers/connectors/tests",
     "workers/ingestion/src",
     "workers/ingestion/tests",
     "workers/relay/src",

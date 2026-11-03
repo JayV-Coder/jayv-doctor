@@ -4,6 +4,7 @@ version = "0.0.0"
 description = "API FastAPI do Integration AI Doctor"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "aid-connectors",
     "aid-contracts",
     "aid-db",
     "fastapi>=0.162",
@@ -19,6 +20,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
+aid-connectors = { workspace = true }
 aid-contracts = { workspace = true }
 aid-db = { workspace = true }
 

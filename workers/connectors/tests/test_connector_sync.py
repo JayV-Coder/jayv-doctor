@@ -9,7 +9,8 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from aid_connector_worker.schedule import enqueue_due
-from aid_connector_worker.sync import REGISTRY, sync_connector
+from aid_connector_worker.sync import sync_connector
+from aid_connectors.registry import REGISTRY
 from aid_connectors.runtime import RetryPolicy
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine

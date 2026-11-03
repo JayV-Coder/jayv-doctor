@@ -21,6 +21,7 @@ name = "aid-api"
 version = "0.0.0"
 source = { editable = "apps/api" }
 dependencies = [
+    { name = "aid-connectors" },
     { name = "aid-contracts" },
     { name = "aid-db" },
     { name = "asyncpg" },
@@ -37,6 +38,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aid-connectors", editable = "packages/connectors" },
     { name = "aid-contracts", editable = "packages/contracts" },
     { name = "aid-db", editable = "packages/db" },
     { name = "asyncpg", specifier = ">=0.30" },

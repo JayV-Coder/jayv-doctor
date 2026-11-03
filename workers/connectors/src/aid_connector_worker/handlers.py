@@ -5,13 +5,14 @@ from collections.abc import Awaitable, Callable, Mapping
 from functools import lru_cache
 from typing import Any
 
+from aid_connectors.registry import REGISTRY
 from aid_connectors.runtime import RetryPolicy
 from aid_db import supavisor_engine
 from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aid_connector_worker.schedule import enqueue_due
-from aid_connector_worker.sync import REGISTRY, sync_connector
+from aid_connector_worker.sync import sync_connector
 
 Handler = Callable[[Mapping[str, Any]], Awaitable[None]]
 

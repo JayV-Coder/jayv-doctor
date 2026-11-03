@@ -13,14 +13,12 @@ from datetime import timedelta
 from typing import Any
 
 from aid_connectors.base import Batch, Connector
-from aid_connectors.fake import FakeConnector
 from aid_connectors.runtime import RetryPolicy, SyncResult, run_sync
 from aid_db import platform_role
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 logger = logging.getLogger(__name__)
-REGISTRY: dict[str, type[Connector]] = {"fake": FakeConnector}
 # Sincronização em `running` há mais que isso é de um worker que morreu.
 LEASE = timedelta(minutes=10)
 FAILING_AFTER = 3

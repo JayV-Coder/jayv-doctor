@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(15);
+select plan(18);
 
 select tests.create_user('00000000-0000-4000-8000-0000000a0001', 'owner@acme.test');
 select tests.create_user('00000000-0000-4000-8000-0000000a0002', 'admin@acme.test');
@@ -112,6 +112,23 @@ select is(doctor.import_auth_events(now() - interval '1 hour'), 0, 'e não se re
 delete from doctor.tenants where id = '00000000-0000-4000-8000-00000000be01';
 select is((select count(*)::int from doctor.audit_logs where tenant_id = '00000000-0000-4000-8000-00000000be01'),
   0, 'excluir a Organização leva a auditoria dela junto');
+
+-- Partições: nenhum papel chega nelas direto (o TRUNCATE furaria o append-only).
+select is(
+  (select array_agg(c.relname::text order by c.relname) from pg_class c
+   where c.relnamespace = 'doctor'::regnamespace and c.relispartition
+     and c.relname like 'audit_logs_%'
+     and (has_table_privilege('service_role', c.oid, 'truncate')
+          or has_table_privilege('service_role', c.oid, 'delete')
+          or has_table_privilege('service_role', c.oid, 'update')
+          or has_table_privilege('authenticated', c.oid, 'select'))),
+  null, 'partições da auditoria sem privilégio direto para ninguém'
+);
+select isnt(doctor.ensure_audit_partition('2028-03-10'), null, 'o job cria a partição de um mês novo');
+select is(
+  (select has_table_privilege('service_role', 'doctor.audit_logs_2028_03', 'truncate')), false,
+  'e ela também nasce trancada'
+);
 
 select * from finish();
 rollback;

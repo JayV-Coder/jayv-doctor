@@ -1262,7 +1262,7 @@ isOneToOne: false
 { Args: { "status": string }; Returns: boolean
                            },
 "ensure_audit_partition":
-{ Args: { "day": string }; Returns: undefined
+{ Args: { "day": string }; Returns: string
                            },
 "ensure_event_partition":
 { Args: { "day": string }; Returns: string
@@ -1318,6 +1318,9 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: {
               "id": string,"name": string,"role": string,"slug": string
             }[]
+                           },
+"lock_audit_partition":
+{ Args: { "partition_name": string }; Returns: undefined
                            },
 "locked_target":
 { Args: { "actor_role": string,"target": string }; Returns: {

@@ -3,6 +3,7 @@ middleware guarda; `tenant_tx` passa ao banco em `doctor.request`, e o trigger d
 preenche os registros da transação."""
 
 import json
+import os
 import re
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
@@ -11,8 +12,12 @@ from uuid import uuid4
 from fastapi import FastAPI, Request, Response
 
 _meta: ContextVar[dict[str, str] | None] = ContextVar("request_meta", default=None)
-# O Cloud Run põe o IP do cliente no primeiro item de X-Forwarded-For.
 IP = re.compile(r"^[0-9A-Fa-f.:]{2,45}$")
+# Quantos saltos do fim do X-Forwarded-For são proxies confiáveis. O balanceador do Cloud Run
+# acrescenta o IP de quem conectou, então o último item é sempre verdadeiro (padrão 1); com a web
+# (Next.js) na frente, repassando o IP do navegador, use 2. O que vem antes disso é declarado
+# pelo cliente e não entra na auditoria.
+TRUSTED_HOPS = max(1, int(os.environ.get("AID_TRUSTED_PROXY_HOPS", "1")))
 REQUEST_ID = re.compile(r"^[A-Za-z0-9._/-]{1,200}$")
 
 
@@ -22,8 +27,11 @@ def current() -> str | None:
 
 
 def describe(request: Request) -> dict[str, str]:
-    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-    ip = forwarded or (request.client.host if request.client else "")
+    hops = [
+        hop.strip() for hop in request.headers.get("x-forwarded-for", "").split(",") if hop.strip()
+    ]
+    peer = request.client.host if request.client else ""
+    ip = hops[-TRUSTED_HOPS] if len(hops) >= TRUSTED_HOPS else (hops[0] if hops else peer)
     trace = request.headers.get("x-cloud-trace-context", "").split("/")[0]
     given = request.headers.get("x-request-id", "")
     request_id = given if REQUEST_ID.match(given) else trace if REQUEST_ID.match(trace) else ""

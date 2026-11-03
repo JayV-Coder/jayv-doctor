@@ -917,12 +917,16 @@ async def test_auditoria_registra_a_troca_de_papel_com_a_requisicao_e_so_o_gesto
     assert any(item.action == "org.switched" for item in found.items)
     # O add_admin passou pelos triggers: o Vínculo novo está na trilha, com o after.
     created = await repository.search(admin, AuditSearch(q="membership.created"))
+    # `_` é literal na busca, não curinga nem removido.
+    assert (await repository.search(admin, AuditSearch(q="org_switched"))).items == []
+    assert (await repository.search(admin, AuditSearch(q="org.switched"))).items
     assert created.items[0].after is not None
     assert created.items[0].after["role"] == "admin"
     assert (await repository.search(admin, AuditSearch(category="diagnosis"))).items == []
     with pytest.raises(ApiError) as denied:
         await repository.search(claims_for(first, user, "admin", aal="aal1"), AuditSearch())
     assert denied.value.status == 403
+    await repository.start_export(admin, AuditSearch(category="security"))
     exported = [item async for item in repository.export(admin, AuditSearch(category="security"))]
     assert any(item.action == "org.switched" for item in exported)
     # A exportação também fica na trilha.

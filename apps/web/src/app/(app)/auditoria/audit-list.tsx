@@ -12,6 +12,8 @@ export function AuditList({ category, initial }: { category: string | null; init
   const [cursor, setCursor] = useState(initial.next_cursor);
   // O termo fica só na memória da página: pode ser o e-mail de alguém.
   const [term, setTerm] = useState("");
+  // O termo da busca que gerou a lista: "Carregar mais" e o CSV seguem o que está na tela.
+  const [submitted, setSubmitted] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, startTransition] = useTransition();
 
@@ -23,6 +25,7 @@ export function AuditList({ category, initial }: { category: string | null; init
         return;
       }
       setError(null);
+      setSubmitted(q);
       setItems((current) => (after ? [...current, ...page.items] : page.items));
       setCursor(page.next_cursor);
     });
@@ -57,7 +60,7 @@ export function AuditList({ category, initial }: { category: string | null; init
       </form>
       <form method="post" action="/auditoria/exportar">
         <input type="hidden" name="category" value={category ?? ""} />
-        <input type="hidden" name="q" value={term.trim()} />
+        <input type="hidden" name="q" value={submitted ?? ""} />
         <button className="btn" type="submit">
           Exportar CSV
         </button>
@@ -100,7 +103,7 @@ export function AuditList({ category, initial }: { category: string | null; init
           className="btn"
           disabled={busy}
           onClick={() => {
-            run(term.trim() || null, cursor);
+            run(submitted, cursor);
           }}
         >
           Carregar mais

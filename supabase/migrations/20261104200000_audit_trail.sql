@@ -32,32 +32,64 @@ create index audit_logs_tenant_action_idx on doctor.audit_logs (tenant_id, actio
 create unique index audit_logs_auth_event_idx on doctor.audit_logs (tenant_id, request_id, occurred_at)
   where action like 'auth.%';
 
--- Partições de 2026-10 a 2027-12 e a padrão (nada se perde se o mês ainda não existir); a
--- retenção (#29) cria as seguintes e apaga as vencidas.
+-- Partições de 2026-10 a 2027-12 e a padrão (nada se perde se o mês ainda não existir); o job
+-- diário cria as seguintes, numa transação curta, e a retenção (#29) apaga as vencidas. Como nas
+-- de `events`, a partição nasce com RLS e sem privilégio nenhum (nem do service_role, que o
+-- default privileges do schema daria): só se chega a ela pela tabela-mãe, append-only.
 create function doctor.ensure_audit_partition(day date)
-returns void
+returns text
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
-  first date := date_trunc('month', day)::date;
-  name text := 'audit_logs_' || to_char(first, 'YYYY_MM');
+  first_day date := date_trunc('month', day)::date;
+  partition_name text := 'audit_logs_' || to_char(first_day, 'YYYY_MM');
 begin
-  if to_regclass('doctor.' || name) is null then
+  if to_regclass(format('doctor.%I', partition_name)) is not null then
+    return partition_name;
+  end if;
+  begin
     execute format(
       'create table doctor.%I partition of doctor.audit_logs for values from (%L) to (%L)',
-      name, first, (first + interval '1 month')::date
+      partition_name, first_day::text || ' 00:00:00+00',
+      (first_day + interval '1 month')::date::text || ' 00:00:00+00'
     );
-  end if;
+  exception
+    when duplicate_table then
+      return partition_name;
+    -- O mês já tem registros na partição padrão (o job atrasou): eles ficam lá, e a criação é
+    -- tentada de novo no mês seguinte, sem travar o resto do job.
+    when check_violation then
+      raise warning 'audit_logs: % já tem registros na partição padrão', partition_name;
+      return null;
+  end;
+  perform doctor.lock_audit_partition(partition_name);
+  return partition_name;
 end;
 $$;
+
+create function doctor.lock_audit_partition(partition_name text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  execute format('alter table doctor.%I enable row level security', partition_name);
+  execute format('revoke all on doctor.%I from public, anon, authenticated, service_role', partition_name);
+end;
+$$;
+revoke all on function doctor.lock_audit_partition(text) from public, anon, authenticated, service_role;
 revoke all on function doctor.ensure_audit_partition(date) from public, anon, authenticated;
 grant execute on function doctor.ensure_audit_partition(date) to service_role;
 
 create table doctor.audit_logs_default partition of doctor.audit_logs default;
+select doctor.lock_audit_partition('audit_logs_default');
 select doctor.ensure_audit_partition(month::date)
 from generate_series('2026-10-01'::date, '2027-12-01'::date, interval '1 month') month;
+-- Ponto de partida do job do Auth: o último evento importado, sem varrer a trilha inteira.
+create index audit_logs_auth_time_idx on doctor.audit_logs (occurred_at desc) where action like 'auth.%';
 
 insert into doctor.audit_logs (id, tenant_id, occurred_at, actor_type, actor_id, action,
   resource_type, resource_id, before, after, request_id)
@@ -160,6 +192,9 @@ as $$
 $$;
 revoke all on function doctor.write_audit(uuid, text, text, text, jsonb, jsonb) from public;
 
+-- As funções dos Conectores registravam criação, alteração, pausa e retomada à mão; o trigger
+-- passou a registrar essas mesmas mudanças, com before e after, e as chamadas antigas não
+-- duplicam mais o registro.
 create or replace function doctor.record_audit(tenant uuid, action text, target text)
 returns void
 language sql
@@ -167,6 +202,7 @@ security definer
 set search_path = ''
 as $$
   select doctor.write_audit(tenant, action, split_part(action, '.', 1), target, null, null)
+  where action not in ('connector.create', 'connector.update', 'connector.pause', 'connector.resume')
 $$;
 revoke all on function doctor.record_audit(uuid, text, text) from public;
 
@@ -203,6 +239,10 @@ begin
     end if;
     if entity = 'membership' and changed_after ? 'role' then
       verb := 'role_changed';
+    elsif entity = 'connector' and changed_after ->> 'status' = 'paused' then
+      verb := 'paused';
+    elsif entity = 'connector' and changed_before ->> 'status' = 'paused' then
+      verb := 'resumed';
     end if;
   else
     changed_before := old_row;
@@ -219,12 +259,16 @@ create trigger memberships_audit after insert or update or delete on doctor.memb
 for each row execute function doctor.audit_change('membership');
 create trigger invitations_audit after insert or update or delete on doctor.invitations
 for each row execute function doctor.audit_change('invitation', 'email', 'token_hash');
+-- Do Conector, só o que a pessoa muda: o que o worker atualiza a cada Sincronização (checkpoint,
+-- próxima rodada, falhas seguidas, último erro) não é auditado, nem a referência da credencial.
 create trigger connectors_audit after insert or update or delete on doctor.connectors
-for each row execute function doctor.audit_change('connector', 'secret_id');
+for each row execute function doctor.audit_change('connector', 'secret_id', 'checkpoint',
+  'next_run_at', 'last_sync_at', 'consecutive_failures', 'last_error');
 create trigger integrations_audit after insert or update or delete on doctor.integrations
 for each row execute function doctor.audit_change('integration');
+-- O Diagnóstico automático já tem o próprio registro (`diagnosis.auto_changed`).
 create trigger tenants_audit after update on doctor.tenants
-for each row execute function doctor.audit_change('org');
+for each row execute function doctor.audit_change('org', 'auto_diagnose_critical');
 
 -- Troca de Organização ativa: auditada na Organização de destino.
 create or replace function doctor.switch_organization(target uuid)

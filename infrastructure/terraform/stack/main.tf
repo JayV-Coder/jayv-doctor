@@ -138,8 +138,10 @@ module "api" {
   min_instances       = var.api_min_instances
   deletion_protection = var.environment == "prod"
   env = {
-    SUPABASE_JWT_ISSUER      = var.supabase_jwt_issuer
-    SUPABASE_URL             = trimsuffix(var.supabase_jwt_issuer, "/auth/v1")
+    SUPABASE_JWT_ISSUER = var.supabase_jwt_issuer
+    SUPABASE_URL        = trimsuffix(var.supabase_jwt_issuer, "/auth/v1")
+    # A web repassa o IP do navegador: balanceador do Cloud Run + web (Trilha de auditoria, #28).
+    AID_TRUSTED_PROXY_HOPS   = "2"
     SUPABASE_PUBLISHABLE_KEY = var.supabase_publishable_key
     APP_URL                  = var.app_url
     OTEL_ENABLED             = "true"

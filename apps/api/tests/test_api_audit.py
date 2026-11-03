@@ -34,8 +34,10 @@ class FakeRepository(AuditRepository):
         self.queries.append(query)
         return AuditPage(items=[ENTRY], next_cursor=None)
 
-    async def export(self, claims: Claims, query: AuditSearch) -> AsyncIterator[AuditEntry]:
+    async def start_export(self, claims: Claims, query: AuditSearch) -> None:
         self.queries.append(query)
+
+    async def export(self, claims: Claims, query: AuditSearch) -> AsyncIterator[AuditEntry]:
         yield ENTRY
 
 
@@ -73,6 +75,14 @@ def test_csv_traz_o_cabecalho_e_o_registro() -> None:
     assert repository.queries[0].q == "julia@acme.test"
 
 
+def test_csv_neutraliza_formula() -> None:
+    from aid_api.audit.router import cell
+
+    assert cell('=HYPERLINK("http://x","y")@x.com') == '\'=HYPERLINK("http://x","y")@x.com'
+    assert cell("-1") == "'-1"
+    assert cell("julia@acme.test") == "julia@acme.test"
+
+
 def test_categoria_pelo_prefixo_da_acao() -> None:
     assert category_of("auth.login") == "security"
     assert category_of("vault.secret_read") == "connectors"
@@ -91,9 +101,10 @@ def test_meta_da_requisicao_para_a_auditoria() -> None:
         ],
         "client": ("10.0.0.2", 1234),
     }
+    # Só o último salto (o que o balanceador do Cloud Run acrescentou) é confiável por padrão.
     assert describe(Request(scope)) == {
         "request_id": "req-1",
-        "ip": "177.10.0.1",
+        "ip": "10.0.0.1",
         "user_agent": "Mozilla/5.0",
     }
     hostile = Request(

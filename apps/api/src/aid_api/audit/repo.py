@@ -71,8 +71,10 @@ def conditions(query: AuditSearch, actors: list[str]) -> tuple[list[str], dict[s
         where.append("(" + " or ".join(f"a.action like :p{i}" for i in range(len(prefixes))) + ")")
         params.update({f"p{i}": f"{prefix}%" for i, prefix in enumerate(prefixes)})
     if query.q:
-        params["q"] = f"%{query.q.replace('%', '').replace('_', '')}%"
-        options = ["a.action ilike :q", "a.resource_id ilike :q"]
+        # Escapado, não removido: `role_changed` precisa achar `membership.role_changed`.
+        escaped = query.q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        params["q"] = f"%{escaped}%"
+        options = ["a.action ilike :q escape '\\'", "a.resource_id ilike :q escape '\\'"]
         if actors:
             options.append("a.actor_id = any(cast(:actors as uuid[]))")
             params["actors"] = actors
@@ -87,21 +89,22 @@ def conditions(query: AuditSearch, actors: list[str]) -> tuple[list[str], dict[s
 
 
 class AuditRepository:
-    async def _members(self, connection: Any) -> dict[str, str]:
+    async def _filtered(
+        self, connection: Any, query: AuditSearch
+    ) -> tuple[dict[str, str], list[str], dict[str, Any]]:
+        """Atores (para o rótulo e para o termo bater com o e-mail) e os filtros da consulta."""
         rows = await connection.execute(
             text("select user_id::text, email from doctor.list_audit_actors()")
         )
-        return {row[0]: row[1] for row in rows if row[1]}
+        members = {row[0]: row[1] for row in rows if row[1]}
+        term = (query.q or "").lower()
+        actors = [ident for ident, label in members.items() if term and term in label.lower()]
+        where, params = conditions(query, actors)
+        return members, where, params
 
     async def search(self, claims: Claims, query: AuditSearch) -> AuditPage:
         async with translated_tx(claims, ERRORS) as connection:
-            members = await self._members(connection)
-            actors = (
-                [ident for ident, label in members.items() if query.q.lower() in label.lower()]
-                if query.q
-                else []
-            )
-            where, params = conditions(query, actors)
+            members, where, params = await self._filtered(connection, query)
             if query.cursor:
                 moment, ident = decode_cursor(query.cursor)
                 where.append("(a.occurred_at, a.id) < (:cursor_at, :cursor_id)")
@@ -121,20 +124,20 @@ class AuditRepository:
             next_cursor=encode_cursor(last["occurred_at"], last["id"]) if last else None,
         )
 
-    async def export(self, claims: Claims, query: AuditSearch) -> AsyncIterator[AuditEntry]:
-        """Até EXPORT_LIMIT registros, do mais novo para o mais antigo; a exportação é auditada."""
+    async def start_export(self, claims: Claims, query: AuditSearch) -> None:
+        """Antes do primeiro byte: confere o acesso (o 403 ainda vira 403) e grava a exportação
+        numa transação própria, que não se desfaz se o download for interrompido."""
         async with translated_tx(claims, ERRORS) as connection:
-            members = await self._members(connection)
-            actors = (
-                [ident for ident, label in members.items() if query.q.lower() in label.lower()]
-                if query.q
-                else []
-            )
-            where, params = conditions(query, actors)
+            await connection.execute(text("select 1 from doctor.list_audit_actors() limit 1"))
             await connection.execute(
                 text("select doctor.record_audit_export(cast(:filters as jsonb))"),
                 {"filters": query.model_dump_json(include={"category", "since", "until"})},
             )
+
+    async def export(self, claims: Claims, query: AuditSearch) -> AsyncIterator[AuditEntry]:
+        """Até EXPORT_LIMIT registros, do mais novo para o mais antigo."""
+        async with translated_tx(claims, ERRORS) as connection:
+            members, where, params = await self._filtered(connection, query)
             result = await connection.stream(text(select_sql(where)), {**params, "n": EXPORT_LIMIT})
             async for row in result.mappings():
                 yield entry(row, members)

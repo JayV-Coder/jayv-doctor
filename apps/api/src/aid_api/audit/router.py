@@ -33,6 +33,11 @@ COLUMNS = [
 ]
 
 
+def cell(value: str) -> str:
+    """Planilha não executa o conteúdo: valor que começa como fórmula ganha um apóstrofo."""
+    return f"'{value}" if value[:1] in ("=", "+", "-", "@", "\t", "\r") else value
+
+
 @router.post("/search", response_model=AuditPage)
 async def search_audit(query: AuditSearch, claims: Manager, repository: Repository) -> AuditPage:
     return await repository.search(claims, query)
@@ -43,6 +48,7 @@ async def export_audit(
     query: AuditSearch, claims: Manager, repository: Repository
 ) -> StreamingResponse:
     """CSV de até 50 mil registros, gerado enquanto é enviado."""
+    await repository.start_export(claims, query)
 
     async def rows() -> AsyncIterator[str]:
         buffer = io.StringIO()
@@ -51,15 +57,18 @@ async def export_audit(
         async for item in repository.export(claims, query):
             writer.writerow(
                 [
-                    item.occurred_at.isoformat(),
-                    item.actor_type,
-                    item.actor_label or item.actor_id or "",
-                    item.action,
-                    item.resource_type or "",
-                    item.resource_id or "",
-                    json.dumps(item.before, ensure_ascii=False) if item.before else "",
-                    json.dumps(item.after, ensure_ascii=False) if item.after else "",
-                    item.ip or "",
+                    cell(value)
+                    for value in (
+                        item.occurred_at.isoformat(),
+                        item.actor_type,
+                        item.actor_label or item.actor_id or "",
+                        item.action,
+                        item.resource_type or "",
+                        item.resource_id or "",
+                        json.dumps(item.before, ensure_ascii=False) if item.before else "",
+                        json.dumps(item.after, ensure_ascii=False) if item.after else "",
+                        item.ip or "",
+                    )
                 ]
             )
             yield buffer.getvalue()

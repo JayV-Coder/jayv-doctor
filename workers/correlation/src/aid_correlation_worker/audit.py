@@ -22,14 +22,18 @@ def next_months(today: date, count: int = MONTHS_AHEAD) -> list[date]:
 
 async def import_auth_events(engine: AsyncEngine, now: datetime | None = None) -> int:
     now = now or datetime.now(UTC)
+    # Uma transação curta por partição: criar trava a tabela-mãe, e a importação não espera nisso.
+    for month in next_months(now.date()):
+        async with engine.begin() as connection:
+            await platform_role(connection)
+            await connection.execute(text("select doctor.ensure_audit_partition(:m)"), {"m": month})
     async with engine.begin() as connection:
         await platform_role(connection)
+        # O índice parcial dos eventos `auth.%` responde sem varrer a trilha.
         last = await connection.scalar(
             text("select max(occurred_at) from doctor.audit_logs where action like 'auth.%'")
         )
         since = max(last, now - LOOKBACK) if last else now - LOOKBACK
-        for month in next_months(now.date()):
-            await connection.execute(text("select doctor.ensure_audit_partition(:m)"), {"m": month})
         imported = await connection.scalar(
             text("select doctor.import_auth_events(:since)"), {"since": since}
         )

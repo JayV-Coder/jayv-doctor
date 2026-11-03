@@ -61,6 +61,10 @@ def handlers_for(worker: str) -> dict[str, Handler]:
         from aid_correlation_worker.handlers import TOPICS as CORRELATION_TOPICS
 
         return {topic: json_handler(handler) for topic, handler in CORRELATION_TOPICS.items()}
+    if worker == "diagnosis":
+        from aid_diagnosis_worker.handlers import TOPICS as DIAGNOSIS_TOPICS
+
+        return {topic: json_handler(handler) for topic, handler in DIAGNOSIS_TOPICS.items()}
     return {}
 
 

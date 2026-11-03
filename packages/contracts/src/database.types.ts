@@ -243,6 +243,70 @@ isOneToOne: false
       referencedColumns: ["tenant_id","id"]
     }
                   ]
+                },"incident_executions": {
+                  Row: {
+                    "created_at": string,"execution_id": string,"id": string,"incident_id": string,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"execution_id": string,"id"?: string,"incident_id": string,"tenant_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"execution_id"?: string,"id"?: string,"incident_id"?: string,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "incident_executions_tenant_id_execution_id_fkey"
+      columns: ["tenant_id","execution_id"]
+isOneToOne: true
+      referencedRelation: "executions"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "incident_executions_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "incident_executions_tenant_id_incident_id_fkey"
+      columns: ["tenant_id","incident_id"]
+isOneToOne: false
+      referencedRelation: "incidents"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"incidents": {
+                  Row: {
+                    "assignee_id": string | null,"category": string,"created_at": string,"execution_count": number,"first_seen_at": string,"id": string,"integration_id": string,"last_seen_at": string,"resolution_note": string | null,"resolved_at": string | null,"rule_code": string,"rule_version": string,"severity": string,"status": string,"tenant_id": string,"title": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "assignee_id"?: string | null,"category": string,"created_at"?: string,"execution_count"?: number,"first_seen_at": string,"id"?: string,"integration_id": string,"last_seen_at": string,"resolution_note"?: string | null,"resolved_at"?: string | null,"rule_code": string,"rule_version": string,"severity": string,"status"?: string,"tenant_id": string,"title": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "assignee_id"?: string | null,"category"?: string,"created_at"?: string,"execution_count"?: number,"first_seen_at"?: string,"id"?: string,"integration_id"?: string,"last_seen_at"?: string,"resolution_note"?: string | null,"resolved_at"?: string | null,"rule_code"?: string,"rule_version"?: string,"severity"?: string,"status"?: string,"tenant_id"?: string,"title"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "incidents_rule_code_rule_version_fkey"
+      columns: ["rule_code","rule_version"]
+isOneToOne: false
+      referencedRelation: "rule_definitions"
+      referencedColumns: ["code","version"]
+    },{
+      foreignKeyName: "incidents_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "incidents_tenant_id_integration_id_fkey"
+      columns: ["tenant_id","integration_id"]
+isOneToOne: false
+      referencedRelation: "integrations"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
                 },"ingestion_batches": {
                   Row: {
                     "connector_id": string | null,"created_at": string,"error": string | null,"event_count": number,"events": NonNullable<Json>,"expires_at": string,"failed_at": string | null,"id": string,"integration_id": string,"processed_at": string | null,"skipped": number,"tenant_id": string,"token_id": string | null
@@ -401,6 +465,52 @@ isOneToOne: false
                   Relationships: [
                     {
       foreignKeyName: "raw_log_objects_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"rule_definitions": {
+                  Row: {
+                    "active": boolean,"category": string,"code": string,"created_at": string,"description": string,"severity_hint": string,"version": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"category": string,"code": string,"created_at"?: string,"description": string,"severity_hint": string,"version": string
+                  }
+                  Update: {
+                    "active"?: boolean,"category"?: string,"code"?: string,"created_at"?: string,"description"?: string,"severity_hint"?: string,"version"?: string
+                  }
+                  Relationships: [
+
+                  ]
+                },"rule_matches": {
+                  Row: {
+                    "created_at": string,"details": NonNullable<Json>,"execution_id": string,"id": string,"matched_event_ids": (string)[],"rule_code": string,"rule_version": string,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"details"?: NonNullable<Json>,"execution_id": string,"id"?: string,"matched_event_ids": (string)[],"rule_code": string,"rule_version": string,"tenant_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"details"?: NonNullable<Json>,"execution_id"?: string,"id"?: string,"matched_event_ids"?: (string)[],"rule_code"?: string,"rule_version"?: string,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "rule_matches_rule_code_rule_version_fkey"
+      columns: ["rule_code","rule_version"]
+isOneToOne: false
+      referencedRelation: "rule_definitions"
+      referencedColumns: ["code","version"]
+    },{
+      foreignKeyName: "rule_matches_tenant_id_execution_id_fkey"
+      columns: ["tenant_id","execution_id"]
+isOneToOne: false
+      referencedRelation: "executions"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "rule_matches_tenant_id_fkey"
       columns: ["tenant_id"]
 isOneToOne: false
       referencedRelation: "tenants"

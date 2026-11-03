@@ -21,4 +21,4 @@ O Cloud Scheduler chama `POST /close` a cada minuto (`aid-correlation-close`). E
 | agrupada por proximidade temporal, ou sem estratégia | `unknown` |
 | o resto | `success` |
 
-Cada Execução fechada põe `rules.evaluate` (`execution_id`, `integration_id`) na outbox. O tópico já existe no Terraform, entregue ao worker `diagnosis`; o handler chega com o ticket #18, que deve entrar junto com este no primeiro deploy, senão as mensagens vão para a DLQ depois de 5 tentativas.
+Cada Execução fechada põe `rules.evaluate` (`execution_id`, `integration_id`) na outbox, consumido pelo worker `diagnosis` (Regras e Incidentes, `docs/operations/regras.md`).

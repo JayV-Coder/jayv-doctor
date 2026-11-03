@@ -36,7 +36,12 @@ def test_worker_de_ingestao_registra_o_topico_ingestion_raw() -> None:
     from aid_worker.main import handlers_for
 
     assert set(handlers_for("ingestion")) == {"ingestion.raw"}
-    assert handlers_for("diagnosis") == {}
+    assert set(handlers_for("diagnosis")) == {
+        "rules.evaluate",
+        "incident.opened",
+        "incident.updated",
+    }
+    assert handlers_for("desconhecido") == {}
 
 
 def test_payload_json_chega_decodificado_ao_handler() -> None:

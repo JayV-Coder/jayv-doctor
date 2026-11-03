@@ -1,0 +1,19 @@
+[project]
+name = "aid-diagnosis-worker"
+version = "0.0.0"
+description = "Worker de diagnóstico: Regras sobre a Execução fechada e abertura de Incidentes"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "aid-db",
+    "aid-diagnosis-engine",
+    "fastapi>=0.162",
+    "sqlalchemy[asyncio]>=2.0",
+]
+
+[tool.uv.sources]
+aid-db = { workspace = true }
+aid-diagnosis-engine = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.9.5,<0.10"]
+build-backend = "uv_build"

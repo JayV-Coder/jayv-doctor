@@ -12,7 +12,7 @@ import os
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
-from fastapi import FastAPI, Response, status
+from fastapi import APIRouter, FastAPI, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
@@ -61,6 +61,15 @@ def topic_of(subscription: str) -> str:
     return subscription.rsplit("/", 1)[-1].removesuffix(".push")
 
 
+def routers_for(worker: str) -> list[APIRouter]:
+    """Rotas próprias de um worker que não vêm do Pub/Sub (ex.: o relay, chamado pelo Scheduler)."""
+    if worker == "relay":
+        from aid_relay.handlers import router
+
+        return [router]
+    return []
+
+
 def create_app(worker: str, handlers: Mapping[str, Handler]) -> FastAPI:
     app = FastAPI(title=f"worker-{worker}", openapi_url=None)
 
@@ -80,15 +89,8 @@ def create_app(worker: str, handlers: Mapping[str, Handler]) -> FastAPI:
         await handler(envelope.message)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    if worker == "relay":
-        from aid_relay.handlers import run_relay
-
-        # Disparado pelo Cloud Scheduler: sempre 200, a próxima rodada retoma o que faltou.
-        @app.post("/relay")
-        async def relay() -> dict[str, int]:
-            stats = await run_relay()
-            return {"published": stats.published, "failed": stats.failed}
-
+    for router in routers_for(worker):
+        app.include_router(router)
     return app
 
 

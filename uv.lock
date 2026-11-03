@@ -6,6 +6,7 @@ requires-python = "==3.12.*"
 members = [
     "aid-api",
     "aid-contracts",
+    "aid-db",
     "aid-ingestion",
     "aid-relay",
     "aid-security",
@@ -18,6 +19,7 @@ name = "aid-api"
 version = "0.0.0"
 source = { editable = "apps/api" }
 dependencies = [
+    { name = "aid-db" },
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "httpx" },
@@ -32,6 +34,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aid-db", editable = "packages/db" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "fastapi", specifier = ">=0.162" },
     { name = "httpx", specifier = ">=0.28" },
@@ -62,11 +65,27 @@ requires-dist = [
 ]
 
 [[package]]
+name = "aid-db"
+version = "0.1.0"
+source = { editable = "packages/db" }
+dependencies = [
+    { name = "asyncpg" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncpg", specifier = ">=0.30" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+]
+
+[[package]]
 name = "aid-ingestion"
 version = "0.0.0"
 source = { editable = "workers/ingestion" }
 dependencies = [
     { name = "aid-contracts" },
+    { name = "aid-db" },
     { name = "aid-security" },
     { name = "asyncpg" },
     { name = "httpx" },
@@ -76,6 +95,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "aid-contracts", editable = "packages/contracts" },
+    { name = "aid-db", editable = "packages/db" },
     { name = "aid-security", editable = "packages/security" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "httpx", specifier = ">=0.28" },
@@ -87,14 +107,18 @@ name = "aid-relay"
 version = "0.0.0"
 source = { editable = "workers/relay" }
 dependencies = [
+    { name = "aid-db" },
     { name = "asyncpg" },
+    { name = "fastapi" },
     { name = "httpx" },
     { name = "sqlalchemy", extra = ["asyncio"] },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "aid-db", editable = "packages/db" },
     { name = "asyncpg", specifier = ">=0.30" },
+    { name = "fastapi", specifier = ">=0.162" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
 ]

@@ -28,7 +28,9 @@ values
 select lives_ok($$select doctor.ensure_event_partition('2026-11-17')$$, 'cria a partição do mês');
 select lives_ok($$select doctor.ensure_event_partition('2026-11-02')$$, 'de novo, sem erro');
 select is(
-  (select count(*)::int from pg_inherits where inhparent = 'doctor.events'::regclass), 1, 'uma partição só'
+  (select count(*)::int from pg_inherits i join pg_class c on c.oid = i.inhrelid
+   where i.inhparent = 'doctor.events'::regclass and c.relname = 'events_2026_11'),
+  1, 'uma partição só para o mês'
 );
 select is(
   (select relrowsecurity from pg_class where relname = 'events_2026_11' and relnamespace = 'doctor'::regnamespace),

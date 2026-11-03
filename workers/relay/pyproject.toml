@@ -4,10 +4,15 @@ version = "0.0.0"
 description = "Relay da outbox: publica no Pub/Sub as mensagens gravadas na transação do dado"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "aid-db",
     "asyncpg>=0.30",
+    "fastapi>=0.162",
     "httpx>=0.28",
     "sqlalchemy[asyncio]>=2.0",
 ]
+
+[tool.uv.sources]
+aid-db = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.9.5,<0.10"]

@@ -77,12 +77,25 @@ async def topic_with_subscription(name: str) -> str:
     return f"{name}.test"
 
 
-async def pull(subscription: str) -> list[dict[str, Any]]:
+async def pull(subscription: str, expected: int = 1) -> list[dict[str, Any]]:
+    """Puxa até ter `expected` mensagens (ou 10 s): um pull pode devolver menos que o disponível."""
+    messages: list[dict[str, Any]] = []
     async with httpx.AsyncClient() as client:
-        response = await client.post(
-            emulator(f"subscriptions/{subscription}:pull"), json={"maxMessages": 100}
-        )
-    return [item["message"] for item in response.json().get("receivedMessages", [])]
+        for _ in range(50):
+            response = await client.post(
+                emulator(f"subscriptions/{subscription}:pull"), json={"maxMessages": 100}
+            )
+            received = response.json().get("receivedMessages", [])
+            messages += [item["message"] for item in received]
+            if received:
+                await client.post(
+                    emulator(f"subscriptions/{subscription}:acknowledge"),
+                    json={"ackIds": [item["ackId"] for item in received]},
+                )
+            if len(messages) >= expected:
+                break
+            await asyncio.sleep(0.2)
+    return messages
 
 
 async def enqueue(engine: AsyncEngine, tenant: str, topic: str, payload: dict[str, Any]) -> int:
@@ -158,7 +171,22 @@ async def test_dois_relays_ao_mesmo_tempo_publicam_cada_mensagem_uma_vez(
 
     received = [
         message["attributes"]["outbox_id"]
-        for message in await pull(subscription)
+        for message in await pull(subscription, expected=len(ids))
         if message["attributes"]["outbox_id"] in ids
     ]
     assert sorted(received) == sorted(ids)
+
+
+class Down(PubSubPublisher):
+    async def publish(self, client: Any, topic: str, messages: Any) -> None:
+        from aid_relay.publisher import PublishError
+
+        raise PublishError(f"{topic}: HTTP 503", rejected=False)
+
+
+@pytest.mark.asyncio
+async def test_queda_do_pub_sub_nao_gasta_tentativa(engine: AsyncEngine, tenant: str) -> None:
+    message_id = await enqueue(engine, tenant, f"relay.test.{letters()}", {"x": 1})
+    stats = await drain(engine, Down(PROJECT, emulator_host=EMULATOR))
+    assert stats.stopped
+    assert await state(engine, message_id) == (False, 0)

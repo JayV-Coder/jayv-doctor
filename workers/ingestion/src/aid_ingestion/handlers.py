@@ -4,10 +4,9 @@ import os
 from collections.abc import Awaitable, Callable, Mapping
 from functools import lru_cache
 from typing import Any
-from uuid import uuid4
 
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
-from sqlalchemy.pool import NullPool
+from aid_db import supavisor_engine
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aid_ingestion.pipeline import process_import
 from aid_ingestion.storage import SupabaseObjectStore
@@ -17,17 +16,7 @@ Handler = Callable[[Mapping[str, Any]], Awaitable[None]]
 
 @lru_cache
 def engine() -> AsyncEngine:
-    url = os.environ["SUPABASE_DB_URL"].replace("postgresql://", "postgresql+asyncpg://", 1)
-    # Supavisor em modo transação: sem cache de prepared statements, como na API.
-    return create_async_engine(
-        url,
-        poolclass=NullPool,
-        connect_args={
-            "statement_cache_size": 0,
-            "prepared_statement_cache_size": 0,
-            "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
-        },
-    )
+    return supavisor_engine(os.environ["SUPABASE_DB_URL"])
 
 
 @lru_cache

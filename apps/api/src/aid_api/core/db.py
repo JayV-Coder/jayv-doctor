@@ -6,12 +6,11 @@ from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from functools import lru_cache
-from uuid import uuid4
 
+from aid_db import supavisor_engine
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
-from sqlalchemy.pool import NullPool
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from aid_api.core.auth import Claims
 from aid_api.core.errors import ApiError
@@ -19,18 +18,7 @@ from aid_api.core.errors import ApiError
 
 @lru_cache
 def get_engine() -> AsyncEngine:
-    url = os.environ["SUPABASE_DB_URL"].replace("postgresql://", "postgresql+asyncpg://", 1)
-    # O Supavisor em modo transação não preserva prepared statements entre transações: nada de
-    # cache (do asyncpg nem do SQLAlchemy), nomes únicos e o pool fica por conta do Supavisor.
-    return create_async_engine(
-        url,
-        poolclass=NullPool,
-        connect_args={
-            "statement_cache_size": 0,
-            "prepared_statement_cache_size": 0,
-            "prepared_statement_name_func": lambda: f"__asyncpg_{uuid4()}__",
-        },
-    )
+    return supavisor_engine(os.environ["SUPABASE_DB_URL"])
 
 
 # Transação da requisição, aberta pela idempotência: reserva, efeito e resposta gravada são uma

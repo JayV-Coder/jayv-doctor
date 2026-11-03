@@ -252,6 +252,7 @@ resource "google_service_account" "scheduler" {
   project      = var.project_id
   account_id   = "${local.name_prefix}-scheduler"
   display_name = "Cloud Scheduler"
+  depends_on   = [module.project]
 }
 
 resource "google_cloud_run_v2_service_iam_member" "scheduler_invoker" {

@@ -1,0 +1,13 @@
+[project]
+name = "aid-db"
+version = "0.1.0"
+description = "Engine assíncrono do Postgres para o Supavisor em modo transação"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "asyncpg>=0.30",
+    "sqlalchemy[asyncio]>=2.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.5,<0.10"]
+build-backend = "uv_build"

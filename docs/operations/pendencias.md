@@ -15,7 +15,9 @@ Tudo foi validado na stack local e no CI. A configuração do GCP e do Supabase 
   - `supabase-db-url`;
   - `hmac-master-key`: 32+ bytes aleatórios, que nunca mudam depois do primeiro Evento, porque mudar quebra a busca por Referência;
   - `smtp-url`;
-  - `supabase-service-role-key`, usada pelo worker de ingestão para ler o Log bruto no Storage (ticket #12).
+  - `supabase-service-role-key`, usada pelo worker de ingestão para ler o Log bruto no Storage (ticket #12);
+  - `anthropic-api-key` e `voyage-api-key`, do worker de diagnóstico (ticket #22).
+- [ ] Vertex AI (provedor alternativo de IA, ticket #22): ativar a API no projeto, dar `roles/aiplatform.user` à conta do worker de diagnóstico, definir `GCP_PROJECT_ID` nele e confirmar que `gemini-2.5-pro`, `gemini-2.5-flash` e `text-embedding-005` estão disponíveis em southamerica-east1.
 - [ ] `MAIL_FROM` com um remetente de domínio verificado.
 - [ ] Variáveis do GitHub (`GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`, `GCP_PROJECT_ID`) e `DEPLOY_ENABLED`.
 

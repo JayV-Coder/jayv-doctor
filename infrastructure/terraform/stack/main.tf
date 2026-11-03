@@ -6,7 +6,7 @@ locals {
     # O Log bruto chega a 50 MB e é lido inteiro: 1 GiB de folga para o parse e a Sanitização.
     ingestion   = { secrets = ["supabase-db-url", "hmac-master-key", "supabase-service-role-key"], memory = "1Gi", timeout = "300s" }
     correlation = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "300s" }
-    diagnosis   = { secrets = ["supabase-db-url", "anthropic-api-key"], memory = "1Gi", timeout = "600s" }
+    diagnosis   = { secrets = ["supabase-db-url", "anthropic-api-key", "voyage-api-key"], memory = "1Gi", timeout = "600s" }
     connectors  = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "600s" }
     # Relay da outbox: o único que publica nos tópicos, chamado pelo Cloud Scheduler.
     relay = { secrets = ["supabase-db-url"], memory = "256Mi", timeout = "60s" }
@@ -32,8 +32,10 @@ locals {
   secret_env = {
     "supabase-db-url"   = "SUPABASE_DB_URL"
     "anthropic-api-key" = "ANTHROPIC_API_KEY"
-    "hmac-master-key"   = "HMAC_MASTER_KEY"
-    "smtp-url"          = "SMTP_URL"
+    # Embeddings da Base de conhecimento (Voyage, parceira da Anthropic), ticket #22.
+    "voyage-api-key"  = "VOYAGE_API_KEY"
+    "hmac-master-key" = "HMAC_MASTER_KEY"
+    "smtp-url"        = "SMTP_URL"
     # Só o worker de ingestão: lê o Log bruto no Storage como job de plataforma.
     "supabase-service-role-key" = "SUPABASE_SERVICE_ROLE_KEY"
   }

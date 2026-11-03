@@ -5,6 +5,7 @@
 !packages/contracts/**
 !packages/security/**
 !workers/ingestion/**
+!workers/relay/**
 !workers/runtime/**
 **/node_modules
 **/__pycache__

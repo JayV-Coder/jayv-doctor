@@ -58,3 +58,11 @@ def test_payload_json_chega_decodificado_ao_handler() -> None:
 
     asyncio.run(deliver())
     assert received == [{"import_id": "abc"}]
+
+
+def test_so_o_relay_expoe_a_rota_do_scheduler() -> None:
+    def paths(worker: str) -> set[str]:
+        return {getattr(route, "path", "") for route in create_app(worker, {}).routes}
+
+    assert "/relay" in paths("relay")
+    assert "/relay" not in paths("ingestion")

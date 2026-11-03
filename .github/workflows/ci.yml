@@ -79,15 +79,23 @@ jobs:
           name: playwright-test-results
           path: apps/web/test-results
           retention-days: 7
-      - name: Testes de integração da API e do worker de ingestão
+      - name: Emulador do Pub/Sub
+        run: |
+          docker run -d --name pubsub -p 8085:8085 gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators \
+            gcloud beta emulators pubsub start --host-port=0.0.0.0:8085 --project=aid-local
+          for _ in $(seq 1 60); do curl -sf -o /dev/null http://127.0.0.1:8085/ && exit 0; sleep 2; done
+          docker logs pubsub; exit 1
+      - name: Testes de integração da API e dos workers
         env:
           INTEGRATION_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
           SUPABASE_URL: http://127.0.0.1:54321
+          PUBSUB_EMULATOR_HOST: 127.0.0.1:8085
         run: |
           SUPABASE_SERVICE_ROLE_KEY="$(supabase status -o json | jq -r .SECRET_KEY)" uv run pytest \
             apps/api/tests/test_api_integration.py \
             workers/ingestion/tests/test_ingestion_pipeline.py \
-            workers/ingestion/tests/test_ingestion_storage.py
+            workers/ingestion/tests/test_ingestion_storage.py \
+            workers/relay/tests/test_relay.py
 
   terraform:
     name: Terraform (fmt, validate, tflint, test)

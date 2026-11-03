@@ -149,3 +149,7 @@ output "storage_regions" {
 output "uses_oidc" {
   value = length(google_pubsub_subscription.push.push_config[0].oidc_token) == 1
 }
+
+output "publishers" {
+  value = var.publishers
+}

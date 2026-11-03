@@ -80,6 +80,15 @@ def create_app(worker: str, handlers: Mapping[str, Handler]) -> FastAPI:
         await handler(envelope.message)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    if worker == "relay":
+        from aid_relay.handlers import run_relay
+
+        # Disparado pelo Cloud Scheduler: sempre 200, a próxima rodada retoma o que faltou.
+        @app.post("/relay")
+        async def relay() -> dict[str, int]:
+            stats = await run_relay()
+            return {"published": stats.published, "failed": stats.failed}
+
     return app
 
 

@@ -11,6 +11,7 @@ COPY apps/api apps/api
 COPY packages/contracts packages/contracts
 COPY packages/security packages/security
 COPY workers/ingestion workers/ingestion
+COPY workers/relay workers/relay
 COPY workers/runtime workers/runtime
 RUN uv sync --frozen --no-dev --no-editable --package "$PACKAGE"
 

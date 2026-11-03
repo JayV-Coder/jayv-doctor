@@ -28,6 +28,7 @@ Tudo foi validado na stack local e no CI. A configuração do GCP e do Supabase 
 
 - [ ] `scripts/apply-doctor-migrations.py --check` e, na janela combinada, `--apply`. As migrações criam o schema `doctor`, o bucket `doctor-raw-logs` e as políticas dele em `storage.objects`.
 - [ ] Extensão `vector` (pgvector, ticket #23): a migração da Base de conhecimento a cria no schema `extensions`. Instalar extensão no projeto compartilhado exige aprovação na janela; conferir antes se o jayv-coder já a usa. A busca usa `hnsw.iterative_scan` (pgvector ≥ 0.8): conferir a versão (`select extversion from pg_extension where extname = 'vector'`).
+- [ ] Segurança (#27): rodar os Advisors do Supabase (security e performance) no projeto e conferir que assinar `doctor.diagnoses` de outra Organização pelo Realtime não entrega eventos (o CI sobe sem Realtime). Ver `docs/security/isolamento-e-asvs-l2.md`.
 - [ ] Diagnóstico (#24): a Cota de IA ainda libera tudo (`ai_allowed` no worker de diagnóstico); o controle de consumo entra com o #31 (`usage_records`, `usage_llm`).
 - [ ] Rodar `python -m aid_knowledge.global_seed` (com `SUPABASE_DB_URL` e `VOYAGE_API_KEY`) depois das migrações, para gravar a Base global v1 com embeddings.
 - [ ] Confirmar que nenhum Custom Access Token Hook está ativo e ativar `doctor.custom_access_token_hook`.

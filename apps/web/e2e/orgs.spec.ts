@@ -75,6 +75,6 @@ test("a API recusa trocar para Organização sem Vínculo", async ({ page, reque
   const response = await request.post(`http://127.0.0.1:8000/api/v1/orgs/${randomUUID()}/switch`, {
     headers: { authorization: `Bearer ${session.access_token}` },
   });
-  expect(response.status()).toBe(403);
+  expect(response.status()).toBe(404);
   expect(((await response.json()) as { code: string }).code).toBe("not_a_member");
 });

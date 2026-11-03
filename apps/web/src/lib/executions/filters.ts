@@ -1,5 +1,5 @@
 import type { ExecutionSearch } from "@/lib/api";
-import { ENVIRONMENTS as ENVIRONMENT_OPTIONS } from "@/lib/integrations/labels";
+import { ENVIRONMENTS as ENVIRONMENT_OPTIONS } from "../integrations/labels";
 import { STATUSES as STATUS_LIST } from "./labels";
 
 // Filtros que podem ir na URL (nada sensível): Integração, Ambiente, status e período. O termo de

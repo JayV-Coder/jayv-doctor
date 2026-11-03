@@ -1,0 +1,59 @@
+name: Avaliação do diagnóstico
+
+# Ticket #30: o gate de regressão roda em toda PR que mexe no motor, no harness ou no dataset
+# (rules_only, sem provedor, rápido); a avaliação híbrida com o provedor real roda toda semana.
+on:
+  pull_request:
+    paths:
+      - "packages/diagnosis-engine/**"
+      - "packages/evaluation/**"
+      - "tests/evaluation/**"
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evaluation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Gate de regressão (rules_only)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --all-packages --locked
+      - run: make eval-gate
+
+  weekly:
+    name: Avaliação semanal (rules_only e híbrido)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --all-packages --locked
+      - name: Avaliar com o provedor real
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "Sem ANTHROPIC_API_KEY: só rules_only." && make eval
+          else
+            make eval-hybrid
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: avaliacao
+          path: tests/evaluation/reports
+          retention-days: 90

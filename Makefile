@@ -1,5 +1,5 @@
 # Comandos do dia a dia. Requer: Node 22 + pnpm 9 (corepack), uv; Docker + Supabase CLI para os alvos db:*.
-.PHONY: dev-setup dev lint typecheck test format check contracts db\:reset db\:types db\:test db\:lint
+.PHONY: dev-setup dev lint typecheck test format check contracts eval eval-hybrid eval-gate db\:reset db\:types db\:test db\:lint
 
 dev-setup: ## instala dependências TS e Python e os hooks de pre-commit
 	pnpm install
@@ -29,6 +29,15 @@ format:
 	uv run ruff format .
 
 check: lint typecheck test ## o mesmo que o CI roda
+
+eval: ## avaliação do motor em rules_only, com relatório em tests/evaluation/reports (ticket #30)
+	uv run python -m aid_evaluation run --modes rules_only
+
+eval-hybrid: ## avaliação também no híbrido, com o provedor real e o juiz (precisa das chaves)
+	uv run python -m aid_evaluation run --modes rules_only hybrid --provider $${EVAL_PROVIDER:-anthropic} --judge
+
+eval-gate: ## gate de regressão: rules_only não cai mais de 2 p.p. contra a linha de base
+	uv run python -m aid_evaluation gate
 
 contracts: ## regenera modelos Pydantic e tipos TS a partir de packages/contracts/schemas
 	pnpm exec prettier --write packages/contracts/schemas

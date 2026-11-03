@@ -13,6 +13,7 @@ members = [
     "aid-db",
     "aid-diagnosis-engine",
     "aid-diagnosis-worker",
+    "aid-evaluation",
     "aid-ingestion",
     "aid-knowledge",
     "aid-relay",
@@ -190,6 +191,21 @@ requires-dist = [
     { name = "aid-knowledge", editable = "packages/knowledge" },
     { name = "fastapi", specifier = ">=0.162" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+]
+
+[[package]]
+name = "aid-evaluation"
+version = "0.1.0"
+source = { editable = "packages/evaluation" }
+dependencies = [
+    { name = "aid-diagnosis-engine" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aid-diagnosis-engine", editable = "packages/diagnosis-engine" },
+    { name = "pydantic", specifier = ">=2.9" },
 ]
 
 [[package]]

@@ -75,6 +75,7 @@ class FakeRepository(DiagnosisRepository):
                     }
                 ],
                 "recommendations": [],
+                "feedback": [],
             }
         )
 
@@ -165,3 +166,19 @@ def test_so_owner_e_admin_ligam_o_automatico() -> None:
     repository = FakeRepository()
     assert client(repository, "admin").put("/api/v1/settings/diagnosis", json=body).json() == body
     assert repository.calls == [("settings", True)]
+
+
+def test_corrigir_exige_o_que_e_certo_e_viewer_nao_revisa() -> None:
+    url = f"/api/v1/diagnoses/{DIAGNOSIS}/feedback"
+    analyst = client(FakeRepository(), "analyst")
+    assert analyst.post(url, json={"verdict": "corrected", "comment": "x"}).status_code == 422
+    assert analyst.post(url, json={"verdict": "accepted", "nota": 1}).status_code == 422
+    assert client(FakeRepository(), "viewer").post(
+        url, json={"verdict": "accepted"}
+    ).status_code == (403)
+    assert (
+        client(FakeRepository(), "viewer")
+        .post(f"/api/v1/incidents/{INCIDENT}/knowledge")
+        .status_code
+        == 403
+    )

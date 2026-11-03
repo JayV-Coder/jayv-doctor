@@ -234,8 +234,35 @@ class IncidentRepository:
                     )
                 ).mappings()
             ]
+            # Documento da Base criado a partir deste Incidente (#26) e se ele pode ser promovido,
+            # pela mesma regra de doctor.promote_incident_to_knowledge: resolvido, e a versão
+            # mais nova publicada aceita ou corrigida.
+            knowledge = (
+                await connection.execute(
+                    text(
+                        "select (select k.id::text from doctor.knowledge_documents k"
+                        " where k.incident_id = i.id and k.source = 'incident') as document,"
+                        " i.status = 'resolved' and exists (select 1"
+                        " from doctor.diagnosis_feedback f"
+                        " where f.diagnosis_id = (select d.id from doctor.diagnoses d"
+                        " where d.incident_id = i.id"
+                        " and d.status in ('published', 'inconclusive', 'failed_llm')"
+                        " order by d.version desc limit 1)"
+                        " and f.verdict in ('accepted', 'corrected')) as reviewed"
+                        " from doctor.incidents i where i.id = cast(:n as uuid)"
+                    ),
+                    {"n": target},
+                )
+            ).one()
         return IncidentDetail.model_validate(
-            {**dict(row), "executions": executions, "evidence": evidence, "history": history}
+            {
+                **dict(row),
+                "executions": executions,
+                "evidence": evidence,
+                "history": history,
+                "knowledge_document_id": knowledge.document,
+                "promotable": knowledge.document is None and bool(knowledge.reviewed),
+            }
         )
 
     async def update(self, claims: Claims, target: str, change: IncidentChange) -> IncidentDetail:

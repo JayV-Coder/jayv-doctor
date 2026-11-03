@@ -754,6 +754,43 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/diagnoses/{target}/feedback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Review Diagnosis
+     * @description Um feedback por revisor por versão, auditado com o veredito e a versão.
+     */
+    post: operations["review_diagnosis_api_v1_diagnoses__target__feedback_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/incidents/{incident}/knowledge": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Promote Incident */
+    post: operations["promote_incident_api_v1_incidents__incident__knowledge_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/settings/diagnosis": {
     parameters: {
       query?: never;
@@ -1052,6 +1089,8 @@ export interface components {
       evidence: components["schemas"]["Evidence"][];
       /** Recommendations */
       recommendations: components["schemas"]["Recommendation"][];
+      /** Feedback */
+      feedback: components["schemas"]["Feedback"][];
     };
     /** DiagnosisQueued */
     DiagnosisQueued: {
@@ -1332,6 +1371,52 @@ export interface components {
       };
       incident: components["schemas"]["IncidentRef"] | null;
     };
+    /** Feedback */
+    Feedback: {
+      /** Id */
+      id: string;
+      /**
+       * Verdict
+       * @enum {string}
+       */
+      verdict: "accepted" | "corrected" | "rejected";
+      /** Correct Category */
+      correct_category: string | null;
+      /** Correct Cause */
+      correct_cause: string | null;
+      /** Responsible System */
+      responsible_system: ("sap" | "salesforce" | "gcp" | "other") | null;
+      /** Comment */
+      comment: string | null;
+      /** Reviewer Id */
+      reviewer_id: string | null;
+      /** Time To Review S */
+      time_to_review_s: number | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+    };
+    /**
+     * FeedbackRequest
+     * @description Aceitar, Corrigir (com a categoria ou a causa certa) ou Rejeitar uma versão.
+     */
+    FeedbackRequest: {
+      /**
+       * Verdict
+       * @enum {string}
+       */
+      verdict: "accepted" | "corrected" | "rejected";
+      /** Correct Category */
+      correct_category?: string | null;
+      /** Correct Cause */
+      correct_cause?: string | null;
+      /** Responsible System */
+      responsible_system?: ("sap" | "salesforce" | "gcp" | "other") | null;
+      /** Comment */
+      comment?: string | null;
+    };
     /** GlobalDocument */
     GlobalDocument: {
       /** Id */
@@ -1480,6 +1565,13 @@ export interface components {
       evidence: components["schemas"]["RuleEvidence"][];
       /** History */
       history: components["schemas"]["HistoryEntry"][];
+      /** Knowledge Document Id */
+      knowledge_document_id?: string | null;
+      /**
+       * Promotable
+       * @default false
+       */
+      promotable: boolean;
     };
     /** IncidentExecution */
     IncidentExecution: {
@@ -2006,6 +2098,11 @@ export interface components {
       avatar_url: string | null;
       /** Locale */
       locale: string;
+    };
+    /** Promoted */
+    Promoted: {
+      /** Document Id */
+      document_id: string;
     };
     /** RawLogDownload */
     RawLogDownload: {
@@ -3951,6 +4048,78 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["DiagnosisDetail"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  review_diagnosis_api_v1_diagnoses__target__feedback_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FeedbackRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Feedback"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  promote_incident_api_v1_incidents__incident__knowledge_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        incident: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Promoted"];
         };
       };
       /** @description Validation Error */

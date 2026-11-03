@@ -51,7 +51,7 @@ async def index(
             await connection.execute(
                 text(
                     "select d.id::text, d.tenant_id::text, d.storage_path, d.content_type,"
-                    " t.llm_provider from doctor.knowledge_documents d"
+                    " d.body, t.llm_provider from doctor.knowledge_documents d"
                     " join doctor.tenants t on t.id = d.tenant_id"
                     " where d.id = cast(:d as uuid) and d.status in ('indexing', 'ready')"
                 ),
@@ -60,7 +60,12 @@ async def index(
         ).first()
     if document is None:
         return "ignored"
-    data = await store.read(document.storage_path)
+    # Incidente promovido (#26): o texto está no registro; upload: o arquivo, no Storage.
+    data = (
+        document.body.encode()
+        if document.body is not None
+        else await store.read(document.storage_path)
+    )
     if data is None:
         await fail(engine, document, "Arquivo não encontrado no armazenamento.")
         return "failed"
@@ -88,8 +93,10 @@ async def index(
         )
         await connection.execute(
             text(
+                # Incidente promovido: o texto do registro vira o sanitizado (o bruto não fica).
                 "update doctor.knowledge_documents set status = 'ready', error = null,"
-                " chunk_count = :n, embedding_model = :m, reindex_queued_at = null"
+                " chunk_count = :n, embedding_model = :m, reindex_queued_at = null,"
+                " body = coalesce(:body, body)"
                 " where tenant_id = cast(:t as uuid) and id = cast(:d as uuid)"
             ),
             {
@@ -97,6 +104,9 @@ async def index(
                 "d": document.id,
                 "n": len(indexed),
                 "m": provider.embedding_model,
+                "body": str(Sanitizer().sanitize(document.body)[0])
+                if document.body is not None
+                else None,
             },
         )
     return "ready"
@@ -114,8 +124,7 @@ async def reindex_stale(engine: AsyncEngine, provider_for: ProviderFor) -> int:
             text(
                 "with stale as (select d.id, d.tenant_id from doctor.knowledge_documents d"
                 " join doctor.tenants t on t.id = d.tenant_id"
-                " where d.source = 'upload'"
-                " and (d.status = 'indexing' and d.updated_at < cast(:cutoff as timestamptz)"
+                " where (d.status = 'indexing' and d.updated_at < cast(:cutoff as timestamptz)"
                 " or d.status = 'ready' and d.embedding_model is distinct from"
                 " (cast(:models as jsonb) ->> t.llm_provider))"
                 " and (d.reindex_queued_at is null"

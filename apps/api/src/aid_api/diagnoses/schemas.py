@@ -1,9 +1,9 @@
 """Contratos do Diagnóstico (ticket #24). A Confiança é heurística (não calibrada)."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Status = Literal["queued", "running", "published", "inconclusive", "failed_llm", "failed"]
 StageName = Literal[
@@ -67,6 +67,43 @@ class Recommendation(BaseModel):
     kind: Literal["investigate", "fix", "verify"]
 
 
+System = Literal["sap", "salesforce", "gcp", "other"]
+
+
+class FeedbackRequest(BaseModel):
+    """Aceitar, Corrigir (com a categoria ou a causa certa) ou Rejeitar uma versão."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    verdict: Literal["accepted", "corrected", "rejected"]
+    correct_category: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,59}$")
+    correct_cause: str | None = Field(default=None, min_length=1, max_length=2000)
+    responsible_system: System | None = None
+    comment: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def check(self) -> Self:
+        if self.verdict == "corrected" and not (self.correct_category or self.correct_cause):
+            raise ValueError("corrigir exige a categoria ou a causa certa")
+        return self
+
+
+class Feedback(BaseModel):
+    id: str
+    verdict: Literal["accepted", "corrected", "rejected"]
+    correct_category: str | None
+    correct_cause: str | None
+    responsible_system: System | None
+    comment: str | None
+    reviewer_id: str | None
+    time_to_review_s: int | None
+    created_at: datetime
+
+
+class Promoted(BaseModel):
+    document_id: str
+
+
 class DiagnosisDetail(DiagnosisSummary):
     probable_cause: str | None
     # null = Indeterminado.
@@ -83,6 +120,7 @@ class DiagnosisDetail(DiagnosisSummary):
     hypotheses: list[Hypothesis]
     evidence: list[Evidence]
     recommendations: list[Recommendation]
+    feedback: list[Feedback]
 
 
 class DiagnosisSettings(BaseModel):

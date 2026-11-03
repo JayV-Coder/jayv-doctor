@@ -96,6 +96,9 @@ class IncidentDetail(IncidentSummary):
     executions: list[IncidentExecution]
     evidence: list[RuleEvidence]
     history: list[HistoryEntry]
+    knowledge_document_id: str | None = None
+    # Resolvido, com a versão mais nova publicada aceita ou corrigida, e ainda fora da Base.
+    promotable: bool = False
 
 
 class IncidentChange(BaseModel):

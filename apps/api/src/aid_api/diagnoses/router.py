@@ -20,6 +20,9 @@ from aid_api.diagnoses.schemas import (
     DiagnosisRequest,
     DiagnosisSettings,
     DiagnosisSummary,
+    Feedback,
+    FeedbackRequest,
+    Promoted,
 )
 
 router = APIRouter(
@@ -75,6 +78,26 @@ async def list_diagnoses(
 @router.get("/diagnoses/{target}", response_model=DiagnosisDetail)
 async def get_diagnosis(target: UUID, claims: Viewer, repository: Repository) -> DiagnosisDetail:
     return await repository.detail(claims, str(target))
+
+
+@router.post(
+    "/diagnoses/{target}/feedback", status_code=status.HTTP_201_CREATED, response_model=Feedback
+)
+async def review_diagnosis(
+    target: UUID, body: FeedbackRequest, claims: Operator, repository: Repository, _: Idempotent
+) -> Feedback:
+    """Um feedback por revisor por versão, auditado com o veredito e a versão."""
+    return await repository.review(claims, str(target), body)
+
+
+# Incidente resolvido, com o Diagnóstico aceito ou corrigido, vira documento da Base.
+@router.post(
+    "/incidents/{incident}/knowledge", status_code=status.HTTP_201_CREATED, response_model=Promoted
+)
+async def promote_incident(
+    incident: UUID, claims: Operator, repository: Repository, _: Idempotent
+) -> Promoted:
+    return Promoted(document_id=await repository.promote(claims, str(incident)))
 
 
 @router.get("/settings/diagnosis", response_model=DiagnosisSettings)

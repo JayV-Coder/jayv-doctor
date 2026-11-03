@@ -1,0 +1,12 @@
+# Correlação incremental: Execuções só se juntam, nunca se dividem
+
+O ticket #17 pede correlação determinística: a mesma entrada produz a mesma saída, em qualquer ordem de chegada. Os Eventos, porém, chegam em lotes, e as Execuções já gravadas têm id, aparecem na tela e logo terão Incidentes e Evidências apontando para elas. Recalcular tudo do zero a cada lote mudaria esses ids.
+
+Por isso o worker roda o motor (`packages/correlation`) sobre os Eventos pendentes, a vizinhança que pode se ligar a eles e todos os Eventos das Execuções envolvidas. A Execução já gravada entra como ligação forte (`execution_ref`): os Eventos dela ficam sempre no mesmo grupo. Quando o grupo junta duas Execuções (por exemplo, o `trace_id` chega depois), a de primeiro Evento mais antigo fica com os Eventos. A outra **não é apagada**: fica fechada, sem Eventos e com `merged_into` apontando para a sobrevivente, e `execution_merges` guarda as chaves que ela tinha. Assim, uma mensagem `rules.evaluate`, um Incidente ou uma Evidência que já citava o id dela continua achando um registro real, e uma fusão em cadeia não apaga o histórico das anteriores.
+
+## Consequências
+
+- O resultado de um lote é determinístico: o motor decide pelo conjunto, com desempates por (instante, id). Uma Execução que, com todos os Eventos à vista desde o início, teria sido dividida em duas continua uma só, se a ligação fraca veio antes.
+- As estratégias fracas (Referência, proximidade) só prendem Eventos **soltos** (sem `execution_id`, sem `trace_id` e ainda sem Execução) a um grupo de cada vez, e nunca ligam dois grupos ancorados. Isso limita a fusão errada que o "nunca dividir" tornaria permanente.
+- Sem id forte, a Referência não estica uma Execução além da janela de 15 min: os soltos se agrupam em janelas fixas a partir do primeiro, e um reprocessamento a cada 10 min não vira uma Execução de dias.
+- O fechamento conta 5 min a partir da última mudança feita pela correlação (`last_activity_at`), não do instante dos Eventos, que numa Importação podem ser de dias atrás. Evento tardio reabre a Execução, que fecha de novo e pede as Regras outra vez.

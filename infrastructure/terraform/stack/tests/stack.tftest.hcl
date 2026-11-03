@@ -22,6 +22,7 @@ run "topicos_tem_push_autenticado_e_dlq_apos_5_tentativas" {
   assert {
     condition = toset(keys(module.topics)) == toset([
       "ingestion.raw", "ingestion.normalized", "correlation.requested", "diagnosis.requested", "connector.sync",
+      "rules.evaluate",
     ])
     error_message = "Os cinco tópicos do ticket precisam existir."
   }
@@ -177,6 +178,10 @@ run "so_o_relay_publica_e_o_scheduler_o_chama" {
   assert {
     condition     = google_cloud_scheduler_job.connector_schedule.http_target[0].http_method == "POST"
     error_message = "O agendador dos Conectores roda pelo Cloud Scheduler."
+  }
+  assert {
+    condition     = google_cloud_scheduler_job.correlation_close.schedule == "* * * * *"
+    error_message = "O fechamento das Execuções roda pelo Cloud Scheduler."
   }
 }
 

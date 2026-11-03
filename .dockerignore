@@ -4,9 +4,11 @@
 !apps/api/**
 !packages/connectors/**
 !packages/contracts/**
+!packages/correlation/**
 !packages/db/**
 !packages/security/**
 !workers/connectors/**
+!workers/correlation/**
 !workers/ingestion/**
 !workers/relay/**
 !workers/runtime/**

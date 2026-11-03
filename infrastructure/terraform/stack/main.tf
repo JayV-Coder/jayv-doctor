@@ -18,8 +18,10 @@ locals {
     "ingestion.raw"         = { worker = "ingestion", publishers = ["relay"], ack_deadline = 300 }
     "ingestion.normalized"  = { worker = "correlation", publishers = ["relay"], ack_deadline = 300 }
     "correlation.requested" = { worker = "correlation", publishers = ["relay"], ack_deadline = 300 }
-    "diagnosis.requested"   = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
-    "connector.sync"        = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
+    # Execução fechada vai para as Regras (ticket #18), no worker de diagnóstico.
+    "rules.evaluate"      = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    "diagnosis.requested" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    "connector.sync"      = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
   }
 
   api_secrets = ["supabase-db-url", "hmac-master-key", "smtp-url"]
@@ -287,6 +289,36 @@ resource "google_cloud_scheduler_job" "connector_schedule" {
     oidc_token {
       service_account_email = google_service_account.scheduler.email
       audience              = module.workers["connectors"].uri
+    }
+  }
+
+  depends_on = [module.project]
+}
+
+resource "google_cloud_run_v2_service_iam_member" "scheduler_invoker_correlation" {
+  project  = var.project_id
+  location = var.region
+  name     = module.workers["correlation"].name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.scheduler.email}"
+}
+
+# Fechamento das Execuções paradas há 5 min: status final e rules.evaluate na outbox.
+resource "google_cloud_scheduler_job" "correlation_close" {
+  project          = var.project_id
+  region           = var.region
+  name             = "${local.name_prefix}-correlation-close"
+  schedule         = "* * * * *"
+  time_zone        = "Etc/UTC"
+  attempt_deadline = "60s"
+
+  http_target {
+    http_method = "POST"
+    uri         = "${module.workers["correlation"].uri}/close"
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = module.workers["correlation"].uri
     }
   }
 

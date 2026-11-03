@@ -1,0 +1,19 @@
+[project]
+name = "aid-correlation-worker"
+version = "0.0.0"
+description = "Worker de correlação: Eventos viram Execuções; as abertas fecham e vão para as Regras"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "aid-correlation",
+    "aid-db",
+    "fastapi>=0.162",
+    "sqlalchemy[asyncio]>=2.0",
+]
+
+[tool.uv.sources]
+aid-correlation = { workspace = true }
+aid-db = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.9.5,<0.10"]
+build-backend = "uv_build"

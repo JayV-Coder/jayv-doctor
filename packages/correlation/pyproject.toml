@@ -1,0 +1,10 @@
+[project]
+name = "aid-correlation"
+version = "0.1.0"
+description = "Motor de correlação: agrupa Eventos em Execuções, de forma determinística"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.9.5,<0.10"]
+build-backend = "uv_build"

@@ -9,6 +9,8 @@ Toda mensagem para o Pub/Sub nasce em `doctor.outbox_messages`, na mesma transa�
 | Worker de ingestão (Importação ou lote processado) | `correlation.requested` |
 | Agendador dos Conectores (`POST /schedule`, a cada minuto) | `connector.sync` |
 | Worker de Conectores (cada lote coletado) | `ingestion.raw` |
+| Worker de correlação (continuação, com mais de 2.000 pendentes) | `correlation.requested` |
+| Fechamento das Execuções (`POST /close`, a cada minuto) | `rules.evaluate` |
 
 O relay é o serviço `worker-relay`, com a mesma imagem dos workers e `WORKER_NAME=relay`. O Cloud Scheduler o chama a cada minuto (`POST /relay`, com OIDC). Cada rodada faz o seguinte:
 

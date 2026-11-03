@@ -57,6 +57,10 @@ def handlers_for(worker: str) -> dict[str, Handler]:
         from aid_connector_worker.handlers import TOPICS as CONNECTOR_TOPICS
 
         return {topic: json_handler(handler) for topic, handler in CONNECTOR_TOPICS.items()}
+    if worker == "correlation":
+        from aid_correlation_worker.handlers import TOPICS as CORRELATION_TOPICS
+
+        return {topic: json_handler(handler) for topic, handler in CORRELATION_TOPICS.items()}
     return {}
 
 
@@ -75,6 +79,10 @@ def routers_for(worker: str) -> list[APIRouter]:
         from aid_connector_worker.handlers import router as schedule
 
         return [schedule]
+    if worker == "correlation":
+        from aid_correlation_worker.handlers import router as close
+
+        return [close]
     return []
 
 

@@ -3457,6 +3457,167 @@
         }
       }
     },
+    "/api/v1/diagnoses/{target}/feedback": {
+      "post": {
+        "tags": ["diagnoses"],
+        "summary": "Review Diagnosis",
+        "description": "Um feedback por revisor por versão, auditado com o veredito e a versão.",
+        "operationId": "review_diagnosis_api_v1_diagnoses__target__feedback_post",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Feedback"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/incidents/{incident}/knowledge": {
+      "post": {
+        "tags": ["diagnoses"],
+        "summary": "Promote Incident",
+        "operationId": "promote_incident_api_v1_incidents__incident__knowledge_post",
+        "parameters": [
+          {
+            "name": "incident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Incident"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Promoted"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/settings/diagnosis": {
       "get": {
         "tags": ["diagnoses"],
@@ -4316,6 +4477,13 @@
             },
             "type": "array",
             "title": "Recommendations"
+          },
+          "feedback": {
+            "items": {
+              "$ref": "#/components/schemas/Feedback"
+            },
+            "type": "array",
+            "title": "Feedback"
           }
         },
         "type": "object",
@@ -4345,7 +4513,8 @@
           "error",
           "hypotheses",
           "evidence",
-          "recommendations"
+          "recommendations",
+          "feedback"
         ],
         "title": "DiagnosisDetail"
       },
@@ -5079,6 +5248,167 @@
         ],
         "title": "ExecutionSummary"
       },
+      "Feedback": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": ["accepted", "corrected", "rejected"],
+            "title": "Verdict"
+          },
+          "correct_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correct Category"
+          },
+          "correct_cause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correct Cause"
+          },
+          "responsible_system": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["sap", "salesforce", "gcp", "other"]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible System"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "reviewer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewer Id"
+          },
+          "time_to_review_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time To Review S"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "verdict",
+          "correct_category",
+          "correct_cause",
+          "responsible_system",
+          "comment",
+          "reviewer_id",
+          "time_to_review_s",
+          "created_at"
+        ],
+        "title": "Feedback"
+      },
+      "FeedbackRequest": {
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": ["accepted", "corrected", "rejected"],
+            "title": "Verdict"
+          },
+          "correct_category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9_]{2,59}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correct Category"
+          },
+          "correct_cause": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correct Cause"
+          },
+          "responsible_system": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["sap", "salesforce", "gcp", "other"]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible System"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["verdict"],
+        "title": "FeedbackRequest",
+        "description": "Aceitar, Corrigir (com a categoria ou a causa certa) ou Rejeitar uma versão."
+      },
       "GlobalDocument": {
         "properties": {
           "id": {
@@ -5476,6 +5806,17 @@
             },
             "type": "array",
             "title": "History"
+          },
+          "knowledge_document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge Document Id"
           }
         },
         "type": "object",
@@ -6848,6 +7189,17 @@
         "type": "object",
         "required": ["full_name", "avatar_url", "locale"],
         "title": "Profile"
+      },
+      "Promoted": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          }
+        },
+        "type": "object",
+        "required": ["document_id"],
+        "title": "Promoted"
       },
       "RawLogDownload": {
         "properties": {

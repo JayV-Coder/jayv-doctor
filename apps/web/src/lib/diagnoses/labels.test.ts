@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   active,
+  reviewTime,
   changes,
   confidenceText,
   evidenceChip,
@@ -28,6 +29,18 @@ describe("Diagnóstico", () => {
     expect(statusChip({ status: "running", requires_human_review: true }).text).toBe(
       "Em andamento",
     );
+    const reviewed = { status: "published", requires_human_review: false };
+    expect(statusChip({ ...reviewed, feedback: [{ verdict: "accepted" }] }).text).toBe("Aceito");
+    expect(
+      statusChip({ ...reviewed, feedback: [{ verdict: "accepted" }, { verdict: "corrected" }] })
+        .text,
+    ).toBe("Corrigido");
+    expect(
+      statusChip({ ...reviewed, requires_human_review: true, feedback: [{ verdict: "rejected" }] })
+        .text,
+    ).toBe("Rejeitado");
+    expect(reviewTime(30)).toBe("menos de 1 min após a publicação");
+    expect(reviewTime(600)).toBe("10 min após a publicação");
   });
 
   it("etapas: as feitas, a atual e as que faltam; rules_only pula Base e IA", () => {

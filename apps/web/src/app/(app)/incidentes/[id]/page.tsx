@@ -19,7 +19,7 @@ import {
   statusLabel as executionStatus,
 } from "@/lib/executions/labels";
 import { getDiagnosis, listDiagnoses } from "@/lib/diagnoses/api";
-import { active, changes, statusText } from "@/lib/diagnoses/labels";
+import { active, changes, reviewable, statusText, verdictOf } from "@/lib/diagnoses/labels";
 import { formatDateTime } from "@/lib/format";
 import { getIncident, listComments } from "@/lib/incidents/api";
 import { incidentCode, severityLabel, severityTone, statusLabel } from "@/lib/incidents/labels";
@@ -27,6 +27,7 @@ import { environmentLabel } from "@/lib/integrations/labels";
 import { CommentForm } from "./comment-form";
 import { IncidentControls } from "./incident-controls";
 import { NewDiagnosis } from "./new-diagnosis";
+import { PromoteButton, ReviewControls } from "./review-controls";
 
 export const metadata = { title: "Incidente · Integration AI Doctor" };
 
@@ -88,6 +89,18 @@ export default async function IncidentPage({
     previous ? getDiagnosis(previous.id) : null,
   ]);
   const differences = diagnosis && before ? changes(before, diagnosis) : [];
+  // A revisão é da versão mais nova, uma por revisor; promover pede o Incidente resolvido e essa
+  // versão aceita ou corrigida.
+  const latest = chosen?.id === versions?.[0]?.id;
+  const reviewedByMe = diagnosis?.feedback.some((item) => item.reviewer_id === me?.id) ?? false;
+  const canReview =
+    operator && diagnosis !== null && latest && reviewable(diagnosis.status) && !reviewedByMe;
+  const verdict = latest && diagnosis ? verdictOf(diagnosis.feedback) : null;
+  const canPromote =
+    operator &&
+    incident.status === "resolved" &&
+    (verdict === "accepted" || verdict === "corrected") &&
+    !incident.knowledge_document_id;
   const code = incidentCode(incident.number);
   const assignee =
     incident.assignee_id === null
@@ -177,6 +190,14 @@ export default async function IncidentPage({
                 </p>
               </div>
             </section>
+          )}
+          {canReview && <ReviewControls incidentId={incident.id} diagnosisId={diagnosis.id} />}
+          {canPromote && <PromoteButton incidentId={incident.id} />}
+          {incident.knowledge_document_id && (
+            <p className="note">
+              Caso na <Link href="/conhecimento">Base de conhecimento</Link>: os próximos
+              Diagnósticos de Incidentes semelhantes o consultam.
+            </p>
           )}
           {before && diagnosis && !active(diagnosis.status) && (
             <section className="card" aria-label="Diferenças entre versões">

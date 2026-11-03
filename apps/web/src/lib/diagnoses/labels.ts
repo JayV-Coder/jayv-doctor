@@ -10,11 +10,39 @@ const STATUS: Record<string, { text: string; tone: ChipTone }> = {
   failed: { text: "Falhou", tone: "danger" },
 };
 
-export function statusChip(diagnosis: { status: string; requires_human_review: boolean }): {
+const VERDICTS: Record<string, { text: string; tone: ChipTone }> = {
+  corrected: { text: "Corrigido", tone: "info" },
+  accepted: { text: "Aceito", tone: "success" },
+  rejected: { text: "Rejeitado", tone: "danger" },
+};
+
+// Veredito que vale para a versão: a correção pesa mais que o aceite, que pesa mais que a recusa.
+export function verdictOf(feedback: readonly { verdict: string }[] = []): string | null {
+  for (const verdict of ["corrected", "accepted", "rejected"]) {
+    if (feedback.some((item) => item.verdict === verdict)) return verdict;
+  }
+  return null;
+}
+
+export function verdictLabel(verdict: string): string {
+  return VERDICTS[verdict]?.text ?? verdict;
+}
+
+export function reviewable(status: string): boolean {
+  return status === "published" || status === "inconclusive" || status === "failed_llm";
+}
+
+export function statusChip(diagnosis: {
+  status: string;
+  requires_human_review: boolean;
+  feedback?: readonly { verdict: string }[];
+}): {
   text: string;
   tone: ChipTone;
 } {
-  // "Aceito" e "Corrigido" chegam com a revisão humana (#26).
+  const verdict = verdictOf(diagnosis.feedback);
+  const reviewed = verdict ? VERDICTS[verdict] : undefined;
+  if (reviewed && reviewable(diagnosis.status)) return reviewed;
   if (diagnosis.status === "published" && diagnosis.requires_human_review) {
     return { text: "Requer revisão", tone: "warning" };
   }
@@ -129,4 +157,12 @@ export function changes(before: Comparable, after: Comparable): string[] {
   }
   if (before.probable_cause !== after.probable_cause) found.push("Causa provável mudou");
   return found;
+}
+
+export function reviewTime(seconds: number | null): string {
+  if (seconds === null) return "";
+  if (seconds < 60) return "menos de 1 min após a publicação";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${String(minutes)} min após a publicação`;
+  return `${String(Math.round(minutes / 60))} h após a publicação`;
 }

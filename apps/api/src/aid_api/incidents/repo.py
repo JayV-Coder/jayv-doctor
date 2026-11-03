@@ -234,8 +234,22 @@ class IncidentRepository:
                     )
                 ).mappings()
             ]
+            # Documento da Base criado a partir deste Incidente (#26), se já foi promovido.
+            promoted = await connection.scalar(
+                text(
+                    "select id::text from doctor.knowledge_documents"
+                    " where incident_id = cast(:n as uuid) and source = 'incident'"
+                ),
+                {"n": target},
+            )
         return IncidentDetail.model_validate(
-            {**dict(row), "executions": executions, "evidence": evidence, "history": history}
+            {
+                **dict(row),
+                "executions": executions,
+                "evidence": evidence,
+                "history": history,
+                "knowledge_document_id": promoted,
+            }
         )
 
     async def update(self, claims: Claims, target: str, change: IncidentChange) -> IncidentDetail:

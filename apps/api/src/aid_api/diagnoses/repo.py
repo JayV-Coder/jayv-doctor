@@ -15,6 +15,8 @@ from aid_api.diagnoses.schemas import (
     DiagnosisSettings,
     DiagnosisSummary,
     Evidence,
+    Feedback,
+    FeedbackRequest,
     Hypothesis,
     Recommendation,
 )
@@ -36,6 +38,31 @@ ERRORS = {
         409, "idempotency_conflict", "Chave de idempotência já usada em outro Incidente."
     ),
 }
+
+
+FEEDBACK_ERRORS = {
+    **ERRORS,
+    "P0002": not_found,
+    "23505": lambda: ApiError(409, "already_reviewed", "Você já revisou esta versão."),
+    "23514": lambda: ApiError(
+        422, "validation_error", "Corrigir exige a categoria ou a causa certa."
+    ),
+    "DR021": lambda: ApiError(
+        409, "not_reviewable", "O Diagnóstico ainda não foi publicado ou falhou."
+    ),
+}
+PROMOTE_ERRORS = {
+    **ERRORS,
+    "23505": lambda: ApiError(409, "already_promoted", "Incidente já promovido à Base."),
+    "DR022": lambda: ApiError(409, "not_resolved", "Resolva o Incidente antes de promovê-lo."),
+    "DR023": lambda: ApiError(
+        409, "not_reviewed", "Aceite ou corrija o Diagnóstico antes de promover."
+    ),
+}
+FEEDBACK = (
+    "select id::text, verdict, correct_category, correct_cause, responsible_system, comment,"
+    " reviewer_id::text, time_to_review_s, created_at from doctor.diagnosis_feedback"
+)
 
 
 class DiagnosisRepository:
@@ -128,6 +155,10 @@ class DiagnosisRepository:
                 ),
                 params,
             )
+            feedback = await connection.execute(
+                text(f"{FEEDBACK} where diagnosis_id = cast(:d as uuid) order by created_at"),
+                params,
+            )
             data: dict[str, Any] = dict(row)
             return DiagnosisDetail.model_validate(
                 {
@@ -139,8 +170,45 @@ class DiagnosisRepository:
                     "recommendations": [
                         Recommendation.model_validate(dict(r)) for r in recommendations.mappings()
                     ],
+                    "feedback": [Feedback.model_validate(dict(f)) for f in feedback.mappings()],
                 }
             )
+
+    async def review(self, claims: Claims, target: str, body: FeedbackRequest) -> Feedback:
+        async with translated_tx(claims, FEEDBACK_ERRORS) as connection:
+            created = await connection.scalar(
+                text(
+                    "select doctor.submit_diagnosis_feedback(cast(:d as uuid), :v, :cat, :cause,"
+                    " :sys, :comment)::text"
+                ),
+                {
+                    "d": target,
+                    "v": body.verdict,
+                    "cat": body.correct_category,
+                    "cause": body.correct_cause,
+                    "sys": body.responsible_system,
+                    "comment": body.comment,
+                },
+            )
+            row = (
+                (
+                    await connection.execute(
+                        text(f"{FEEDBACK} where id = cast(:f as uuid)"),
+                        {"f": created},
+                    )
+                )
+                .mappings()
+                .one()
+            )
+        return Feedback.model_validate(dict(row))
+
+    async def promote(self, claims: Claims, incident: str) -> str:
+        async with translated_tx(claims, PROMOTE_ERRORS) as connection:
+            created = await connection.scalar(
+                text("select doctor.promote_incident_to_knowledge(cast(:i as uuid))::text"),
+                {"i": incident},
+            )
+        return str(created)
 
     async def settings(self, claims: Claims) -> DiagnosisSettings:
         async with translated_tx(claims, ERRORS) as connection:

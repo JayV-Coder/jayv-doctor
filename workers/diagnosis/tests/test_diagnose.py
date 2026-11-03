@@ -339,3 +339,45 @@ async def test_base_sem_embedding_segue_pelo_texto(
     loader = DbLoader(engine, tenant["tenant"], found["incident"], NoEmbedding())
     # Sem exceção: busca só por texto (a Base global pode estar vazia neste banco).
     assert isinstance(list(await loader.knowledge("timeout 504 gateway")), list)
+
+
+@pytest.mark.asyncio
+async def test_caso_corrigido_e_promovido_volta_no_proximo_diagnostico(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    from aid_diagnosis_worker.knowledge import index
+
+    found = await incident_with_timeout(engine, tenant)
+    document = str(uuid4())
+    body = (
+        "# INC-0001 · Timeout\n\n## Classificação\n\nSAP_LOCK\n\n## Causa\n\n"
+        "Lock na tabela VBAK durante o job noturno de remessas.\n\n## Resolução\n\n"
+        "Job remarcado; contato do cliente joana@cliente.com.br."
+    )
+    await run(
+        engine,
+        "insert into doctor.knowledge_documents (id, tenant_id, title, source, incident_id,"
+        " content_type, size_bytes, status, body) values (:d, :t, 'INC-0001 · Timeout',"
+        " 'incident', :i, 'text/markdown', 10, 'indexing', :b)",
+        d=document,
+        t=tenant["tenant"],
+        i=found["incident"],
+        b=body,
+    )
+
+    class NoFile:
+        async def read(self, path: str) -> bytes | None:
+            raise AssertionError("documento de Incidente não tem arquivo")
+
+    provider = FakeProvider()
+    assert await index(engine, {"document_id": document}, NoFile(), lambda n: provider) == "ready"
+    chunks = await rows(
+        engine,
+        "select content from doctor.knowledge_chunks where document_id = cast(:d as uuid)",
+        d=document,
+    )
+    assert "joana@cliente.com.br" not in chunks[0]["content"]
+
+    loader = DbLoader(engine, tenant["tenant"], found["incident"], provider)
+    hits = await loader.knowledge("lock tabela VBAK job noturno")
+    assert [hit.title for hit in hits if hit.origin == "tenant"] == ["INC-0001 · Timeout"]

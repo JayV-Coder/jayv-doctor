@@ -815,3 +815,68 @@ async def test_diagnostico_pedido_pela_api_publicado_pelo_worker_e_lido_isolado(
     with pytest.raises(ApiError) as other:
         await repository.detail(claims_for(second, user, "analyst"), queued.diagnosis_id)
     assert other.value.status == 404
+
+
+@pytest.mark.asyncio
+async def test_revisao_auditada_e_promocao_do_incidente_resolvido(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aid_api.core.db as db
+    from aid_api.diagnoses.repo import DiagnosisRepository
+    from aid_api.diagnoses.schemas import FeedbackRequest
+    from aid_api.incidents.repo import IncidentRepository
+    from aid_api.incidents.schemas import IncidentChange
+
+    first, second = tenants
+    await seed_explorer(engine, first, second)
+    await add_admin(engine, first, user)
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("update doctor.memberships set role = 'analyst' where user_id = :u"), {"u": user}
+        )
+        incident = await connection.scalar(
+            text("select id::text from doctor.incidents where tenant_id = cast(:t as uuid)"),
+            {"t": first},
+        )
+        diagnosis = await connection.scalar(
+            text(
+                "insert into doctor.diagnoses (tenant_id, incident_id, version, status, stage,"
+                " requested_mode, mode, processing_key, probable_cause, classification,"
+                " published_at) values (cast(:t as uuid), cast(:i as uuid), 1, 'published',"
+                " 'done', 'hybrid', 'hybrid', 'k', 'Gateway lento.', 'UPSTREAM_TIMEOUT', now())"
+                " returning id::text"
+            ),
+            {"t": first, "i": incident},
+        )
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    analyst = claims_for(first, user, "analyst")
+    repository = DiagnosisRepository()
+
+    with pytest.raises(ApiError) as early:
+        await repository.promote(analyst, incident)
+    assert early.value.code == "not_resolved"
+    review = await repository.review(
+        analyst,
+        diagnosis,
+        FeedbackRequest(
+            verdict="corrected", correct_category="SAP_LOCK", correct_cause="Lock na VBAK."
+        ),
+    )
+    assert (review.verdict, review.reviewer_id) == ("corrected", user)
+    with pytest.raises(ApiError) as twice:
+        await repository.review(analyst, diagnosis, FeedbackRequest(verdict="accepted"))
+    assert twice.value.code == "already_reviewed"
+    detail = await repository.detail(analyst, diagnosis)
+    assert detail.requires_human_review is False
+    assert [f.verdict for f in detail.feedback] == ["corrected"]
+
+    await IncidentRepository().update(
+        analyst,
+        incident,
+        IncidentChange.model_validate({"status": "resolved", "resolution_note": "VBAK liberada."}),
+    )
+    document = await repository.promote(analyst, incident)
+    assert (await IncidentRepository().detail(analyst, incident)).knowledge_document_id == document
+    with pytest.raises(ApiError) as again:
+        await repository.promote(analyst, incident)
+    assert again.value.code == "already_promoted"

@@ -96,6 +96,7 @@ class IncidentDetail(IncidentSummary):
     executions: list[IncidentExecution]
     evidence: list[RuleEvidence]
     history: list[HistoryEntry]
+    knowledge_document_id: str | None = None
 
 
 class IncidentChange(BaseModel):

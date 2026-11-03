@@ -1516,3 +1516,8 @@ p {
     gap: 24px;
   }
 }
+
+.reviews {
+  margin: 0;
+  padding-left: 18px;
+}

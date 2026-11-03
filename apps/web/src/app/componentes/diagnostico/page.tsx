@@ -67,6 +67,7 @@ const BASE: DiagnosisDetail = {
     { rank: 1, text: "Consultar o processamento correspondente no SAP", kind: "investigate" },
     { rank: 2, text: "Confirmar a existência do pedido antes de reenviar", kind: "verify" },
   ],
+  feedback: [],
 };
 
 const STATES: { name: string; diagnosis: DiagnosisDetail }[] = [
@@ -80,6 +81,26 @@ const STATES: { name: string; diagnosis: DiagnosisDetail }[] = [
   {
     name: "failed_llm",
     diagnosis: { ...BASE, status: "failed_llm", mode: "rules_only", confidence: 0.5, model: null },
+  },
+  {
+    name: "corrected",
+    diagnosis: {
+      ...BASE,
+      requires_human_review: false,
+      feedback: [
+        {
+          id: "00000000-0000-4000-8000-000000000f01",
+          verdict: "corrected",
+          correct_category: "SAP_LOCK",
+          correct_cause: "Lock na tabela VBAK durante o job noturno.",
+          responsible_system: "sap",
+          comment: "Confirmado com o time SAP.",
+          reviewer_id: null,
+          time_to_review_s: 600,
+          created_at: "2026-11-02T14:31:20Z",
+        },
+      ],
+    },
   },
   {
     name: "failed",

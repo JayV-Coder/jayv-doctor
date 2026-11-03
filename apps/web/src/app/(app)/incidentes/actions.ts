@@ -9,6 +9,11 @@ const MESSAGES: Record<string, string> = {
   invalid_assignee: "O responsável não é membro da Organização.",
   forbidden: "Seu papel não permite esta ação.",
   not_found: "Incidente não encontrado.",
+  already_reviewed: "Você já revisou esta versão.",
+  not_reviewable: "Esta versão ainda não pode ser revisada.",
+  not_resolved: "Resolva o Incidente antes de promovê-lo.",
+  not_reviewed: "Aceite ou corrija o Diagnóstico antes de promover.",
+  already_promoted: "Este Incidente já está na Base de conhecimento.",
   idempotency_key_reused: "Esse pedido já foi enviado com outros dados. Feche e peça de novo.",
 };
 const GENERIC = "Não foi possível concluir agora. Tente de novo.";
@@ -89,5 +94,33 @@ export async function requestDiagnosis(
     { method: "POST", body: JSON.stringify(body), headers: { "Idempotency-Key": key } },
     `/incidentes/${id}`,
     "Confira o modo do Diagnóstico.",
+  );
+}
+
+export async function reviewDiagnosis(
+  incidentId: string,
+  diagnosisId: string,
+  body: {
+    verdict: "accepted" | "corrected" | "rejected";
+    correct_category?: string | undefined;
+    correct_cause?: string | undefined;
+    responsible_system?: string | undefined;
+    comment?: string | undefined;
+  },
+): Promise<string | null> {
+  return send(
+    `/diagnoses/${encodeURIComponent(diagnosisId)}/feedback`,
+    { method: "POST", body: JSON.stringify(body) },
+    `/incidentes/${incidentId}`,
+    "Corrigir exige a categoria (ex.: SAP_LOCK) ou a causa certa.",
+  );
+}
+
+export async function promoteIncident(incidentId: string): Promise<string | null> {
+  return send(
+    `/incidents/${encodeURIComponent(incidentId)}/knowledge`,
+    { method: "POST" },
+    `/incidentes/${incidentId}`,
+    "Não foi possível promover o Incidente.",
   );
 }

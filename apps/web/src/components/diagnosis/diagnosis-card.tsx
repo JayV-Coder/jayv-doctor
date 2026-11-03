@@ -7,9 +7,11 @@ import {
   evidenceChip,
   evidenceHref,
   modeLabel,
+  reviewTime,
   stageSteps,
   statusChip,
   systemLabel,
+  verdictLabel,
 } from "@/lib/diagnoses/labels";
 import type { DiagnosisDetail } from "@/lib/diagnoses/api";
 
@@ -71,8 +73,16 @@ function Progress({ diagnosis }: Props) {
 
 function Result({ diagnosis }: Props) {
   const inconclusive = diagnosis.status === "inconclusive";
+  const correction = diagnosis.feedback.find((item) => item.verdict === "corrected");
   return (
     <>
+      {correction && (
+        <div className="note">
+          <span className="label">Corrigido pela revisão</span>
+          {correction.correct_category && <p className="small">{correction.correct_category}</p>}
+          {correction.correct_cause && <p className="cause">{correction.correct_cause}</p>}
+        </div>
+      )}
       {diagnosis.status === "failed_llm" && (
         <p className="alert" role="status">
           O modelo de IA falhou: este Diagnóstico foi montado só com as Regras determinísticas.
@@ -118,6 +128,17 @@ function Result({ diagnosis }: Props) {
           </>
         )}
       </dl>
+      {diagnosis.feedback.length > 0 && (
+        <ul className="small reviews" aria-label="Revisões">
+          {diagnosis.feedback.map((item) => (
+            <li key={item.id}>
+              {verdictLabel(item.verdict)}
+              {item.time_to_review_s !== null && ` · ${reviewTime(item.time_to_review_s)}`}
+              {item.comment && ` · ${item.comment}`}
+            </li>
+          ))}
+        </ul>
+      )}
       {diagnosis.verification_notes.length > 0 && (
         <details className="notes">
           <summary className="small">

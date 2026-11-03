@@ -2,9 +2,11 @@
 !pyproject.toml
 !uv.lock
 !apps/api/**
+!packages/connectors/**
 !packages/contracts/**
 !packages/db/**
 !packages/security/**
+!workers/connectors/**
 !workers/ingestion/**
 !workers/relay/**
 !workers/runtime/**

@@ -95,7 +95,8 @@ jobs:
             apps/api/tests/test_api_integration.py \
             workers/ingestion/tests/test_ingestion_pipeline.py \
             workers/ingestion/tests/test_ingestion_storage.py \
-            workers/relay/tests/test_relay.py
+            workers/relay/tests/test_relay.py \
+            workers/connectors/tests/test_connector_sync.py
 
   terraform:
     name: Terraform (fmt, validate, tflint, test)

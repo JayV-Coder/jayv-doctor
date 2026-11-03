@@ -174,6 +174,10 @@ run "so_o_relay_publica_e_o_scheduler_o_chama" {
     condition     = !contains(keys(google_cloud_run_v2_service_iam_member.pubsub_invoker), "relay")
     error_message = "O Pub/Sub não chama o relay."
   }
+  assert {
+    condition     = google_cloud_scheduler_job.connector_schedule.http_target[0].http_method == "POST"
+    error_message = "O agendador dos Conectores roda pelo Cloud Scheduler."
+  }
 }
 
 run "chave_secreta_do_supabase_e_recusada" {

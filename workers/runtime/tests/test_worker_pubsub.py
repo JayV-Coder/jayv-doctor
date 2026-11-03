@@ -73,3 +73,10 @@ def test_so_o_relay_expoe_a_rota_do_scheduler(monkeypatch: Any) -> None:
     response = TestClient(create_app("relay", {})).post("/relay")
     assert response.json() == {"published": 3, "failed": 0}
     assert TestClient(create_app("ingestion", {})).post("/relay").status_code == 404
+
+
+def test_worker_de_conectores_registra_o_topico_e_o_agendador() -> None:
+    from aid_worker.main import handlers_for
+
+    assert set(handlers_for("connectors")) == {"connector.sync"}
+    assert TestClient(create_app("ingestion", {})).post("/schedule").status_code == 404

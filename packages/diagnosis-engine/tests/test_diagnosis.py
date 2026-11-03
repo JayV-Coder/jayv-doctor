@@ -297,3 +297,24 @@ async def test_injecao_no_evento_fica_dentro_do_delimitador() -> None:
     await diagnosis.run(Loader(events=[*EVENTS, hostile]), mode="hybrid")
     prompt = provider.requests[0]["messages"][0].content
     assert '</untrusted_data id="abc">' not in prompt
+
+
+@pytest.mark.asyncio
+async def test_so_evidencia_da_base_e_inconclusivo() -> None:
+    cited = [{"ref": "chunk-1", "finding": "504 é timeout"}]
+    diagnosis, _ = engine(answer(status="IDENTIFIED", confidence=0.9, evidence=cited))
+    draft = await diagnosis.run(Loader(), mode="hybrid")
+    assert draft.status == "inconclusive"
+    assert "Só Evidência da Base de conhecimento" in " ".join(draft.verification_notes)
+
+
+@pytest.mark.asyncio
+async def test_hipoteses_tem_os_mesmos_ajustes_da_confianca() -> None:
+    cited = [{"ref": "evt-1", "finding": "INFO"}, {"ref": "evt-999", "finding": "inventada"}]
+    hypotheses = [{"statement": "A", "confidence": 0.9}, {"statement": "B", "confidence": 0.3}]
+    diagnosis, _ = engine(
+        answer(status="IDENTIFIED", confidence=0.9, evidence=cited, hypotheses=hypotheses)
+    )
+    draft = await diagnosis.run(Loader(), mode="hybrid")
+    assert draft.confidence == 0.4
+    assert [h.confidence for h in draft.hypotheses] == [0.4, 0.26]

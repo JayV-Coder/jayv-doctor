@@ -2,12 +2,14 @@
 progresso (`stage`) chega pelo Realtime (ADR-0005). Todo Papel lê; Analyst ou acima pede; Owner
 ou Admin liga o Diagnóstico automático de Incidente crítico."""
 
+import hashlib
+import json
 from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, status
 
-from aid_api.core.auth import Claims, require_role
+from aid_api.core.auth import Claims, require_manager, require_role
 from aid_api.core.idempotency import Idempotent, IdempotentRoute
 from aid_api.core.permissions import CONFIGURE_DIAGNOSIS, OPERATE, VIEW
 from aid_api.core.rate_limit import rate_limit
@@ -29,7 +31,7 @@ router = APIRouter(
 
 Viewer = Annotated[Claims, Depends(require_role(*VIEW))]
 Operator = Annotated[Claims, Depends(require_role(*OPERATE))]
-Manager = Annotated[Claims, Depends(require_role(*CONFIGURE_DIAGNOSIS))]
+Manager = Annotated[Claims, Depends(require_manager(*CONFIGURE_DIAGNOSIS))]
 Repository = Annotated[DiagnosisRepository, Depends(get_diagnosis_repository)]
 
 
@@ -46,9 +48,21 @@ async def request_diagnosis(
     _: Idempotent,
     idempotency_key: Annotated[str | None, Header(min_length=1, max_length=255)] = None,
 ) -> DiagnosisQueued:
-    # A mesma chave é o mesmo Diagnóstico também no banco (`processing_key`), não só na resposta.
-    key = f"req:{idempotency_key}" if idempotency_key else f"req:{uuid4()}"
-    return await repository.request(claims, str(incident), body, key)
+    # A mesma requisição é o mesmo Diagnóstico também no banco (`processing_key`), não só na
+    # resposta gravada por 24 h: o hash junta Usuário, Incidente, corpo e chave (tamanho fixo).
+    return await repository.request(
+        claims,
+        str(incident),
+        body,
+        processing_key(claims, str(incident), body, idempotency_key or str(uuid4())),
+    )
+
+
+def processing_key(claims: Claims, incident: str, body: DiagnosisRequest, key: str) -> str:
+    material = json.dumps(
+        [claims.sub, incident, body.mode, body.include_knowledge_base, key], separators=(",", ":")
+    )
+    return f"req:{hashlib.sha256(material.encode()).hexdigest()}"
 
 
 @router.get("/incidents/{incident}/diagnoses", response_model=list[DiagnosisSummary])

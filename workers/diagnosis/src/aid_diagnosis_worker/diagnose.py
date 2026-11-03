@@ -20,7 +20,7 @@ from aid_diagnosis_engine.diagnosis import (
     Stage,
 )
 from aid_diagnosis_engine.diagnosis.model import Mode
-from aid_diagnosis_engine.llm.base import LLMProvider
+from aid_diagnosis_engine.llm.base import LLMError, LLMProvider
 from aid_diagnosis_engine.llm.client import GuardedLLM
 from aid_diagnosis_engine.rules.base import EventView
 from aid_diagnosis_engine.rules.catalog import RULES, RULESET_VERSION
@@ -30,6 +30,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 # Posse de um Diagnóstico em andamento: passado isso sem publicar, outra entrega pode retomá-lo.
 LEASE = timedelta(minutes=5)
+# Na terceira falha que não seja do LLM (banco, dado, código), o Diagnóstico vira `failed` em vez
+# de voltar à fila até a DLQ.
+MAX_ATTEMPTS = 3
 MAX_EVENTS = 200
 MAX_RULES = 20
 KNOWLEDGE_K = 5
@@ -138,7 +141,12 @@ class DbLoader:
 
     async def knowledge(self, query: str) -> Sequence[KnowledgeItem]:
         # Embedding fora da transação; a busca, com a claim do tenant (o RAG não cruza tenants).
-        [vector] = await self.provider.embed([query], input_type="query")
+        # Sem embedding (provedor fora), a busca segue só pelo texto, como na API.
+        vector: list[float] | None
+        try:
+            [vector] = await self.provider.embed([query], input_type="query")
+        except LLMError:
+            vector = None
         async with self.engine.begin() as connection:
             await tenant_role(connection, self.tenant)
             hits = await search(
@@ -146,7 +154,7 @@ class DbLoader:
                 self.tenant,
                 query,
                 embedding=vector,
-                model=self.provider.embedding_model,
+                model=self.provider.embedding_model if vector is not None else None,
                 k=KNOWLEDGE_K,
             )
         return [
@@ -162,12 +170,12 @@ async def claim(engine: AsyncEngine, diagnosis_id: str) -> Any:
             await connection.execute(
                 text(
                     "update doctor.diagnoses d set status = 'running', stage = 'validation',"
-                    " started_at = now()"
+                    " started_at = now(), attempts = d.attempts + 1"
                     " from doctor.tenants t where t.id = d.tenant_id and d.id = cast(:d as uuid)"
                     " and (d.status = 'queued' or d.status = 'running'"
                     " and d.started_at < now() - make_interval(secs => :lease))"
                     " returning d.id::text, d.tenant_id::text, d.incident_id::text,"
-                    " d.requested_mode, d.include_knowledge_base, t.llm_provider"
+                    " d.requested_mode, d.include_knowledge_base, d.attempts, t.llm_provider"
                 ),
                 {"d": diagnosis_id, "lease": LEASE.total_seconds()},
             )
@@ -186,23 +194,53 @@ async def set_stage(engine: AsyncEngine, diagnosis_id: str, stage: Stage) -> Non
         )
 
 
-async def finish(
-    engine: AsyncEngine, diagnosis: Any, *, status: str, error: str | None = None
-) -> None:
+async def release(engine: AsyncEngine, diagnosis: Any) -> None:
+    """Devolve à fila sem esperar o prazo de posse: a próxima entrega retoma na hora."""
     async with engine.begin() as connection:
         await platform_role(connection)
         await connection.execute(
             text(
-                "update doctor.diagnoses set status = :s, stage = :stage, error = :e"
+                "update doctor.diagnoses set status = 'queued', stage = 'queued', started_at = null"
                 " where id = cast(:d as uuid) and status = 'running'"
             ),
-            {
-                "d": diagnosis.id,
-                "s": status,
-                "stage": "done" if status == "failed" else "queued",
-                "e": error,
-            },
+            {"d": diagnosis.id},
         )
+
+
+async def fail(engine: AsyncEngine, diagnosis: Any, error: str) -> None:
+    """Final como os outros: com `published_at`, duração e a mensagem `diagnosis.published`."""
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        updated = await connection.scalar(
+            text(
+                "update doctor.diagnoses set status = 'failed', stage = 'done', error = :e,"
+                " published_at = now(),"
+                " duration_ms = (extract(epoch from now() - created_at) * 1000)::int"
+                " where id = cast(:d as uuid) and status = 'running' returning id"
+            ),
+            {"d": diagnosis.id, "e": error[:500]},
+        )
+        if updated is not None:
+            await announce(connection, diagnosis, "failed")
+
+
+async def announce(connection: Any, diagnosis: Any, status: str) -> None:
+    await connection.execute(
+        text(
+            "insert into doctor.outbox_messages (tenant_id, topic, payload)"
+            " values (cast(:t as uuid), 'diagnosis.published', cast(:p as jsonb))"
+        ),
+        {
+            "t": diagnosis.tenant_id,
+            "p": json.dumps(
+                {
+                    "diagnosis_id": diagnosis.id,
+                    "incident_id": diagnosis.incident_id,
+                    "status": status,
+                }
+            ),
+        },
+    )
 
 
 def _evidence_row(diagnosis: Any, rank: int, item: Any) -> dict[str, Any]:
@@ -306,22 +344,7 @@ async def publish(engine: AsyncEngine, diagnosis: Any, draft: DiagnosisDraft) ->
                 "output": draft.output_tokens,
             },
         )
-        await connection.execute(
-            text(
-                "insert into doctor.outbox_messages (tenant_id, topic, payload)"
-                " values (cast(:t as uuid), 'diagnosis.published', cast(:p as jsonb))"
-            ),
-            {
-                "t": diagnosis.tenant_id,
-                "p": json.dumps(
-                    {
-                        "diagnosis_id": diagnosis.id,
-                        "incident_id": diagnosis.incident_id,
-                        "status": draft.status,
-                    }
-                ),
-            },
-        )
+        await announce(connection, diagnosis, draft.status)
     return True
 
 
@@ -331,30 +354,37 @@ async def diagnose(
     diagnosis = await claim(engine, str(payload["diagnosis_id"]))
     if diagnosis is None:
         return "ignored"
-    provider = provider_for(diagnosis.llm_provider)
-    hybrid = diagnosis.requested_mode == "hybrid"
-    llm = GuardedLLM(provider) if hybrid and await ai_allowed(engine, diagnosis.tenant_id) else None
-    motor = DiagnosisEngine(llm, scope=diagnosis.tenant_id)
 
     async def on_stage(stage: Stage) -> None:
         await set_stage(engine, diagnosis.id, stage)
 
-    loader = DbLoader(engine, diagnosis.tenant_id, diagnosis.incident_id, provider)
+    # Tudo depois da posse fica aqui dentro: nenhuma falha deixa o Diagnóstico `running`.
     try:
+        provider = provider_for(diagnosis.llm_provider)
+        hybrid = diagnosis.requested_mode == "hybrid"
+        allowed = hybrid and await ai_allowed(engine, diagnosis.tenant_id)
+        motor = DiagnosisEngine(
+            GuardedLLM(provider) if allowed else None, scope=diagnosis.tenant_id
+        )
+        loader = DbLoader(engine, diagnosis.tenant_id, diagnosis.incident_id, provider)
         draft = await motor.run(
             loader,
             mode=cast("Mode", diagnosis.requested_mode),
             include_knowledge_base=diagnosis.include_knowledge_base,
             on_stage=on_stage,
         )
+        published = await publish(engine, diagnosis, draft)
     except DiagnosisError as exc:
-        await finish(engine, diagnosis, status="failed", error=str(exc))
+        await fail(engine, diagnosis, str(exc))
         return "failed"
     except Exception:
+        if diagnosis.attempts >= MAX_ATTEMPTS:
+            await fail(engine, diagnosis, "Erro interno ao gerar o Diagnóstico.")
+            return "failed"
         # Banco ou rede: devolve à fila e deixa o Pub/Sub reentregar.
-        await finish(engine, diagnosis, status="queued")
+        await release(engine, diagnosis)
         raise
-    return draft.status if await publish(engine, diagnosis, draft) else "ignored"
+    return draft.status if published else "ignored"
 
 
 async def open_automatic(engine: AsyncEngine, payload: Mapping[str, Any]) -> str | None:

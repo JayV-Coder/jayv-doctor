@@ -79,17 +79,27 @@ def verify(
             notes.append(f"Evidência descartada: {_ref(ref)!r} não pertence ao Incidente.")
 
     status: Status = "inconclusive" if output.status == "INCONCLUSIVE" else "published"
+    # A Base explica, mas não prova: sem Evento nem Regra do próprio Incidente, é inconclusivo.
+    own = any(item.kind in ("event", "rule_match") for item in evidence)
     if not evidence:
         status = "inconclusive"
         notes.append("Nenhuma Evidência citada pelo modelo pertence ao Incidente.")
+    elif not own:
+        status = "inconclusive"
+        notes.append("Só Evidência da Base de conhecimento: nenhum dado do Incidente a sustenta.")
 
-    confidence = output.confidence
+    # Os mesmos ajustes valem para a Confiança e para cada Hipótese.
+    penalty = DISCARD_PENALTY if discarded else 1.0
+    ceiling = WEAK_CEILING if evidence and not strong else 1.0
     if discarded:
-        confidence *= DISCARD_PENALTY
         notes.append("Confiança rebaixada: o modelo citou Evidência inexistente.")
-    if evidence and not strong and confidence > WEAK_CEILING:
-        confidence = WEAK_CEILING
+    if output.confidence * penalty > ceiling:
         notes.append("Confiança rebaixada: só Evidência fraca (sem Regra nem Evento de erro).")
+
+    def adjusted(value: float) -> float:
+        return round(min(value * penalty, ceiling), 2)
+
+    confidence = adjusted(output.confidence)
 
     responsible: str | None = output.responsible_system
     if responsible == "indeterminado":
@@ -108,10 +118,9 @@ def verify(
         recommendations.append(RecommendationDraft(item.text, item.kind))
 
     hypotheses = [
-        HypothesisDraft(item.statement, round(item.confidence, 2))
+        HypothesisDraft(item.statement, adjusted(item.confidence))
         for item in sorted(output.hypotheses, key=lambda h: h.confidence, reverse=True)
     ]
-    confidence = round(confidence, 2)
     return DiagnosisDraft(
         status=status,
         mode="hybrid",

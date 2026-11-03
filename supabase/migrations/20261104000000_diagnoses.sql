@@ -20,7 +20,8 @@ create table doctor.diagnoses (
   requested_mode text not null check (requested_mode in ('hybrid', 'rules_only')),
   mode text not null check (mode in ('hybrid', 'rules_only')),
   include_knowledge_base boolean not null default true,
-  -- Idempotência: a mesma requisição (ou o mesmo Incidente aberto, no automático) é 1 Diagnóstico.
+  -- Idempotência: a mesma requisição (hash de Usuário, Incidente, corpo e Idempotency-Key) ou o
+  -- mesmo Incidente aberto, no automático, é 1 Diagnóstico.
   processing_key text not null check (char_length(processing_key) between 1 and 200),
   classification text check (char_length(classification) <= 80),
   probable_cause text check (char_length(probable_cause) <= 2000),
@@ -36,6 +37,8 @@ create table doctor.diagnoses (
   output_tokens integer not null default 0 check (output_tokens >= 0),
   duration_ms integer check (duration_ms >= 0),
   error text check (char_length(error) <= 500),
+  -- Tentativas do worker: falha que se repete vira `failed` em vez de voltar à fila para sempre.
+  attempts integer not null default 0 check (attempts >= 0),
   requested_by uuid references auth.users (id) on delete set null,
   started_at timestamptz,
   published_at timestamptz,
@@ -294,7 +297,7 @@ begin
 end;
 $$;
 
--- Diagnóstico automático ao abrir Incidente crítico: Owner ou Admin liga e desliga.
+-- Diagnóstico automático ao abrir Incidente crítico: Owner ou Admin com MFA liga e desliga.
 create function doctor.set_auto_diagnosis(enabled boolean)
 returns void
 language plpgsql
@@ -304,9 +307,7 @@ as $$
 declare
   tenant uuid := doctor.current_tenant_id();
 begin
-  if not doctor.has_member_role('owner', 'admin') then
-    raise insufficient_privilege using message = 'exige Owner ou Admin';
-  end if;
+  perform doctor.require_manager();
   update doctor.tenants t set auto_diagnose_critical = enabled where t.id = tenant;
   perform doctor.record_audit(tenant, 'diagnosis.auto_changed', enabled::text);
 end;

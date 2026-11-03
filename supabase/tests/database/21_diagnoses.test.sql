@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(18);
+select plan(19);
 
 select tests.create_user('00000000-0000-4000-8000-0000000a0001', 'ana@acme.test');
 select tests.create_user('00000000-0000-4000-8000-0000000a0002', 'vera@acme.test');
@@ -130,6 +130,11 @@ select results_eq(
 );
 
 select tests.authenticate_as('00000000-0000-4000-8000-0000000b0001', '00000000-0000-4000-8000-00000000be01', 'owner');
+select throws_ok(
+  $$select doctor.set_auto_diagnosis(true)$$, '42501', null, 'Owner sem MFA não liga o automático'
+);
+select tests.clear_authentication();
+select tests.authenticate_as('00000000-0000-4000-8000-0000000b0001', '00000000-0000-4000-8000-00000000be01', 'owner', 'aal2');
 select doctor.set_auto_diagnosis(true);
 select tests.clear_authentication();
 select is(

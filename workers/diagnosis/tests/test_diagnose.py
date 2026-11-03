@@ -262,17 +262,38 @@ async def test_falha_de_infraestrutura_devolve_a_fila(
 
     def broken(name: str) -> FakeProvider:
         class Broken(FakeProvider):
-            async def embed(self, texts: Any, *, input_type: Any) -> list[list[float]]:
+            async def complete_structured(self, **kwargs: Any) -> Any:
                 raise RuntimeError("rede")
 
         return Broken()
 
-    with pytest.raises(RuntimeError):
-        await diagnose(engine, {"diagnosis_id": diagnosis}, broken)
+    for _ in range(2):
+        with pytest.raises(RuntimeError):
+            await diagnose(engine, {"diagnosis_id": diagnosis}, broken)
+        [saved] = await rows(
+            engine,
+            "select status, started_at from doctor.diagnoses where id = cast(:d as uuid)",
+            d=diagnosis,
+        )
+        # Volta à fila na hora (sem esperar o prazo de posse) para a próxima entrega.
+        assert (saved["status"], saved["started_at"]) == ("queued", None)
+    # Na terceira, a falha que se repete vira `failed`, final como os outros.
+    assert await diagnose(engine, {"diagnosis_id": diagnosis}, broken) == "failed"
     [saved] = await rows(
-        engine, "select status from doctor.diagnoses where id = cast(:d as uuid)", d=diagnosis
+        engine,
+        "select status, error, published_at is not null as published, attempts,"
+        " (select count(*) from doctor.outbox_messages o where o.topic = 'diagnosis.published'"
+        " and o.payload ->> 'diagnosis_id' = :d) as announced"
+        " from doctor.diagnoses where id = cast(:d as uuid)",
+        d=diagnosis,
     )
-    assert saved["status"] == "queued"
+    assert dict(saved) == {
+        "status": "failed",
+        "error": "Erro interno ao gerar o Diagnóstico.",
+        "published": True,
+        "attempts": 3,
+        "announced": 1,
+    }
 
 
 @pytest.mark.asyncio
@@ -302,3 +323,19 @@ async def test_automatico_so_com_a_opcao_ligada_e_incidente_critico(
         d=created,
     )
     assert queued[0]["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_base_sem_embedding_segue_pelo_texto(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    from aid_diagnosis_engine.llm.base import LLMTransientError
+
+    class NoEmbedding(FakeProvider):
+        async def embed(self, texts: Any, *, input_type: Any) -> list[list[float]]:
+            raise LLMTransientError("429")
+
+    found = await incident_with_timeout(engine, tenant)
+    loader = DbLoader(engine, tenant["tenant"], found["incident"], NoEmbedding())
+    # Sem exceção: busca só por texto (a Base global pode estar vazia neste banco).
+    assert isinstance(list(await loader.knowledge("timeout 504 gateway")), list)

@@ -10,6 +10,7 @@ from aid_api.core.idempotency import (
     get_idempotency_store,
 )
 from aid_api.diagnoses.repo import DiagnosisRepository, get_diagnosis_repository
+from aid_api.diagnoses.router import processing_key
 from aid_api.diagnoses.schemas import (
     DiagnosisDetail,
     DiagnosisQueued,
@@ -94,10 +95,10 @@ class FreshKeys(IdempotencySession, IdempotencyStore):
         yield self
 
 
-def client(repository: FakeRepository, role: str) -> TestClient:
+def client(repository: FakeRepository, role: str, aal: str = "aal2") -> TestClient:
     app = create_app()
     app.dependency_overrides[get_claims] = lambda: Claims(
-        sub="u", email=None, aal="aal2", tenant_id=TENANT_ID, tenant_role=role
+        sub="u", email=None, aal=aal, tenant_id=TENANT_ID, tenant_role=role
     )
     app.dependency_overrides[get_diagnosis_repository] = lambda: repository
     app.dependency_overrides[get_idempotency_store] = lambda: FreshKeys()
@@ -113,7 +114,16 @@ def test_pedir_responde_202_e_a_chave_vira_processing_key() -> None:
     )
     assert response.status_code == 202
     assert response.json() == {"diagnosis_id": DIAGNOSIS, "status": "queued", "version": 1}
-    assert repository.calls == [("request", (INCIDENT, "rules_only", False, "req:abc-123"))]
+    incident, mode, knowledge, key = repository.calls[0][1]
+    assert (incident, mode, knowledge) == (INCIDENT, "rules_only", False)
+    # Mesma requisição, mesma chave no banco; outro corpo ou outro Usuário, outra chave.
+    body = DiagnosisRequest(mode="rules_only", include_knowledge_base=False)
+    analyst = Claims(sub="u", email=None, aal="aal2", tenant_id=TENANT_ID, tenant_role="analyst")
+    assert key == processing_key(analyst, INCIDENT, body, "abc-123")
+    assert key != processing_key(analyst, INCIDENT, DiagnosisRequest(), "abc-123")
+    other = Claims(sub="v", email=None, aal="aal2", tenant_id=TENANT_ID, tenant_role="analyst")
+    assert key != processing_key(other, INCIDENT, body, "abc-123")
+    assert len(processing_key(analyst, INCIDENT, body, "x" * 255)) == 68
 
 
 def test_padrao_e_hibrido_com_base_e_sem_chave_gera_uma() -> None:
@@ -146,6 +156,10 @@ def test_so_owner_e_admin_ligam_o_automatico() -> None:
         client(FakeRepository(), "analyst").put("/api/v1/settings/diagnosis", json=body).status_code
         == 403
     )
+    without_mfa = client(FakeRepository(), "admin", aal="aal1").put(
+        "/api/v1/settings/diagnosis", json=body
+    )
+    assert without_mfa.status_code == 403
     repository = FakeRepository()
     assert client(repository, "admin").put("/api/v1/settings/diagnosis", json=body).json() == body
     assert repository.calls == [("settings", True)]

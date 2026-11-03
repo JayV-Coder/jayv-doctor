@@ -79,14 +79,14 @@ isOneToOne: false
                   ]
                 },"diagnoses": {
                   Row: {
-                    "classification": string | null,"confidence": number | null,"created_at": string,"duration_ms": number | null,"error": string | null,"id": string,"incident_id": string,"include_knowledge_base": boolean,"input_tokens": number,"mode": string,"model": string | null,"output_tokens": number,"probable_cause": string | null,"processing_key": string,"provider": string | null,"published_at": string | null,"requested_by": string | null,"requested_mode": string,"requires_human_review": boolean,"responsible_system": string | null,"ruleset_version": string | null,"stage": string,"started_at": string | null,"status": string,"tenant_id": string,"updated_at": string,"verification_notes": NonNullable<Json>,"version": number
+                    "attempts": number,"classification": string | null,"confidence": number | null,"created_at": string,"duration_ms": number | null,"error": string | null,"id": string,"incident_id": string,"include_knowledge_base": boolean,"input_tokens": number,"mode": string,"model": string | null,"output_tokens": number,"probable_cause": string | null,"processing_key": string,"provider": string | null,"published_at": string | null,"requested_by": string | null,"requested_mode": string,"requires_human_review": boolean,"responsible_system": string | null,"ruleset_version": string | null,"stage": string,"started_at": string | null,"status": string,"tenant_id": string,"updated_at": string,"verification_notes": NonNullable<Json>,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "classification"?: string | null,"confidence"?: number | null,"created_at"?: string,"duration_ms"?: number | null,"error"?: string | null,"id"?: string,"incident_id": string,"include_knowledge_base"?: boolean,"input_tokens"?: number,"mode": string,"model"?: string | null,"output_tokens"?: number,"probable_cause"?: string | null,"processing_key": string,"provider"?: string | null,"published_at"?: string | null,"requested_by"?: string | null,"requested_mode": string,"requires_human_review"?: boolean,"responsible_system"?: string | null,"ruleset_version"?: string | null,"stage"?: string,"started_at"?: string | null,"status"?: string,"tenant_id": string,"updated_at"?: string,"verification_notes"?: NonNullable<Json>,"version": number
+                    "attempts"?: number,"classification"?: string | null,"confidence"?: number | null,"created_at"?: string,"duration_ms"?: number | null,"error"?: string | null,"id"?: string,"incident_id": string,"include_knowledge_base"?: boolean,"input_tokens"?: number,"mode": string,"model"?: string | null,"output_tokens"?: number,"probable_cause"?: string | null,"processing_key": string,"provider"?: string | null,"published_at"?: string | null,"requested_by"?: string | null,"requested_mode": string,"requires_human_review"?: boolean,"responsible_system"?: string | null,"ruleset_version"?: string | null,"stage"?: string,"started_at"?: string | null,"status"?: string,"tenant_id": string,"updated_at"?: string,"verification_notes"?: NonNullable<Json>,"version": number
                   }
                   Update: {
-                    "classification"?: string | null,"confidence"?: number | null,"created_at"?: string,"duration_ms"?: number | null,"error"?: string | null,"id"?: string,"incident_id"?: string,"include_knowledge_base"?: boolean,"input_tokens"?: number,"mode"?: string,"model"?: string | null,"output_tokens"?: number,"probable_cause"?: string | null,"processing_key"?: string,"provider"?: string | null,"published_at"?: string | null,"requested_by"?: string | null,"requested_mode"?: string,"requires_human_review"?: boolean,"responsible_system"?: string | null,"ruleset_version"?: string | null,"stage"?: string,"started_at"?: string | null,"status"?: string,"tenant_id"?: string,"updated_at"?: string,"verification_notes"?: NonNullable<Json>,"version"?: number
+                    "attempts"?: number,"classification"?: string | null,"confidence"?: number | null,"created_at"?: string,"duration_ms"?: number | null,"error"?: string | null,"id"?: string,"incident_id"?: string,"include_knowledge_base"?: boolean,"input_tokens"?: number,"mode"?: string,"model"?: string | null,"output_tokens"?: number,"probable_cause"?: string | null,"processing_key"?: string,"provider"?: string | null,"published_at"?: string | null,"requested_by"?: string | null,"requested_mode"?: string,"requires_human_review"?: boolean,"responsible_system"?: string | null,"ruleset_version"?: string | null,"stage"?: string,"started_at"?: string | null,"status"?: string,"tenant_id"?: string,"updated_at"?: string,"verification_notes"?: NonNullable<Json>,"version"?: number
                   }
                   Relationships: [
                     {
@@ -249,7 +249,35 @@ isOneToOne: false
       referencedColumns: ["tenant_id","id"]
     }
                   ]
+                },"events_2026_10": {
+                  Row: {
+                    "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"correlated_by": string | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"execution_ref": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key": string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id": string,"ingested_at"?: string,"integration_id": string,"operation": string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id"?: string | null
+                  }
+                  Update: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
                 },"events_2026_11": {
+                  Row: {
+                    "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"correlated_by": string | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"execution_ref": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key": string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id": string,"ingested_at"?: string,"integration_id": string,"operation": string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id"?: string | null
+                  }
+                  Update: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"events_2026_12": {
                   Row: {
                     "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"correlated_by": string | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"execution_ref": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
                   }

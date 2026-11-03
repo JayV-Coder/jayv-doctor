@@ -389,6 +389,29 @@ resource "google_cloud_scheduler_job" "dashboard_stats" {
   depends_on = [module.project]
 }
 
+# Retenção e exclusão (#29): todo dia às 03:00 BRT (06:00 UTC), no worker de diagnóstico, que
+# tem a chave do Storage. O pg_cron do projeto é do jayv-coder (ADR-0009).
+resource "google_cloud_scheduler_job" "retention" {
+  project          = var.project_id
+  region           = var.region
+  name             = "${local.name_prefix}-retention"
+  schedule         = "0 6 * * *"
+  time_zone        = "Etc/UTC"
+  attempt_deadline = "1800s"
+
+  http_target {
+    http_method = "POST"
+    uri         = "${module.workers["diagnosis"].uri}/retention/run"
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = module.workers["diagnosis"].uri
+    }
+  }
+
+  depends_on = [module.project]
+}
+
 # Trilha de auditoria (#28): login e MFA do Supabase Auth e as partições dos próximos meses.
 resource "google_cloud_scheduler_job" "audit_auth_events" {
   project          = var.project_id

@@ -932,3 +932,55 @@ async def test_auditoria_registra_a_troca_de_papel_com_a_requisicao_e_so_o_gesto
     # A exportação também fica na trilha.
     audited = await repository.search(admin, AuditSearch(q="audit.exported"))
     assert [item.action for item in audited.items] == ["audit.exported"]
+
+
+@pytest.mark.asyncio
+async def test_retencao_envio_ao_llm_exclusao_e_titular(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aid_api.core.db as db
+    from aid_api.core.references import reference_of
+    from aid_api.privacy.repo import PrivacyRepository
+    from aid_api.privacy.schemas import DeletionRequest, RetentionChange
+
+    first, _ = tenants
+    seeded = await seed_explorer(engine, first, tenants[1])
+    await add_admin(engine, first, user)
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    monkeypatch.setenv("HMAC_MASTER_KEY", "chave-mestre-de-teste")
+    admin = claims_for(first, user, "admin", aal="aal2")
+    repository = PrivacyRepository()
+
+    settings = await repository.settings(admin)
+    assert {r.data_class: r.days for r in settings.retention} == {
+        "raw_logs": 30,
+        "events": 90,
+        "incidents": 180,
+        "audit": 365,
+    }
+    await repository.set_retention(admin, RetentionChange(data_class="events", days=60))
+    with pytest.raises(ApiError) as bounds:
+        await repository.set_retention(admin, RetentionChange(data_class="audit", days=30))
+    assert bounds.value.code == "retention_out_of_bounds"
+    await repository.set_llm(admin, False)
+    changed = await repository.settings(admin)
+    assert ({r.data_class: r.days for r in changed.retention}["events"], changed.llm_enabled) == (
+        60,
+        False,
+    )
+
+    with pytest.raises(ApiError) as not_owner:
+        await repository.request_deletion(admin, DeletionRequest(confirmation="x"))
+    assert not_owner.value.status == 403
+
+    reference = reference_of(admin, "4500012345")
+    assert reference == seeded["reference"]
+    assert reference is not None
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("update doctor.events set business_reference = :r where id = cast(:e as uuid)"),
+            {"r": reference, "e": seeded["e2"]},
+        )
+    assert (await repository.find_subject(admin, reference)).events >= 1
+    assert await repository.erase_subject(admin, reference) >= 1
+    assert (await repository.find_subject(admin, reference)).events == 0

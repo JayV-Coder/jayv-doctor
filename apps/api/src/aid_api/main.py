@@ -14,6 +14,7 @@ from aid_api.ingestion import router as ingestion
 from aid_api.integrations import router as integrations
 from aid_api.knowledge import router as knowledge
 from aid_api.orgs import router as orgs
+from aid_api.privacy import router as privacy
 
 
 def create_app() -> FastAPI:
@@ -37,6 +38,7 @@ def create_app() -> FastAPI:
     app.include_router(knowledge.router)
     app.include_router(diagnoses.router)
     app.include_router(audit.router)
+    app.include_router(privacy.router)
     telemetry.configure(app)
     return app
 

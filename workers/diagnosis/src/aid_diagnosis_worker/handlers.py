@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from aid_diagnosis_worker.diagnose import diagnose, open_automatic
 from aid_diagnosis_worker.evaluate import evaluate_execution
 from aid_diagnosis_worker.knowledge import index, reindex_stale
+from aid_diagnosis_worker.retention import SupabaseStorage, run_retention
 
 Handler = Callable[[Mapping[str, Any]], Awaitable[None]]
 
@@ -64,3 +65,9 @@ router = APIRouter()
 @router.post("/knowledge/reindex")
 async def reindex() -> dict[str, int]:
     return {"queued": await reindex_stale(engine(), provider_for)}
+
+
+@router.post("/retention/run")
+async def retention() -> dict[str, int]:
+    storage = SupabaseStorage(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
+    return await run_retention(engine(), storage)

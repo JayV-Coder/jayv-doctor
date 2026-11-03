@@ -17,9 +17,6 @@ DOC = "00000000-0000-4000-8000-0000000007a1"
 
 
 class FakeRepository(KnowledgeRepository):
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, Any]] = []
-
     async def create(self, claims: Claims, new: NewKnowledgeDocument) -> tuple[str, str]:
         self.calls.append(("create", new))
         return DOC, f"{TENANT_ID}/{DOC}/runbook.md"
@@ -30,8 +27,12 @@ class FakeRepository(KnowledgeRepository):
     async def delete(self, claims: Claims, target: str) -> None:
         self.calls.append(("delete", target))
 
-    async def llm_provider(self, claims: Claims) -> str:
-        return "anthropic"
+    def __init__(self, enabled: bool = True) -> None:
+        self.calls: list[tuple[str, Any]] = []
+        self.enabled = enabled
+
+    async def llm_provider(self, claims: Claims) -> str | None:
+        return "anthropic" if self.enabled else None
 
     async def search(
         self, claims: Claims, query: str, k: int, embedding: Any, model: str | None
@@ -155,3 +156,13 @@ def test_busca_hibrida_e_so_texto_com_o_provedor_fora() -> None:
         "/api/v1/knowledge/search", json={"q": "VL10 bloqueado"}
     )
     assert response.json()["mode"] == "text"
+
+
+def test_envio_ao_llm_desligado_busca_so_pelo_texto_sem_embedding() -> None:
+    repository = FakeRepository(enabled=False)
+    provider = FakeProvider()
+    response = client(repository, provider=provider).post(
+        "/api/v1/knowledge/search", json={"q": "VL10 bloqueado"}
+    )
+    assert response.json()["mode"] == "text"
+    assert provider.embeds == []

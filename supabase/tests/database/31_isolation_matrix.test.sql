@@ -95,6 +95,8 @@ begin
   values (t, 'novo-' || t::text || '@exemplo.test', 'viewer', md5(t::text || 'convite') || md5(t::text), owner);
   insert into doctor.outbox_messages (tenant_id, topic, payload) values (t, 'rules.evaluate', '{}');
   insert into doctor.audit_logs (tenant_id, actor_type, action) values (t, 'system', 'teste.isolamento');
+  insert into doctor.retention_policies (tenant_id, data_class, days) values (t, 'raw_logs', 15);
+  insert into doctor.deletion_receipts (tenant_id, requested_at) values (t, now());
 end;
 $$;
 

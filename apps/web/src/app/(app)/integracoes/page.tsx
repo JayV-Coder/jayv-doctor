@@ -10,7 +10,7 @@ import {
   errorRateText,
   flowLabel,
 } from "@/lib/integrations/labels";
-import { isManager } from "@/lib/orgs/labels";
+import { canManage } from "@/lib/orgs/labels";
 import { ArchiveButton } from "./archive-button";
 import { IntegrationForm } from "./integration-form";
 
@@ -19,8 +19,7 @@ export const metadata = { title: "Integrações · Integration AI Doctor" };
 // Tela 10: lista em cards; o cadastro abre numa folha inferior.
 export default async function IntegrationsPage() {
   const [me, integrations] = await Promise.all([getMe(), listIntegrations()]);
-  // Toda escrita exige MFA: sem `aal2`, o formulário só levaria a um erro no fim.
-  const manager = isManager(me?.active_role) && me?.aal === "aal2";
+  const manager = canManage(me);
 
   return (
     <>

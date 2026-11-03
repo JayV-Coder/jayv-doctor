@@ -2,8 +2,6 @@
 erro temporário e paginação quebrada. Serve aos testes e à suíte de contrato."""
 
 import asyncio
-import hashlib
-import uuid
 from collections import Counter
 from collections.abc import AsyncIterator, Mapping
 from datetime import UTC, datetime, timedelta
@@ -17,6 +15,7 @@ from aid_connectors.base import (
     RateLimitPolicy,
     Secret,
     TestResult,
+    stable_uuid7,
 )
 
 START = datetime(2026, 11, 2, 14, 0, tzinfo=UTC)
@@ -26,16 +25,6 @@ MESSAGES = {
     "transient": "Falha temporária no provedor (503).",
     "auth": "Credencial recusada pelo provedor (401).",
 }
-
-
-def stable_uuid7(seed: str, moment: datetime) -> str:
-    """UUIDv7 determinístico: a mesma página gera o mesmo event_id, para a deduplicação."""
-    millis = int(moment.timestamp() * 1000)
-    rest = int.from_bytes(hashlib.sha256(seed.encode()).digest()[:10], "big")
-    value = (millis << 80) | rest
-    value = (value & ~(0xF << 76)) | (0x7 << 76)
-    value = (value & ~(0x3 << 62)) | (0x2 << 62)
-    return str(uuid.UUID(int=value))
 
 
 class FakeConnector:
@@ -56,7 +45,9 @@ class FakeConnector:
             errors["fail"] = "objeto {page, kind, times}"
         return errors
 
-    async def test_connection(self, secret: Secret, config: Mapping[str, Any]) -> TestResult:
+    async def test_connection(
+        self, secret: Secret, config: Mapping[str, Any], *, preview: bool = False
+    ) -> TestResult:
         fail = config.get("fail") or {}
         if not secret.reveal() or fail.get("kind") == "auth":
             return TestResult(False, MESSAGES["auth"])

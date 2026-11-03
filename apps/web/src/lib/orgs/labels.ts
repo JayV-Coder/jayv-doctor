@@ -23,3 +23,11 @@ const MANAGER_ROLES = ["owner", "admin"];
 export function isManager(role: string | null | undefined): boolean {
   return role != null && MANAGER_ROLES.includes(role);
 }
+
+// Ações de escrita na tela: Owner ou Admin com MFA (`aal2`), a mesma regra que a API confere.
+// Sem `aal2`, o botão só levaria a um erro no fim.
+export function canManage(
+  me: { active_role?: string | null; aal?: string | null } | null | undefined,
+): boolean {
+  return isManager(me?.active_role) && me?.aal === "aal2";
+}

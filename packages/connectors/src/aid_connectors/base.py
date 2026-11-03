@@ -1,8 +1,11 @@
 """Interface pequena de um Conector. Tudo o que é comum (retry, backoff, timeout, Checkpoint por
 lote, política de falhas) fica no runtime, fora do conector."""
 
+import hashlib
+import uuid
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, ClassVar, Literal, Protocol
 
 Checkpoint = Mapping[str, Any]
@@ -64,8 +67,23 @@ class Connector(Protocol):
 
     def validate_config(self, config: Mapping[str, Any]) -> ConfigErrors: ...
 
-    async def test_connection(self, secret: Secret, config: Mapping[str, Any]) -> TestResult: ...
+    async def test_connection(
+        self, secret: Secret, config: Mapping[str, Any], *, preview: bool = False
+    ) -> TestResult:
+        """`preview`: além de testar, estima o volume com a config (assistente de criação)."""
+        ...
 
     def collect(
         self, secret: Secret, config: Mapping[str, Any], checkpoint: Checkpoint | None
     ) -> AsyncIterator[Batch]: ...
+
+
+def stable_uuid7(seed: str, moment: datetime) -> str:
+    """UUIDv7 determinístico a partir do id na origem: o mesmo registro coletado de novo gera o
+    mesmo event_id, e a deduplicação da ingestão o descarta."""
+    millis = int(moment.timestamp() * 1000)
+    rest = int.from_bytes(hashlib.sha256(seed.encode()).digest()[:10], "big")
+    value = (millis << 80) | rest
+    value = (value & ~(0xF << 76)) | (0x7 << 76)
+    value = (value & ~(0x3 << 62)) | (0x2 << 62)
+    return str(uuid.UUID(int=value))

@@ -52,3 +52,43 @@ O conector `fake` aceita falhas injetadas pela config (`fail: {page, kind, times
 ## Credenciais
 
 Ficam no Supabase Vault (ADR-0006), com o nome `doctor/connector/<id>`, porque o Vault é do projeto inteiro. A tabela guarda só o `secret_id`, que o cliente nem consegue ler. A leitura é só pela `service_role`, sem papel novo no banco compartilhado (ADR-0009), e cada acesso chama `doctor.record_audit`, que o ticket #28 vai implementar.
+
+## Google Cloud Logging (`gcp`)
+
+Config:
+
+```json
+{
+  "project_id": "acme-integracoes",
+  "auth": "key",
+  "services": ["orders-sync"],
+  "min_severity": "WARNING",
+  "filter": "jsonPayload.app=\"orders\"",
+  "backfill_hours": 24,
+  "requests_per_minute": 60
+}
+```
+
+- **Acesso (`key`):** o cliente cria uma Service Account com `roles/logging.viewer` no projeto, e a credencial do Conector é o JSON da chave dela, guardado no Vault. O `token_uri` do JSON é ignorado: o token sai sempre de `oauth2.googleapis.com`.
+- **Sem chave (`impersonation`, preferido no ticket): desligado por enquanto.** Com uma só conta de plataforma, uma Organização poderia nomear a Service Account de outra Organização, que deu permissão àquela conta, e ler os logs dela (confused deputy). Para ligar, cada Organização precisa da própria identidade de plataforma: uma Service Account por Organização, criada no onboarding do Conector, que o cliente autoriza. Isso exige a sessão de configuração do GCP e está em `docs/operations/pendencias.md`.
+- **Coleta:** `entries.list` em ordem de `timestamp`, numa janela que vai do Checkpoint menos 30 s até agora menos 30 s. Os 30 s cobrem as entradas que chegam ao Logging atrasadas. O que repetir na sobreposição tem o mesmo `event_id` (derivado de `insertId` e `timestamp`) e a ingestão descarta. O primeiro backfill é de 24 h ou 7 dias.
+- **Cota:** pausa entre chamadas, também entre tentativas da mesma Sincronização, para não passar de `requests_per_minute` (60 por padrão, a cota de leitura do Logging). `RESOURCE_EXHAUSTED` vira 429 e o runtime espera 60 s. O token é reaproveitado até vencer.
+- **Consulta avançada (`filter`):** entra entre parênteses, e é recusada se tiver parênteses desbalanceados fora de aspas: assim não consegue escapar da janela de tempo.
+- **Mapeamento:**
+  - `trace` → `trace_id`;
+  - `labels.execution_id` ou `jsonPayload.execution_id` → `execution_id`;
+  - `httpRequest.status` → `error.http_status`;
+  - `resource.labels.service_name` → `source.service`;
+  - severidades do Logging para as cinco do contrato;
+  - nanossegundos truncados em microssegundos.
+- **Teste de conexão sem `logging.viewer`:** a mensagem diz qual permissão falta (`logging.logEntries.list`), em qual Service Account e em qual projeto. Com a API do Logging desativada, a mensagem diz isso, e não manda conceder papel.
+- **Prévia:** o teste antes de salvar (`POST /connectors/test`, usado pelo assistente) lê uma página (até 1.000 entradas) da última hora com os filtros e diz quantas atendem ("48 registros na última hora…", ou "Mais de 1.000…"). O teste de um Conector salvo lê uma entrada só: prova o acesso sem gastar a cota do cliente.
+- **E2E:** `AID_GCP_OAUTH_URL` e `AID_GCP_LOGGING_URL` apontam o conector para o GCP falso de `apps/web/e2e/fake-gcp.mjs`. Só aceitam endereço de loopback: num ambiente real, uma delas esquecida derruba o Conector em vez de mandar o JWT assinado e os tokens dos clientes para outro host. O Terraform não as define.
+- O enriquecimento com o Cloud Trace (opcional no ticket) fica para depois.
+
+## Tela (ticket #16)
+
+- **Tela 11** (`/conectores`): um card por Conector com status (Saudável, Aguardando, Com falhas, Pausado, Desativado), última Sincronização com a contagem de eventos, Checkpoint e, com falhas, o último erro e a próxima tentativa. Todo Papel vê; só Owner e Admin com MFA veem "Adicionar", "Testar conexão", "Sincronizar", "Retomar", "Pausar", "Editar" e "Trocar credencial".
+- **Testar conexão de um Conector salvo** pede a credencial de novo: a salva não sai do Vault. A enviada serve só ao teste.
+- **Tela 12** (`/conectores/novo`): projeto, credencial (com os comandos `gcloud` copiáveis), filtros com prévia, Integração e ativação. O rascunho fica no `sessionStorage` sem a credencial; quem volta no meio cai no passo da credencial e envia a chave de novo.
+- **Tempo real:** `doctor.connectors` está na publicação `supabase_realtime`. A tela só usa o aviso para buscar de novo na API; o evento passa pelo RLS e pelos privilégios de coluna, então não traz `secret_id`.

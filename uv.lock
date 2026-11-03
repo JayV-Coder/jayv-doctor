@@ -84,10 +84,16 @@ version = "0.1.0"
 source = { editable = "packages/connectors" }
 dependencies = [
     { name = "aid-contracts" },
+    { name = "httpx" },
+    { name = "pyjwt", extra = ["crypto"] },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "aid-contracts", editable = "packages/contracts" }]
+requires-dist = [
+    { name = "aid-contracts", editable = "packages/contracts" },
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.15" },
+]
 
 [[package]]
 name = "aid-contracts"

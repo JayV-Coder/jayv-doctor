@@ -17,6 +17,8 @@ export type ExecutionPage = Schemas["ExecutionPage"];
 export type ExecutionDetail = Schemas["ExecutionDetail"];
 export type EventDetail = Schemas["EventDetail"];
 export type ExecutionSearch = Schemas["ExecutionSearch"];
+export type Connector = Schemas["Connector"];
+export type ConnectorSync = Schemas["ConnectorSync"];
 type Me = Schemas["Me"];
 
 // Só no servidor: o token sai do cookie da sessão e a API o valida.
@@ -73,6 +75,23 @@ export async function getEvent(
 ): Promise<EventDetail | "not_found" | null> {
   const query = at ? `?at=${encodeURIComponent(at)}` : "";
   return getOne<EventDetail>(`/events/${encodeURIComponent(id)}${query}`);
+// Conectores da Organização ativa; `null` se a API não respondeu.
+export async function listConnectors(): Promise<Connector[] | null> {
+  const response = await apiFetch("/connectors").catch(() => null);
+  return response?.ok ? ((await response.json()) as Connector[]) : null;
+}
+
+// `"not_found"` quando não existe nesta Organização; `null` se a API não respondeu.
+export async function getConnector(id: string): Promise<Connector | "not_found" | null> {
+  const response = await apiFetch(`/connectors/${encodeURIComponent(id)}`).catch(() => null);
+  if (response?.status === 404 || response?.status === 422) return "not_found";
+  return response?.ok ? ((await response.json()) as Connector) : null;
+}
+
+// As 50 Sincronizações mais recentes de um Conector; `null` se a API não respondeu.
+export async function listConnectorSyncs(id: string): Promise<ConnectorSync[] | null> {
+  const response = await apiFetch(`/connectors/${encodeURIComponent(id)}/syncs`).catch(() => null);
+  return response?.ok ? ((await response.json()) as ConnectorSync[]) : null;
 }
 
 // `cache`: o layout do shell e a página pedem o mesmo `/me` na mesma requisição.

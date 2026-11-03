@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(9);
+select plan(10);
 
 select has_table('doctor', 'executions', 'tabela doctor.executions existe');
 select has_table('doctor', 'execution_merges', 'tabela doctor.execution_merges existe');
@@ -52,7 +52,19 @@ select throws_ok(
   '23503', null, 'fusão só dentro da Organização'
 );
 
+insert into doctor.executions (id, tenant_id, integration_id, first_event_at, last_event_at, merged_into)
+values ('00000000-0000-4000-8000-0000000004b2', '00000000-0000-4000-8000-00000000be01',
+  '00000000-0000-4000-8000-0000000001b1', '2026-11-02T14:02:01Z', '2026-11-02T14:02:31Z',
+  '00000000-0000-4000-8000-0000000004b1');
+insert into doctor.execution_merges (tenant_id, survivor_id, merged_id)
+values ('00000000-0000-4000-8000-00000000be01', '00000000-0000-4000-8000-0000000004b1',
+  '00000000-0000-4000-8000-0000000004b2');
+
 select tests.authenticate_as('00000000-0000-4000-8000-0000000a0001', '00000000-0000-4000-8000-00000000ac01', 'viewer');
+select is(
+  (select count(*)::int from doctor.execution_merges), 0,
+  'outra Organização não lê o histórico de fusões'
+);
 select results_eq(
   $$select id::text collate "default" from doctor.executions$$,
   $$values ('00000000-0000-4000-8000-0000000004a1'::text)$$,

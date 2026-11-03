@@ -6,6 +6,7 @@ from aid_correlation.engine import (
     Settings,
     Strategy,
     execution_status,
+    final_status,
     merge_plan,
 )
 
@@ -17,5 +18,6 @@ __all__ = [
     "Settings",
     "Strategy",
     "execution_status",
+    "final_status",
     "merge_plan",
 ]

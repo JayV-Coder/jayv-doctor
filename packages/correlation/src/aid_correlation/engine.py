@@ -45,6 +45,10 @@ class EventRef:
     def strong(self) -> bool:
         return self.execution_id is not None or self.trace_id is not None
 
+    @property
+    def anchored(self) -> bool:
+        return self.strong or self.execution_ref is not None
+
 
 def always(_first: str, _second: str) -> bool:
     return True
@@ -147,7 +151,9 @@ class Correlator:
             elif event.trace_id is not None:
                 how[event.id] = "trace_id"
 
-        loose = [event for event in events if not event.strong]
+        # Ancorado: tem id forte ou já pertence a uma Execução gravada. As estratégias fracas só
+        # prendem Eventos soltos a um grupo, um de cada vez: nunca ligam dois grupos ancorados.
+        loose = [event for event in events if not event.anchored]
         self._by_reference(events, loose, sets, how)
         self._by_proximity(events, [e for e in loose if e.id not in how], sets, how, weak)
 
@@ -164,33 +170,63 @@ class Correlator:
         how: dict[str, Strategy | None],
     ) -> None:
         window = self.settings.reference_window
-        strong: dict[str, list[EventRef]] = defaultdict(list)
+        anchored: dict[str, list[EventRef]] = defaultdict(list)
+        spans: dict[str, tuple[datetime, datetime, bool]] = {}
         for event in events:
-            if event.strong and event.business_reference is not None:
-                strong[event.business_reference].append(event)
-        # Primeiro, cada Evento sem ids vai para o grupo forte mais próximo no tempo.
+            if not event.anchored:
+                continue
+            root = sets.find(event.id)
+            first, last, strong = spans.get(root, (event.timestamp, event.timestamp, False))
+            spans[root] = (
+                min(first, event.timestamp),
+                max(last, event.timestamp),
+                strong or event.strong,
+            )
+            if event.business_reference is not None:
+                anchored[event.business_reference].append(event)
+
+        def fits(event: EventRef, other: EventRef) -> bool:
+            first, last, strong = spans[sets.find(other.id)]
+            if strong:
+                # Ids fortes definem a Execução: basta estar perto de um Evento dela.
+                return _gap(event, other) <= window
+            # Sem id forte, a Referência sozinha não estica a Execução além da janela.
+            return max(last, event.timestamp) - min(first, event.timestamp) <= window
+
+        # Primeiro, cada Evento solto vai para o grupo ancorado mais próximo no tempo. Os vãos
+        # são os de antes desta etapa: o resultado não depende da ordem dos soltos.
+        chosen: list[tuple[EventRef, str]] = []
         for event in loose:
             if event.business_reference is None:
                 continue
             candidates = [
                 (_gap(event, other), sets.find(other.id))
-                for other in strong[event.business_reference]
-                if _gap(event, other) <= window
-                and self.settings.compatible(event.operation, other.operation)
+                for other in anchored[event.business_reference]
+                if self.settings.compatible(event.operation, other.operation) and fits(event, other)
             ]
             if candidates:
-                sets.union(event.id, min(candidates)[1])
-                how[event.id] = "business_reference"
-        # Depois, os que sobraram se juntam entre si (arestas simétricas, sem depender da ordem).
+                chosen.append((event, min(candidates)[1]))
+        for event, root in chosen:
+            sets.union(event.id, root)
+            how[event.id] = "business_reference"
+        # Depois, os que sobraram formam grupos entre si, em janelas fixas a partir do primeiro de
+        # cada uma: uma corrente de Eventos a cada 10 min não vira uma Execução de dias.
         rest: dict[str, list[EventRef]] = defaultdict(list)
         for event in loose:
             if event.business_reference is not None and event.id not in how:
                 rest[event.business_reference].append(event)
         for bucket in rest.values():
-            for event, other in _pairs(bucket, window):
-                if self.settings.compatible(event.operation, other.operation):
-                    sets.union(event.id, other.id)
-                    how[event.id] = how[other.id] = "business_reference"
+            head: EventRef | None = None
+            for event in bucket:
+                if (
+                    head is None
+                    or event.timestamp - head.timestamp > window
+                    or not self.settings.compatible(head.operation, event.operation)
+                ):
+                    head = event
+                    continue
+                sets.union(event.id, head.id)
+                how[event.id] = how[head.id] = "business_reference"
 
     def _by_proximity(
         self,
@@ -228,7 +264,7 @@ class Correlator:
         clusters: dict[str, list[EventRef]] = defaultdict(list)
         for event in loose:
             clusters[local.find(event.id)].append(event)
-        settled = by_resource(event for event in events if event.id in how)
+        settled = by_resource(event for event in events if event.anchored or event.id in how)
         for cluster in clusters.values():
             candidates = [
                 (_gap(event, other), sets.find(other.id))
@@ -284,18 +320,27 @@ def _order(event: EventRef) -> tuple[datetime, str]:
     return event.order
 
 
-def execution_status(group: Group, closed: bool) -> Status:
-    """Erro em qualquer Evento falha a Execução; sem erro, ela é confirmada só ao fechar."""
-    if any(severity in FAILED for severity in group.severities):
+def final_status(*, failed: bool, low_confidence: bool, closed: bool) -> Status:
+    """Erro em qualquer Evento falha a Execução; sem erro, ela é confirmada só ao fechar, e a
+    agrupada só por estratégia fraca fecha como `unknown`. O fechamento usa a mesma regra."""
+    if failed:
         return "failed"
     if not closed:
         return "pending_confirmation"
-    return "unknown" if group.low_confidence else "success"
+    return "unknown" if low_confidence else "success"
 
 
-def merge_plan(first_events: Mapping[str, str]) -> tuple[str | None, list[str]]:
+def execution_status(group: Group, closed: bool) -> Status:
+    return final_status(
+        failed=any(severity in FAILED for severity in group.severities),
+        low_confidence=group.low_confidence,
+        closed=closed,
+    )
+
+
+def merge_plan(first_events: Mapping[str, datetime]) -> tuple[str | None, list[str]]:
     """Quando um grupo junta Execuções que já existiam: fica a de primeiro Evento mais antigo
-    (desempate pelo id), e as outras são fundidas nela. Recebe {id: first_event_at ISO}."""
+    (desempate pelo id), e as outras são fundidas nela. Recebe {id: first_event_at}."""
     if not first_events:
         return None, []
     ordered = sorted(first_events, key=lambda target: (first_events[target], target))

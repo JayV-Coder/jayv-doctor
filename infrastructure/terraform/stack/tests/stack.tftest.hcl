@@ -22,6 +22,7 @@ run "topicos_tem_push_autenticado_e_dlq_apos_5_tentativas" {
   assert {
     condition = toset(keys(module.topics)) == toset([
       "ingestion.raw", "ingestion.normalized", "correlation.requested", "diagnosis.requested", "connector.sync",
+      "rules.evaluate",
     ])
     error_message = "Os cinco tópicos do ticket precisam existir."
   }

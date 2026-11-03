@@ -2,15 +2,19 @@
 
 Cada mensagem só diz qual Integração tem Eventos novos; o worker pega os pendentes
 (`execution_ref` nulo), a vizinhança já correlacionada que pode se ligar a eles (mesmos ids,
-Referência na janela, mesmo recurso na proximidade) e os demais Eventos dessas Execuções, e roda
-o motor sobre o conjunto. Execuções nunca se dividem: as que o motor junta são fundidas na mais
-antiga, com histórico em `execution_merges`. Um lock por Integração serializa as mensagens
-concorrentes; a mensagem repetida não acha pendentes e termina sem efeito.
+Referência na janela de cada pendente, mesmo recurso na proximidade) e os demais Eventos dessas
+Execuções, e roda o motor sobre o conjunto. Execuções nunca se dividem nem são apagadas: a que se
+revela igual a outra é marcada `merged_into` a mais antiga, com histórico em `execution_merges`
+(ADR-0012). Um lock por Integração serializa as mensagens concorrentes; a mensagem repetida não
+acha pendentes e termina sem efeito. As escritas vão em lote: poucas idas ao banco por mensagem.
 """
 
 import json
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
+from uuid import uuid4
 
 from aid_correlation import Correlator, EventRef, Group, execution_status, merge_plan
 from aid_db import platform_role
@@ -36,23 +40,36 @@ PENDING = text(
     " and e.execution_ref is null order by e.timestamp, e.id limit :page"
 )
 
+# A janela da Referência e a da proximidade são por pendente (unnest), não o intervalo da página
+# inteira: uma Importação de 7 dias não puxa a semana toda.
 NEIGHBORS = text(
     f"select {COLUMNS} from doctor.events e"  # noqa: S608
     " where e.tenant_id = cast(:t as uuid) and e.integration_id = cast(:i as uuid)"
     " and e.execution_ref is not null and ("
     "  e.execution_id = any(cast(:execs as text[])) or e.trace_id = any(cast(:traces as text[]))"
-    "  or (e.business_reference = any(cast(:refs as text[]))"
-    "   and e.timestamp between cast(:lo as timestamptz) - make_interval(secs => :window)"
-    "   and cast(:hi as timestamptz) + make_interval(secs => :window))"
-    "  or (e.source ->> 'resource' = any(cast(:resources as text[]))"
-    "   and e.timestamp between cast(:lo as timestamptz) - make_interval(secs => :near)"
-    "   and cast(:hi as timestamptz) + make_interval(secs => :near)))"
+    "  or exists (select 1 from unnest(cast(:refs as text[]), cast(:ref_at as timestamptz[]))"
+    "   as p(ref, at) where e.business_reference = p.ref"
+    "   and e.timestamp between p.at - make_interval(secs => :window)"
+    "   and p.at + make_interval(secs => :window))"
+    "  or exists (select 1 from unnest(cast(:resources as text[]),"
+    "   cast(:resource_at as timestamptz[])) as p(resource, at)"
+    "   where e.source ->> 'resource' = p.resource"
+    "   and e.timestamp between p.at - make_interval(secs => :near)"
+    "   and p.at + make_interval(secs => :near)))"
 )
 
 MEMBERS = text(
     f"select {COLUMNS} from doctor.events e"  # noqa: S608
     " where e.tenant_id = cast(:t as uuid) and e.execution_ref = any(cast(:refs as uuid[]))"
 )
+
+
+@dataclass(frozen=True)
+class Existing:
+    id: str
+    first_event_at: datetime
+    correlation_keys: Mapping[str, Any]
+    low_confidence: bool
 
 
 def to_ref(row: Row[Any]) -> EventRef:
@@ -81,6 +98,8 @@ async def neighborhood(
     def values(name: str) -> list[str]:
         return sorted({str(getattr(e, name)) for e in pending if getattr(e, name) is not None})
 
+    with_reference = [e for e in pending if e.business_reference is not None]
+    with_resource = [e for e in pending if e.resource is not None and e.attempt is not None]
     neighbors = await load(
         connection,
         NEIGHBORS,
@@ -88,10 +107,10 @@ async def neighborhood(
         i=integration,
         execs=values("execution_id"),
         traces=values("trace_id"),
-        refs=values("business_reference"),
-        resources=values("resource"),
-        lo=min(e.timestamp for e in pending),
-        hi=max(e.timestamp for e in pending),
+        refs=[e.business_reference for e in with_reference],
+        ref_at=[e.timestamp for e in with_reference],
+        resources=[e.resource for e in with_resource],
+        resource_at=[e.timestamp for e in with_resource],
         window=correlator.settings.reference_window.total_seconds(),
         near=correlator.settings.proximity.total_seconds(),
     )
@@ -100,118 +119,49 @@ async def neighborhood(
     return [*neighbors, *members]
 
 
-async def existing(connection: AsyncConnection, tenant: str, refs: set[str]) -> dict[str, Any]:
+async def existing(connection: AsyncConnection, tenant: str, refs: set[str]) -> dict[str, Existing]:
+    if not refs:
+        return {}
     rows = await connection.execute(
         text(
-            "select id::text, first_event_at, correlation_keys from doctor.executions"
+            "select id::text, first_event_at, correlation_keys, low_confidence"
+            " from doctor.executions"
             " where tenant_id = cast(:t as uuid) and id = any(cast(:ids as uuid[]))"
             " order by id for update"
         ),
         {"t": tenant, "ids": sorted(refs)},
     )
-    return {row.id: row for row in rows}
+    return {row.id: Existing(*row) for row in rows}
 
 
-async def resolve(connection: AsyncConnection, tenant: str, group: Group, refs: set[str]) -> str:
-    """A Execução do grupo: nova, a que já existia, ou a mais antiga, com as outras fundidas."""
-    found = await existing(connection, tenant, refs) if refs else {}
-    survivor, merged = merge_plan(
-        {key: row.first_event_at.isoformat() for key, row in found.items()}
-    )
-    if survivor is None:
-        created = await connection.scalar(
-            text(
-                "insert into doctor.executions (tenant_id, integration_id, first_event_at,"
-                " last_event_at) values (cast(:t as uuid), cast(:i as uuid), :f, :l)"
-                " returning id::text"
-            ),
-            {
-                "t": tenant,
-                "i": group.integration_id,
-                "f": group.first_event_at,
-                "l": group.last_event_at,
-            },
-        )
-        return str(created)
-    for target in merged:
-        await connection.execute(
-            text(
-                "insert into doctor.execution_merges"
-                " (tenant_id, survivor_id, merged_id, merged_keys)"
-                " values (cast(:t as uuid), cast(:s as uuid), cast(:m as uuid), cast(:k as jsonb))"
-            ),
-            {
-                "t": tenant,
-                "s": survivor,
-                "m": target,
-                "k": json.dumps(found[target].correlation_keys),
-            },
-        )
-        await connection.execute(
-            text(
-                "update doctor.events set execution_ref = cast(:s as uuid)"
-                " where tenant_id = cast(:t as uuid) and execution_ref = cast(:m as uuid)"
-            ),
-            {"t": tenant, "s": survivor, "m": target},
-        )
-        await connection.execute(
-            text(
-                "delete from doctor.executions"
-                " where tenant_id = cast(:t as uuid) and id = cast(:m as uuid)"
-            ),
-            {"t": tenant, "m": target},
-        )
-    return survivor
-
-
-async def assign(
-    connection: AsyncConnection,
-    tenant: str,
-    execution: str,
-    group: Group,
-    pending: Mapping[str, EventRef],
-) -> None:
-    rows = [
-        {
-            "t": tenant,
-            "id": event_id,
-            "ts": pending[event_id].timestamp,
-            "x": execution,
-            "c": group.correlated_by.get(event_id),
-        }
-        for event_id in group.event_ids
-        if event_id in pending
-    ]
-    # Com o instante na condição: o Postgres vai direto à partição do Evento.
+async def merge(connection: AsyncConnection, tenant: str, survivor: str, found: Existing) -> None:
+    """Marca a Execução como fundida, leva os Eventos (e as já fundidas nela) para a
+    sobrevivente e guarda o histórico. Nada é apagado: quem apontava para ela continua achando."""
+    params = {"t": tenant, "s": survivor, "m": found.id}
     await connection.execute(
         text(
-            "update doctor.events set execution_ref = cast(:x as uuid), correlated_by = :c"
-            " where tenant_id = cast(:t as uuid) and id = cast(:id as uuid) and timestamp = :ts"
+            "insert into doctor.execution_merges"
+            " (tenant_id, survivor_id, merged_id, merged_keys)"
+            " values (cast(:t as uuid), cast(:s as uuid), cast(:m as uuid), cast(:k as jsonb))"
         ),
-        rows,
+        {**params, "k": json.dumps(dict(found.correlation_keys))},
     )
-
-
-async def refresh(connection: AsyncConnection, tenant: str, execution: str, group: Group) -> None:
-    """Os números saem do grupo inteiro; Evento novo reabre a Execução (fecha de novo em 5 min)."""
     await connection.execute(
         text(
-            "update doctor.executions set first_event_at = :f, last_event_at = :l,"
-            " duration_ms = :d, event_count = :n, correlation_keys = cast(:k as jsonb),"
-            " low_confidence = :w, status = :s, last_activity_at = now(), closed_at = null"
-            " where tenant_id = cast(:t as uuid) and id = cast(:x as uuid)"
+            "update doctor.events set execution_ref = cast(:s as uuid)"
+            " where tenant_id = cast(:t as uuid) and execution_ref = cast(:m as uuid)"
         ),
-        {
-            "t": tenant,
-            "x": execution,
-            "f": group.first_event_at,
-            "l": group.last_event_at,
-            "d": group.duration_ms,
-            "n": len(group.event_ids),
-            "k": json.dumps(group.keys),
-            "w": group.low_confidence,
-            "s": execution_status(group, closed=False),
-        },
+        params,
+    )
+    await connection.execute(
+        text(
+            "update doctor.executions set merged_into = cast(:s as uuid),"
+            " event_count = case when id = cast(:m as uuid) then 0 else event_count end,"
+            " closed_at = coalesce(closed_at, now())"
+            " where tenant_id = cast(:t as uuid)"
+            " and (id = cast(:m as uuid) or merged_into = cast(:m as uuid))"
+        ),
+        params,
     )
 
 
@@ -237,13 +187,92 @@ async def correlate_integration(
         known = await neighborhood(connection, tenant, integration, pending, correlator)
         events = {event.id: event for event in [*known, *pending]}
         waiting = {event.id: event for event in pending}
-        for group in correlator.correlate(tenant, events.values()).groups:
-            if not waiting.keys() & set(group.event_ids):
-                continue
-            refs = {r for e in group.event_ids if (r := events[e].execution_ref) is not None}
-            execution = await resolve(connection, tenant, group, refs)
-            await assign(connection, tenant, execution, group, waiting)
-            await refresh(connection, tenant, execution, group)
+        groups = [
+            group
+            for group in correlator.correlate(tenant, events.values()).groups
+            if waiting.keys() & set(group.event_ids)
+        ]
+        found = await existing(
+            connection, tenant, {e.execution_ref for e in known if e.execution_ref is not None}
+        )
+
+        targets: list[tuple[Group, str, bool]] = []
+        created: list[dict[str, Any]] = []
+        for group in groups:
+            mine = {
+                ref
+                for event_id in group.event_ids
+                if (ref := events[event_id].execution_ref) is not None and ref in found
+            }
+            survivor, merged = merge_plan({ref: found[ref].first_event_at for ref in mine})
+            if survivor is None:
+                survivor = str(uuid4())
+                created.append(
+                    {
+                        "id": survivor,
+                        "t": tenant,
+                        "i": integration,
+                        "f": group.first_event_at,
+                        "l": group.last_event_at,
+                    }
+                )
+            for target in merged:
+                await merge(connection, tenant, survivor, found[target])
+            was_weak = any(found[ref].low_confidence for ref in mine)
+            targets.append((group, survivor, was_weak))
+
+        if created:
+            await connection.execute(
+                text(
+                    "insert into doctor.executions (id, tenant_id, integration_id,"
+                    " first_event_at, last_event_at) values (cast(:id as uuid),"
+                    " cast(:t as uuid), cast(:i as uuid), :f, :l)"
+                ),
+                created,
+            )
+        # Com o instante na condição: o Postgres vai direto à partição do Evento.
+        await connection.execute(
+            text(
+                "update doctor.events set execution_ref = cast(:x as uuid), correlated_by = :c"
+                " where tenant_id = cast(:t as uuid) and id = cast(:id as uuid)"
+                " and timestamp = :ts"
+            ),
+            [
+                {
+                    "t": tenant,
+                    "id": event_id,
+                    "ts": waiting[event_id].timestamp,
+                    "x": execution,
+                    "c": group.correlated_by.get(event_id),
+                }
+                for group, execution, _ in targets
+                for event_id in group.event_ids
+                if event_id in waiting
+            ],
+        )
+        # Os números saem do grupo inteiro; Evento novo reabre a Execução (fecha de novo em 5 min).
+        await connection.execute(
+            text(
+                "update doctor.executions set first_event_at = :f, last_event_at = :l,"
+                " duration_ms = :d, event_count = :n, correlation_keys = cast(:k as jsonb),"
+                " low_confidence = :w, status = :s, last_activity_at = now(), closed_at = null"
+                " where tenant_id = cast(:t as uuid) and id = cast(:x as uuid)"
+            ),
+            [
+                {
+                    "t": tenant,
+                    "x": execution,
+                    "f": group.first_event_at,
+                    "l": group.last_event_at,
+                    "d": group.duration_ms,
+                    "n": len(group.event_ids),
+                    "k": json.dumps(group.keys),
+                    "w": group.low_confidence or was_weak,
+                    "s": execution_status(group, closed=False),
+                }
+                for group, execution, was_weak in targets
+            ],
+        )
         if len(pending) == PAGE:
             await connection.execute(
                 text(

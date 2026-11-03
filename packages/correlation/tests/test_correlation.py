@@ -135,10 +135,32 @@ def test_execucao_gravada_nunca_se_divide() -> None:
     assert events[1].id in first.event_ids
 
 
+def test_estrategia_fraca_nunca_junta_duas_execucoes_ancoradas() -> None:
+    # Soltos já gravados em Execuções diferentes; o novo fica entre os dois.
+    events = [
+        event(1, 0, resource="svc", attempt=1, execution_ref="x-a"),
+        event(2, 0, execution_id="exec-1", execution_ref="x-a"),
+        event(3, 2000, resource="svc", attempt=3, execution_ref="x-b"),
+        event(4, 2000, execution_id="exec-2", execution_ref="x-b"),
+        event(5, 1000, resource="svc", attempt=2),
+        event(6, 500, business_reference="hmac:1", execution_ref="x-a"),
+        event(7, 1500, business_reference="hmac:1", execution_ref="x-b"),
+        event(8, 1000, business_reference="hmac:1"),
+    ]
+    groups = Correlator().correlate(TENANT, events).groups
+    assert len(groups) == 2
+
+
+def test_referencia_sem_id_forte_nao_vira_corrente_sem_fim() -> None:
+    # O mesmo pedido reprocessado a cada 10 min por 2 h, sem nenhum id forte.
+    events = [event(n, n * 600_000, business_reference="hmac:x") for n in range(1, 13)]
+    groups = Correlator().correlate(TENANT, events).groups
+    assert all(group.duration_ms <= 15 * 60_000 for group in groups)
+    assert len(groups) == 6
+
+
 def test_plano_de_fusao_mantem_a_execucao_mais_antiga() -> None:
-    survivor, merged = merge_plan(
-        {"b-exec": "2026-11-02T14:00:01Z", "a-exec": "2026-11-02T14:00:02Z"}
-    )
+    survivor, merged = merge_plan({"b-exec": T0, "a-exec": T0 + timedelta(seconds=1)})
     assert (survivor, merged) == ("b-exec", ["a-exec"])
     assert merge_plan({}) == (None, [])
 

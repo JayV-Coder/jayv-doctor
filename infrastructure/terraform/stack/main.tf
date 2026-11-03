@@ -18,8 +18,10 @@ locals {
     "ingestion.raw"         = { worker = "ingestion", publishers = ["relay"], ack_deadline = 300 }
     "ingestion.normalized"  = { worker = "correlation", publishers = ["relay"], ack_deadline = 300 }
     "correlation.requested" = { worker = "correlation", publishers = ["relay"], ack_deadline = 300 }
-    "diagnosis.requested"   = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
-    "connector.sync"        = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
+    # Execução fechada vai para as Regras (ticket #18), no worker de diagnóstico.
+    "rules.evaluate"      = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    "diagnosis.requested" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    "connector.sync"      = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
   }
 
   api_secrets = ["supabase-db-url", "hmac-master-key", "smtp-url"]

@@ -111,7 +111,8 @@ async def executions(engine: AsyncEngine, ids: dict[str, str]) -> list[Any]:
     return await rows(
         engine,
         "select id::text, status, event_count, duration_ms, correlation_keys, low_confidence,"
-        " closed_at from doctor.executions where tenant_id = :t order by first_event_at",
+        " closed_at from doctor.executions where tenant_id = :t and merged_into is null"
+        " order by first_event_at",
         t=ids["tenant"],
     )
 
@@ -195,6 +196,51 @@ async def test_trace_que_chega_depois_funde_e_guarda_o_historico(
     )
     assert [(h["s"], h["m"]) for h in history] == [(first["id"], second["id"])]
     assert history[0]["k"]["execution_id"] == ["exec-2"]
+    # A fundida continua existindo, fechada e apontando para a sobrevivente.
+    gone = await rows(
+        engine,
+        "select merged_into::text as m, closed_at, event_count from doctor.executions"
+        " where id = :x",
+        x=second["id"],
+    )
+    assert gone[0]["m"] == first["id"]
+    assert gone[0]["closed_at"] is not None
+    assert gone[0]["event_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_fusao_em_cadeia_guarda_todo_o_historico(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    for offset, execution in ((0, "exec-1"), (100, "exec-2"), (200, "exec-3")):
+        await insert(engine, tenant, offset, execution_id=execution)
+    await correlate(engine, tenant)
+    first, second, third = await executions(engine, tenant)
+    await insert(engine, tenant, 300, execution_id="exec-2", trace_id="t-a")
+    await insert(engine, tenant, 310, execution_id="exec-3", trace_id="t-a")
+    await correlate(engine, tenant)
+    await insert(engine, tenant, 400, execution_id="exec-1", trace_id="t-b")
+    await insert(engine, tenant, 410, execution_id="exec-2", trace_id="t-b")
+    await correlate(engine, tenant)
+    (survivor,) = await executions(engine, tenant)
+    assert survivor["id"] == first["id"]
+    assert survivor["event_count"] == 7
+    history = await rows(
+        engine,
+        "select survivor_id::text as s, merged_id::text as m from doctor.execution_merges"
+        " where tenant_id = :t order by merged_at, merged_id",
+        t=tenant["tenant"],
+    )
+    assert {(h["s"], h["m"]) for h in history} == {
+        (second["id"], third["id"]),
+        (first["id"], second["id"]),
+    }
+    pointers = await rows(
+        engine,
+        "select merged_into::text as m from doctor.executions where id = any(cast(:ids as uuid[]))",
+        ids=[second["id"], third["id"]],
+    )
+    assert {p["m"] for p in pointers} == {first["id"]}
 
 
 @pytest.mark.asyncio

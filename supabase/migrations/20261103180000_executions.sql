@@ -20,11 +20,16 @@ create table doctor.executions (
   -- Importação podem ser de ontem): é dela que contam os 5 min até fechar.
   last_activity_at timestamptz not null default now(),
   closed_at timestamptz,
+  -- Fundida em outra (o trace chegou depois, por exemplo). A linha fica, fechada e sem Eventos:
+  -- o que já apontava para ela (mensagens, Incidentes) acha a sobrevivente por aqui.
+  merged_into uuid,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (tenant_id, id),
   foreign key (tenant_id, integration_id) references doctor.integrations (tenant_id, id),
-  check (last_event_at >= first_event_at)
+  foreign key (tenant_id, merged_into) references doctor.executions (tenant_id, id),
+  check (last_event_at >= first_event_at),
+  check (merged_into is null or merged_into <> id)
 );
 comment on table doctor.executions is 'Execução: ocorrência de ponta a ponta de um fluxo, reconstruída pela correlação.';
 
@@ -32,27 +37,37 @@ create index executions_tenant_time_idx on doctor.executions (tenant_id, integra
 create index executions_status_idx on doctor.executions (tenant_id, status, first_event_at desc);
 -- Exceção à convenção (sem tenant_id na frente): o fechamento é job de plataforma e busca as
 -- abertas de todas as Organizações.
-create index executions_open_idx on doctor.executions (last_activity_at) where closed_at is null;
+create index executions_open_idx on doctor.executions (last_activity_at)
+  where closed_at is null and merged_into is null;
+create index executions_merged_idx on doctor.executions (tenant_id, merged_into)
+  where merged_into is not null;
 
 create trigger executions_set_updated_at
 before update on doctor.executions
 for each row execute function doctor.set_updated_at();
 
 -- Duas Execuções que se revelam a mesma (ex.: o trace chega depois) viram uma só; a que sai fica
--- registrada aqui, com as chaves que tinha.
+-- registrada aqui, com as chaves que tinha. Nenhuma das duas é apagada (ADR-0012).
 create table doctor.execution_merges (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references doctor.tenants (id) on delete cascade,
   survivor_id uuid not null,
   merged_id uuid not null,
-  merged_keys jsonb not null default '{}',
+  merged_keys jsonb not null default '{}' check (jsonb_typeof(merged_keys) = 'object'),
   merged_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
   unique (tenant_id, id),
-  foreign key (tenant_id, survivor_id) references doctor.executions (tenant_id, id) on delete cascade
+  foreign key (tenant_id, survivor_id) references doctor.executions (tenant_id, id),
+  foreign key (tenant_id, merged_id) references doctor.executions (tenant_id, id)
 );
 comment on table doctor.execution_merges is 'Histórico de fusões de Execuções pela correlação.';
 
 create index execution_merges_survivor_idx on doctor.execution_merges (tenant_id, survivor_id);
+create index execution_merges_merged_idx on doctor.execution_merges (tenant_id, merged_id);
+
+create trigger execution_merges_set_updated_at
+before update on doctor.execution_merges
+for each row execute function doctor.set_updated_at();
 
 alter table doctor.events
   add column execution_ref uuid,

@@ -19,7 +19,7 @@ Exigem `Authorization: Bearer <JWT do Supabase Auth>` e Organização ativa. Tod
 - **Config nova** recomeça a coleta do zero, e a deduplicação descarta o que repetir. Uma Sincronização que já estava rodando não grava o Checkpoint da config antiga.
 - **Conector desativado** pela plataforma não é pausado nem retomado pela API.
 - **Config** é validada pelo conector do provedor. O erro traz o nome do campo e a regra, nunca o valor.
-- `provider`: `fake`, `gcp`, `salesforce` ou `sap`. Hoje só o `fake` tem conector; os outros respondem `422 provider_unavailable` até os tickets #15, #37 e #38.
+- `provider`: `fake`, `gcp`, `salesforce` ou `sap`. Hoje `fake` e `gcp` têm conector (a config do GCP está em `docs/operations/conectores.md`); `salesforce` e `sap` respondem `422 provider_unavailable` até os tickets #37 e #38.
 
 Status e política de falhas estão em [`docs/operations/conectores.md`](../operations/conectores.md).
 

@@ -1,0 +1,31 @@
+{
+  "entries": [
+    {
+      "insertId": "a1b2c3",
+      "logName": "projects/acme-integracoes/logs/run.googleapis.com%2Fstdout",
+      "timestamp": "2026-11-02T14:05:00.123456789Z",
+      "severity": "ERROR",
+      "trace": "projects/acme-integracoes/traces/4bf92f3577b34da6a3ce929d0e0e4736",
+      "resource": {
+        "type": "cloud_run_revision",
+        "labels": { "service_name": "orders-sync", "revision_name": "orders-sync-00042" }
+      },
+      "labels": { "execution_id": "exec-981" },
+      "httpRequest": { "requestMethod": "POST", "status": 504, "latency": "30.001s" },
+      "jsonPayload": {
+        "message": "Timeout ao chamar BAPI_SALESORDER_CREATEFROMDAT2",
+        "operation": "create_order",
+        "pedido": "4500012345"
+      }
+    },
+    {
+      "insertId": "d4e5f6",
+      "logName": "projects/acme-integracoes/logs/run.googleapis.com%2Fstdout",
+      "timestamp": "2026-11-02T14:05:01Z",
+      "severity": "INFO",
+      "resource": { "type": "cloud_run_revision", "labels": { "service_name": "orders-sync" } },
+      "textPayload": "pedido enviado ao SAP"
+    }
+  ],
+  "nextPageToken": "pagina-2"
+}

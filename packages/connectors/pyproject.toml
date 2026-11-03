@@ -3,7 +3,7 @@ name = "aid-connectors"
 version = "0.1.0"
 description = "Contrato comum dos Conectores, runtime de Sincronização e conector fake"
 requires-python = ">=3.12,<3.13"
-dependencies = ["aid-contracts"]
+dependencies = ["aid-contracts", "httpx>=0.28", "pyjwt[crypto]>=2.15"]
 
 [tool.uv.sources]
 aid-contracts = { workspace = true }

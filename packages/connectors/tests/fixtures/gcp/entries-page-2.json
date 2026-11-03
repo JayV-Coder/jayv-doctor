@@ -1,0 +1,13 @@
+{
+  "entries": [
+    {
+      "insertId": "g7h8i9",
+      "logName": "projects/acme-integracoes/logs/run.googleapis.com%2Fstderr",
+      "timestamp": "2026-11-02T14:06:00Z",
+      "severity": "CRITICAL",
+      "resource": { "type": "cloud_run_revision", "labels": { "service_name": "orders-sync" } },
+      "jsonPayload": { "message": "Too many requests", "execution_id": "exec-982" },
+      "httpRequest": { "status": 429 }
+    }
+  ]
+}

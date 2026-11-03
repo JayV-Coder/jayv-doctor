@@ -19,6 +19,9 @@ Tudo foi validado na stack local e no CI. A configuração do GCP e do Supabase 
 - [ ] `MAIL_FROM` com um remetente de domínio verificado.
 - [ ] Variáveis do GitHub (`GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`, `GCP_PROJECT_ID`) e `DEPLOY_ENABLED`.
 
+- [ ] Teste do conector GCP (ticket #15) em staging, contra um projeto de teste com logs sintéticos: comparar a contagem do Logging com os Eventos gravados, com uma Sincronização por minuto.
+- [ ] Decidir e montar a identidade de plataforma por Organização, que liga o modo sem chave (`impersonation`) do conector GCP (ver `docs/operations/conectores.md`).
+
 ## Supabase hospedado (exige aprovação na hora, ADR-0009)
 
 - [ ] `scripts/apply-doctor-migrations.py --check` e, na janela combinada, `--apply`. As migrações criam o schema `doctor`, o bucket `doctor-raw-logs` e as políticas dele em `storage.objects`.

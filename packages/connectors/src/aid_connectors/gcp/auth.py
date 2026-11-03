@@ -11,6 +11,7 @@ import json
 import os
 import time
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -19,9 +20,34 @@ import jwt
 from aid_connectors.base import ConnectorError, Secret
 
 SCOPE = "https://www.googleapis.com/auth/logging.read"
-# Sempre este endpoint: o `token_uri` do JSON vem do cliente e levaria a plataforma a postar onde
-# ele quisesse (SSRF). A variável é da plataforma, só para os testes ponta a ponta.
-OAUTH_ENDPOINT = os.environ.get("AID_GCP_OAUTH_URL", "https://oauth2.googleapis.com/token")
+LOOPBACK = ("http://127.0.0.1:", "http://localhost:")
+
+
+@dataclass(frozen=True)
+class Endpoints:
+    """Para onde vão o JWT assinado e as consultas. Nunca o `token_uri` do JSON, que vem do
+    cliente e levaria a plataforma a postar onde ele quisesse (SSRF)."""
+
+    oauth: str = "https://oauth2.googleapis.com/token"
+    logging: str = "https://logging.googleapis.com/v2/entries:list"
+
+    @classmethod
+    def from_environment(cls, environ: Mapping[str, str] = os.environ) -> "Endpoints":
+        """`AID_GCP_OAUTH_URL` e `AID_GCP_LOGGING_URL` existem só para o GCP falso do E2E e só
+        aceitam endereço local: uma variável esquecida num ambiente real derruba o Conector em
+        vez de mandar as credenciais dos clientes para outro lugar."""
+        overrides = {
+            name: environ[variable]
+            for name, variable in (
+                ("oauth", "AID_GCP_OAUTH_URL"),
+                ("logging", "AID_GCP_LOGGING_URL"),
+            )
+            if environ.get(variable)
+        }
+        for value in overrides.values():
+            if not value.startswith(LOOPBACK):
+                raise ValueError("endpoint do GCP trocado só pode ser loopback (E2E)")
+        return cls(**overrides)
 
 
 def service_account(secret: Secret) -> Mapping[str, Any]:
@@ -39,7 +65,9 @@ def principal(secret: Secret) -> str:
     return str(service_account(secret)["client_email"])
 
 
-async def access_token(client: httpx.AsyncClient, secret: Secret) -> tuple[str, float]:
+async def access_token(
+    client: httpx.AsyncClient, secret: Secret, endpoint: str
+) -> tuple[str, float]:
     """(token, segundos de validade)."""
     info = service_account(secret)
     now = int(time.time())
@@ -48,7 +76,7 @@ async def access_token(client: httpx.AsyncClient, secret: Secret) -> tuple[str, 
             {
                 "iss": info["client_email"],
                 "scope": SCOPE,
-                "aud": OAUTH_ENDPOINT,
+                "aud": endpoint,
                 "iat": now,
                 "exp": now + 3600,
             },
@@ -59,7 +87,7 @@ async def access_token(client: httpx.AsyncClient, secret: Secret) -> tuple[str, 
         raise ConnectorError("auth", "A chave privada da Service Account é inválida.") from exc
     try:
         response = await client.post(
-            OAUTH_ENDPOINT,
+            endpoint,
             data={
                 "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
                 "assertion": assertion,

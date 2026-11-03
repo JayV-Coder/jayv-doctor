@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { runConnectorAction } from "./actions";
 
 const LABELS = { sync: "Sincronizar", pause: "Pausar", resume: "Retomar" } as const;
@@ -17,6 +17,17 @@ export function ActionButton({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [busy, startTransition] = useTransition();
+
+  // O aviso de pedido feito some sozinho; o status de verdade chega pelo card.
+  useEffect(() => {
+    if (!done) return;
+    const timer = setTimeout(() => {
+      setDone(false);
+    }, 6000);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [done]);
 
   return (
     <>

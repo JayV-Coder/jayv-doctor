@@ -5,7 +5,6 @@ repetidas. Respeita a cota de leitura da API, também entre tentativas, e trata
 RESOURCE_EXHAUSTED como 429."""
 
 import asyncio
-import os
 import re
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
@@ -23,11 +22,9 @@ from aid_connectors.base import (
     Secret,
     TestResult,
 )
-from aid_connectors.gcp.auth import access_token, principal
+from aid_connectors.gcp.auth import Endpoints, access_token, principal
 from aid_connectors.gcp.mapping import timestamp, to_event
 
-# Variáveis só para os testes ponta a ponta (um GCP falso local); em produção ficam sem valor.
-ENTRIES = os.environ.get("AID_GCP_LOGGING_URL", "https://logging.googleapis.com/v2/entries:list")
 OVERLAP = timedelta(seconds=30)
 PROJECT = re.compile(r"^[a-z][a-z0-9-]{4,28}[a-z0-9]$")
 SERVICE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
@@ -96,8 +93,10 @@ class GcpLoggingConnector:
         transport: httpx.AsyncBaseTransport | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        endpoints: Endpoints | None = None,
     ) -> None:
         self.transport = transport
+        self.endpoints = endpoints or Endpoints.from_environment()
         self.clock = clock
         self.sleep = sleep
         # Reaproveitados entre as tentativas do runtime na mesma Sincronização.
@@ -146,7 +145,7 @@ class GcpLoggingConnector:
 
     async def bearer(self, client: httpx.AsyncClient, secret: Secret) -> str:
         if self.token is None or self.token[1] < time.monotonic() + 60:
-            token, seconds = await access_token(client, secret)
+            token, seconds = await access_token(client, secret, self.endpoints.oauth)
             self.token = (token, time.monotonic() + seconds)
         return self.token[0]
 
@@ -180,7 +179,7 @@ class GcpLoggingConnector:
         await self.pace(config)
         try:
             response = await client.post(
-                ENTRIES, json=body, headers={"authorization": f"Bearer {token}"}
+                self.endpoints.logging, json=body, headers={"authorization": f"Bearer {token}"}
             )
         except httpx.HTTPError as exc:
             raise ConnectorError("transient", "O Cloud Logging não respondeu.") from exc
@@ -201,21 +200,33 @@ class GcpLoggingConnector:
             raise ConnectorError("invalid", "Projeto ou consulta do Logging inválidos.")
         raise ConnectorError("transient", f"Cloud Logging respondeu HTTP {response.status_code}.")
 
-    async def test_connection(self, secret: Secret, config: Mapping[str, Any]) -> TestResult:
-        """Lê uma página da última hora com os filtros: prova a permissão e serve de prévia do
-        volume no assistente."""
+    async def test_connection(
+        self, secret: Secret, config: Mapping[str, Any], *, preview: bool = False
+    ) -> TestResult:
+        """Lê a última hora com os filtros: prova a permissão e, com `preview`, conta uma página
+        (até 1.000 entradas) para o assistente. Sem `preview`, uma entrada basta."""
         try:
             async with self.client() as client:
                 now = self.clock()
                 query = self.query(config, now - timedelta(hours=1), now)
-                found = await self.entries(client, secret, config, query, None, PREVIEW)
+                size = PREVIEW if preview else 1
+                found = await self.entries(client, secret, config, query, None, size)
         except ConnectorError as exc:
             return TestResult(False, exc.message)
+        if not preview:
+            return TestResult(
+                True, "Conexão estabelecida: a Service Account lê os logs do projeto."
+            )
         count = len(found.get("entries") or [])
-        if found.get("nextPageToken"):
-            amount = f"Mais de {count:,}".replace(",", ".")
-        else:
-            amount = f"{count:,}".replace(",", ".")
+        more = bool(found.get("nextPageToken"))
+        if more and count == 0:
+            # O Logging devolve página vazia com continuação quando a busca estoura o prazo.
+            return TestResult(
+                True,
+                "Conexão estabelecida. Não deu para contar os registros da última hora: "
+                "a consulta é ampla demais para a prévia.",
+            )
+        amount = f"{'Mais de ' if more else ''}{count:,}".replace(",", ".")
         return TestResult(
             True, f"Conexão estabelecida. {amount} registros na última hora atendem aos filtros."
         )

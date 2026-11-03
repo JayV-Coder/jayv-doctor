@@ -15,6 +15,7 @@ describe("formatos pt-BR", () => {
     const instant = new Date("2026-11-02T17:05:00Z");
     expect(formatDateTime(instant, "America/Sao_Paulo")).toBe("02/11/2026, 14:05");
     expect(formatDateTime(instant, "Europe/Lisbon")).toBe("02/11/2026, 17:05");
+    expect(formatDateTime(instant, "UTC", { seconds: true })).toBe("02/11/2026, 17:05:00");
   });
 });
 

@@ -67,7 +67,11 @@ class Connector(Protocol):
 
     def validate_config(self, config: Mapping[str, Any]) -> ConfigErrors: ...
 
-    async def test_connection(self, secret: Secret, config: Mapping[str, Any]) -> TestResult: ...
+    async def test_connection(
+        self, secret: Secret, config: Mapping[str, Any], *, preview: bool = False
+    ) -> TestResult:
+        """`preview`: além de testar, estima o volume com a config (assistente de criação)."""
+        ...
 
     def collect(
         self, secret: Secret, config: Mapping[str, Any], checkpoint: Checkpoint | None

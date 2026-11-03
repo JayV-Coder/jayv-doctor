@@ -76,7 +76,7 @@ class ConnectorRepository:
             created = await connection.scalar(
                 text(
                     "select doctor.create_connector(cast(:i as uuid), :p, :n,"
-                    " cast(:c as jsonb), :s)::text"
+                    " cast(:c as jsonb), :s, :v)::text"
                 ),
                 {
                     "i": str(new.integration_id),
@@ -84,13 +84,9 @@ class ConnectorRepository:
                     "n": new.name,
                     "c": json.dumps(new.config),
                     "s": new.credential.get_secret_value(),
+                    "v": new.sync_interval_seconds or 300,
                 },
             )
-            if new.sync_interval_seconds is not None:
-                await connection.execute(
-                    text("select doctor.update_connector(cast(:t as uuid), null, null, :i)"),
-                    {"t": str(created), "i": new.sync_interval_seconds},
-                )
             return await fetch(connection, str(created))
 
     async def update(

@@ -11,7 +11,7 @@ import {
   nextRunText,
   pauseText,
 } from "@/lib/connectors/labels";
-import { isManager } from "@/lib/orgs/labels";
+import { canManage } from "@/lib/orgs/labels";
 import { ActionButton } from "./action-button";
 import { LiveStatus } from "./live-status";
 import { TestConnection } from "./test-connection";
@@ -21,7 +21,7 @@ export const metadata = { title: "Conectores · Integration AI Doctor" };
 // Tela 11: um card por Conector. Todo Papel vê; só Owner e Admin com MFA agem.
 export default async function ConnectorsPage() {
   const [me, connectors] = await Promise.all([getMe(), listConnectors()]);
-  const manager = isManager(me?.active_role) && me?.aal === "aal2";
+  const manager = canManage(me);
   const now = new Date();
 
   return (
@@ -127,7 +127,11 @@ function ConnectorCard({
             provider={connector.provider}
             primary={failing}
           />
-          <ActionButton id={connector.id} action={paused ? "resume" : "sync"} />
+          <ActionButton
+            key={paused ? "resume" : "sync"}
+            id={connector.id}
+            action={paused ? "resume" : "sync"}
+          />
         </div>
       )}
       <Link className="btn" href={`/conectores/${connector.id}`}>

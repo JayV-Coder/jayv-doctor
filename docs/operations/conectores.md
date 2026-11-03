@@ -82,8 +82,8 @@ Config:
   - severidades do Logging para as cinco do contrato;
   - nanossegundos truncados em microssegundos.
 - **Teste de conexão sem `logging.viewer`:** a mensagem diz qual permissão falta (`logging.logEntries.list`), em qual Service Account e em qual projeto. Com a API do Logging desativada, a mensagem diz isso, e não manda conceder papel.
-- **Teste de conexão = prévia:** lê uma página (até 1.000 entradas) da última hora com os filtros e diz quantas atendem ("48 registros na última hora…", ou "Mais de 1.000…"). O assistente da Tela 12 usa o mesmo teste no passo dos filtros.
-- **E2E:** `AID_GCP_OAUTH_URL` e `AID_GCP_LOGGING_URL` apontam o conector para o GCP falso de `apps/web/e2e/fake-gcp.mjs`. São da plataforma, nunca do cliente, e ficam sem valor em produção (o Terraform não as define).
+- **Prévia:** o teste antes de salvar (`POST /connectors/test`, usado pelo assistente) lê uma página (até 1.000 entradas) da última hora com os filtros e diz quantas atendem ("48 registros na última hora…", ou "Mais de 1.000…"). O teste de um Conector salvo lê uma entrada só: prova o acesso sem gastar a cota do cliente.
+- **E2E:** `AID_GCP_OAUTH_URL` e `AID_GCP_LOGGING_URL` apontam o conector para o GCP falso de `apps/web/e2e/fake-gcp.mjs`. Só aceitam endereço de loopback: num ambiente real, uma delas esquecida derruba o Conector em vez de mandar o JWT assinado e os tokens dos clientes para outro host. O Terraform não as define.
 - O enriquecimento com o Cloud Trace (opcional no ticket) fica para depois.
 
 ## Tela (ticket #16)

@@ -12,10 +12,14 @@ export function formatPercent(ratio: number): string {
 }
 
 // O fuso é o do navegador: no servidor ele é desconhecido, por isso quem chama o informa.
-export function formatDateTime(instant: Date, timeZone: string): string {
+export function formatDateTime(
+  instant: Date,
+  timeZone: string,
+  { seconds = false }: { seconds?: boolean } = {},
+): string {
   return new Intl.DateTimeFormat(LOCALE, {
     dateStyle: "short",
-    timeStyle: "short",
+    timeStyle: seconds ? "medium" : "short",
     timeZone,
   }).format(instant);
 }

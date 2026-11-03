@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { FormMessage } from "@/components/auth-shell";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import type { Connector } from "@/lib/api";
@@ -10,6 +10,7 @@ import { editConnector } from "../actions";
 export function EditSheet({ connector }: { connector: Connector }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, startTransition] = useTransition();
+  const form = useRef<HTMLFormElement>(null);
   // O intervalo salvo pode não estar entre os oferecidos (a API aceita de 60 s a 1 dia).
   const intervals = INTERVALS.includes(
     connector.sync_interval_seconds as (typeof INTERVALS)[number],
@@ -26,6 +27,7 @@ export function EditSheet({ connector }: { connector: Connector }) {
       }}
     >
       <form
+        ref={form}
         className="stack"
         onSubmit={(event) => {
           event.preventDefault();

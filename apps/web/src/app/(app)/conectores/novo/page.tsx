@@ -3,7 +3,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { ReloadButton } from "@/components/ui/reload-button";
 import { getMe, listIntegrations } from "@/lib/api";
-import { isManager } from "@/lib/orgs/labels";
+import { canManage } from "@/lib/orgs/labels";
 import { GcpWizard } from "./gcp-wizard";
 
 export const metadata = { title: "Conector GCP · Integration AI Doctor" };
@@ -11,7 +11,7 @@ export const metadata = { title: "Conector GCP · Integration AI Doctor" };
 // Tela 12: assistente do Conector do Google Cloud em 4 passos.
 export default async function NewConnectorPage() {
   const [me, integrations] = await Promise.all([getMe(), listIntegrations()]);
-  if (!isManager(me?.active_role) || me?.aal !== "aal2") {
+  if (!canManage(me)) {
     return (
       <EmptyState
         title="Só Owner ou Admin configuram Conectores"
@@ -48,6 +48,7 @@ export default async function NewConnectorPage() {
   }
   return (
     <GcpWizard
+      tenantId={me?.active_tenant_id ?? ""}
       integrations={integrations.map(({ id, name, environment }) => ({ id, name, environment }))}
     />
   );

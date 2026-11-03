@@ -45,7 +45,9 @@ class FakeConnector:
             errors["fail"] = "objeto {page, kind, times}"
         return errors
 
-    async def test_connection(self, secret: Secret, config: Mapping[str, Any]) -> TestResult:
+    async def test_connection(
+        self, secret: Secret, config: Mapping[str, Any], *, preview: bool = False
+    ) -> TestResult:
         fail = config.get("fail") or {}
         if not secret.reveal() or fail.get("kind") == "auth":
             return TestResult(False, MESSAGES["auth"])

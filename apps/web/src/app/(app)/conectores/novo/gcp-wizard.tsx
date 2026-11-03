@@ -26,15 +26,23 @@ type IntegrationOption = Pick<Integration, "id" | "name" | "environment">;
 const TITLES = ["Projeto", "Credencial", "Filtros de coleta", "Ativar"] as const;
 const OFFLINE: TestOutcome = { ok: false, message: "Sem conexão. Tente de novo." };
 
-function save(draft: Draft) {
+function save(key: string, draft: Draft) {
   try {
-    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    sessionStorage.setItem(key, JSON.stringify(draft));
   } catch {
     // Sem sessionStorage (janela privada, bloqueio): perde-se só o progresso.
   }
 }
 
-export function GcpWizard({ integrations }: { integrations: IntegrationOption[] }) {
+export function GcpWizard({
+  tenantId,
+  integrations,
+}: {
+  tenantId: string;
+  integrations: IntegrationOption[];
+}) {
+  // Um rascunho por Organização: quem troca de Organização na mesma aba não leva a config junto.
+  const key = `${DRAFT_KEY}:${tenantId}`;
   const router = useRouter();
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   // A credencial e os testes ficam só na memória: voltar à página pede a chave de novo.
@@ -48,20 +56,24 @@ export function GcpWizard({ integrations }: { integrations: IntegrationOption[] 
   useEffect(() => {
     let saved = EMPTY_DRAFT;
     try {
-      saved = readDraft(sessionStorage.getItem(DRAFT_KEY));
+      saved = readDraft(sessionStorage.getItem(key));
     } catch {
       // Sem sessionStorage (janela privada, bloqueio): o assistente funciona sem rascunho.
     }
+    // A Integração do rascunho pode ter sido arquivada desde então.
+    if (!integrations.some(({ id }) => id === saved.integration_id)) {
+      saved = { ...saved, integration_id: "" };
+    }
     if (saved.step > 2) setResumed(true);
     setDraft({ ...saved, step: saved.step > 2 ? 2 : saved.step });
-  }, []);
+  }, [key, integrations]);
 
   // Grava a cada mudança feita pela pessoa, e só aí: ativar apaga o rascunho de vez.
   function update(change: Partial<Draft>) {
     const next = { ...draft, ...change };
     setDraft(next);
     setError(null);
-    save(next);
+    save(key, next);
   }
 
   function go(step: Draft["step"]) {
@@ -93,7 +105,7 @@ export function GcpWizard({ integrations }: { integrations: IntegrationOption[] 
         return;
       }
       try {
-        sessionStorage.removeItem(DRAFT_KEY);
+        sessionStorage.removeItem(key);
       } catch {
         // Sem sessionStorage não há rascunho a apagar.
       }

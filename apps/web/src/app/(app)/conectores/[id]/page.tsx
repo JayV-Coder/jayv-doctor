@@ -4,7 +4,13 @@ import { Chip } from "@/components/ui/chip";
 import { ErrorState } from "@/components/ui/error-state";
 import { ListItem } from "@/components/ui/list-item";
 import { ReloadButton } from "@/components/ui/reload-button";
-import { getConnector, getMe, listConnectorSyncs, listIntegrations } from "@/lib/api";
+import {
+  getConnector,
+  getMe,
+  listConnectorSyncs,
+  listIntegrations,
+  type Integration,
+} from "@/lib/api";
 import {
   checkpointText,
   connectorState,
@@ -15,8 +21,8 @@ import {
   syncDuration,
   syncStatus,
 } from "@/lib/connectors/labels";
-import { formatNumber } from "@/lib/format";
-import { isManager } from "@/lib/orgs/labels";
+import { formatDateTime, formatNumber } from "@/lib/format";
+import { canManage } from "@/lib/orgs/labels";
 import { ActionButton } from "../action-button";
 import { LiveStatus } from "../live-status";
 import { TestConnection } from "../test-connection";
@@ -24,12 +30,6 @@ import { CredentialSheet } from "./credential-sheet";
 import { EditSheet } from "./edit-sheet";
 
 export const metadata = { title: "Conector · Integration AI Doctor" };
-
-const TIME = new Intl.DateTimeFormat("pt-BR", {
-  dateStyle: "short",
-  timeStyle: "medium",
-  timeZone: "UTC",
-});
 
 // Detalhe do Conector: histórico de Sincronizações e o último erro com a ação que resolve.
 export default async function ConnectorPage({ params }: { params: Promise<{ id: string }> }) {
@@ -48,16 +48,15 @@ export default async function ConnectorPage({ params }: { params: Promise<{ id: 
       </ErrorState>
     );
   }
-  const manager = isManager(me?.active_role) && me?.aal === "aal2";
+  const manager = canManage(me);
   const state = connectorState(connector);
-  const integration = integrations?.find(({ id }) => id === connector.integration_id);
   const now = new Date();
   const paused = connector.status === "paused";
   const active = connector.status !== "disabled";
 
   return (
     <>
-      <LiveStatus />
+      <LiveStatus connectorId={connector.id} />
       <Link className="small" href="/conectores">
         ‹ Conectores
       </Link>
@@ -76,7 +75,7 @@ export default async function ConnectorPage({ params }: { params: Promise<{ id: 
         {paused && <p className="alert">{pauseText(connector.paused_reason)}</p>}
         <dl className="kv">
           <dt>integração</dt>
-          <dd>{integration?.name ?? "arquivada"}</dd>
+          <dd>{integrationName(integrations, connector.integration_id)}</dd>
           <dt>última sync</dt>
           <dd>{lastSyncText(connector, now)}</dd>
           <dt>checkpoint</dt>
@@ -98,7 +97,12 @@ export default async function ConnectorPage({ params }: { params: Promise<{ id: 
                 name={connector.name}
                 provider={connector.provider}
               />
-              <ActionButton id={connector.id} action={paused ? "resume" : "sync"} primary />
+              <ActionButton
+                key={paused ? "resume" : "sync"}
+                id={connector.id}
+                action={paused ? "resume" : "sync"}
+                primary
+              />
             </div>
             <div className="grid2">
               <CredentialSheet id={connector.id} provider={connector.provider} />
@@ -123,7 +127,7 @@ export default async function ConnectorPage({ params }: { params: Promise<{ id: 
             return (
               <ListItem
                 key={sync.id}
-                title={`${TIME.format(new Date(sync.started_at))} UTC`}
+                title={`${formatDateTime(new Date(sync.started_at), "UTC", { seconds: true })} UTC`}
                 detail={[
                   syncDuration(sync.started_at, sync.finished_at),
                   `${formatNumber(sync.records)} ${sync.records === 1 ? "evento" : "eventos"}`,
@@ -139,4 +143,10 @@ export default async function ConnectorPage({ params }: { params: Promise<{ id: 
       )}
     </>
   );
+}
+
+// A lista traz só as ativas: fora dela, a Integração foi arquivada. Sem a lista, não se sabe.
+function integrationName(integrations: Integration[] | null, id: string): string {
+  if (integrations === null) return "indisponível";
+  return integrations.find((integration) => integration.id === id)?.name ?? "arquivada";
 }

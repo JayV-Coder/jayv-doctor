@@ -10,6 +10,7 @@ from aid_api.imports import router as imports
 from aid_api.incidents import router as incidents
 from aid_api.ingestion import router as ingestion
 from aid_api.integrations import router as integrations
+from aid_api.knowledge import router as knowledge
 from aid_api.orgs import router as orgs
 
 
@@ -30,6 +31,7 @@ def create_app() -> FastAPI:
     app.include_router(executions.router)
     app.include_router(incidents.router)
     app.include_router(dashboard.router)
+    app.include_router(knowledge.router)
     telemetry.configure(app)
     return app
 

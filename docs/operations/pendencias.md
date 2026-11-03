@@ -16,7 +16,7 @@ Tudo foi validado na stack local e no CI. A configuração do GCP e do Supabase 
   - `hmac-master-key`: 32+ bytes aleatórios, que nunca mudam depois do primeiro Evento, porque mudar quebra a busca por Referência;
   - `smtp-url`;
   - `supabase-service-role-key`, usada pelo worker de ingestão para ler o Log bruto no Storage (ticket #12);
-  - `anthropic-api-key` e `voyage-api-key`, do worker de diagnóstico (ticket #22).
+  - `anthropic-api-key` e `voyage-api-key`, do worker de diagnóstico (ticket #22); a `voyage-api-key` também na API, para a busca da Base de conhecimento (ticket #23).
 - [ ] Vertex AI (provedor alternativo de IA, ticket #22): ativar a API no projeto, dar `roles/aiplatform.user` à conta do worker de diagnóstico, definir `GCP_PROJECT_ID` nele e confirmar que `gemini-2.5-pro`, `gemini-2.5-flash` e `text-embedding-005` estão disponíveis em southamerica-east1.
 - [ ] `MAIL_FROM` com um remetente de domínio verificado.
 - [ ] Variáveis do GitHub (`GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`, `GCP_PROJECT_ID`) e `DEPLOY_ENABLED`.
@@ -27,6 +27,8 @@ Tudo foi validado na stack local e no CI. A configuração do GCP e do Supabase 
 ## Supabase hospedado (exige aprovação na hora, ADR-0009)
 
 - [ ] `scripts/apply-doctor-migrations.py --check` e, na janela combinada, `--apply`. As migrações criam o schema `doctor`, o bucket `doctor-raw-logs` e as políticas dele em `storage.objects`.
+- [ ] Extensão `vector` (pgvector, ticket #23): a migração da Base de conhecimento a cria no schema `extensions`. Instalar extensão no projeto compartilhado exige aprovação na janela; conferir antes se o jayv-coder já a usa.
+- [ ] Rodar `python -m aid_knowledge.global_seed` (com `SUPABASE_DB_URL` e `VOYAGE_API_KEY`) depois das migrações, para gravar a Base global v1 com embeddings.
 - [ ] Confirmar que nenhum Custom Access Token Hook está ativo e ativar `doctor.custom_access_token_hook`.
 - [ ] Incluir as URLs do app web nas URLs de redirecionamento do Auth.
 - [ ] Confirmar que o Realtime está ligado no projeto. A migração do ticket #16 só acrescenta `doctor.connectors` à publicação `supabase_realtime`, que é do projeto inteiro: conferir antes que a publicação não é `FOR ALL TABLES` e o que o jayv-coder já publica.

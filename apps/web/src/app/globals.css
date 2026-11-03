@@ -1411,3 +1411,13 @@ p {
     display: block;
   }
 }
+
+/* Aviso em destaque, em texto corrido (a .kv é grade de rótulo e valor). */
+.note {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 2px solid var(--ac);
+  background: color-mix(in srgb, var(--sec) 60%, transparent);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}

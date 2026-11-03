@@ -80,6 +80,11 @@ class LLMProvider(Protocol):
         """Registrada junto com cada vetor: trocar de provedor exige reindexar."""
         ...
 
+    @property
+    def embedding_model(self) -> str:
+        """Gravado com cada Fragmento: a busca só compara vetores do mesmo modelo."""
+        ...
+
 
 def describe_validation(exc: ValidationError) -> str:
     """Só os campos e as regras: o valor pode trazer dado do cliente."""

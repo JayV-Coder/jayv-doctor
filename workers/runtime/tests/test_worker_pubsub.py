@@ -38,6 +38,7 @@ def test_worker_de_ingestao_registra_o_topico_ingestion_raw() -> None:
     assert set(handlers_for("ingestion")) == {"ingestion.raw"}
     assert set(handlers_for("diagnosis")) == {
         "rules.evaluate",
+        "knowledge.index",
         "incident.opened",
         "incident.updated",
     }

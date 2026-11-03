@@ -1,0 +1,20 @@
+[project]
+name = "aid-knowledge"
+version = "0.1.0"
+description = "Base de conhecimento: extração de texto, Fragmentos, embeddings e busca híbrida"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "aid-db",
+    "aid-diagnosis-engine",
+    "aid-security",
+    "pypdf>=5.0",
+]
+
+[tool.uv.sources]
+aid-db = { workspace = true }
+aid-diagnosis-engine = { workspace = true }
+aid-security = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.9.5,<0.10"]
+build-backend = "uv_build"

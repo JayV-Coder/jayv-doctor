@@ -42,6 +42,7 @@ REFUSALS = {"SAFETY", "RECITATION", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "
 class VertexProvider:
     name = "vertex"
     embedding_dimensions = DIMENSIONS
+    embedding_model = EMBEDDING_MODEL
 
     def __init__(
         self,

@@ -65,6 +65,8 @@ async def tenant(engine: AsyncEngine) -> AsyncIterator[dict[str, str]]:
     )
     yield ids
     for table in (
+        "knowledge_chunks",
+        "knowledge_documents",
         "execution_stats_hourly",
         "incident_history",
         "incident_comments",
@@ -435,3 +437,53 @@ async def test_reavaliar_execucao_de_incidente_resolvido_nao_reabre(
     assert await evaluate_execution(engine, {"execution_id": old}) != incident
     statuses = await rows(engine, "select status from doctor.incidents where id = :i", i=incident)
     assert statuses[0]["status"] == "resolved"
+
+
+@pytest.mark.asyncio
+async def test_indexa_documento_e_reindexa_quando_o_modelo_muda(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    from aid_diagnosis_engine.llm.fake import FakeProvider
+    from aid_diagnosis_worker.knowledge import index, reindex_stale
+
+    document = str(uuid4())
+    await run(
+        engine,
+        "insert into doctor.knowledge_documents (id, tenant_id, title, source, storage_path,"
+        " content_type, size_bytes, status) values (:d, :t, 'Runbook', 'upload', :p,"
+        " 'text/markdown', 40, 'indexing')",
+        d=document,
+        t=tenant["tenant"],
+        p=f"{tenant['tenant']}/{document}/runbook.md",
+    )
+
+    class Store:
+        async def read(self, path: str) -> bytes | None:
+            return b"# Runbook\n\nCliente CPF 529.982.247-25 com o job VL10 travado."
+
+    provider = FakeProvider()
+    assert await index(engine, {"document_id": document}, Store(), lambda name: provider) == "ready"
+    stored = await rows(
+        engine,
+        "select d.status, d.chunk_count, d.embedding_model, c.content from"
+        " doctor.knowledge_documents d join doctor.knowledge_chunks c on c.document_id = d.id"
+        " where d.id = :d",
+        d=document,
+    )
+    assert (stored[0]["status"], stored[0]["chunk_count"], stored[0]["embedding_model"]) == (
+        "ready",
+        1,
+        "fake",
+    )
+    # A Sanitização roda antes do embedding: o CPF não vira Fragmento.
+    assert "529.982.247-25" not in stored[0]["content"]
+    # O provedor da Organização é `anthropic`, cujo modelo não é `fake`: volta para a fila.
+    from aid_diagnosis_engine.llm.registry import provider_for
+
+    assert await reindex_stale(engine, provider_for) >= 1
+    queued = await rows(
+        engine,
+        "select status from doctor.knowledge_documents where id = :d",
+        d=document,
+    )
+    assert queued[0]["status"] == "indexing"

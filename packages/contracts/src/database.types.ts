@@ -115,6 +115,48 @@ isOneToOne: false
       referencedColumns: ["tenant_id","id"]
     }
                   ]
+                },"events_2026_10": {
+                  Row: {
+                    "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"correlated_by": string | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"execution_ref": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key": string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id": string,"ingested_at"?: string,"integration_id": string,"operation": string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id"?: string | null
+                  }
+                  Update: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"events_2026_11": {
+                  Row: {
+                    "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"correlated_by": string | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"execution_ref": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key": string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id": string,"ingested_at"?: string,"integration_id": string,"operation": string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id"?: string | null
+                  }
+                  Update: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"events_2026_12": {
+                  Row: {
+                    "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"correlated_by": string | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"execution_ref": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key": string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id": string,"ingested_at"?: string,"integration_id": string,"operation": string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id"?: string | null
+                  }
+                  Update: {
+                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
                 },"execution_merges": {
                   Row: {
                     "id": string,"merged_at": string,"merged_id": string,"merged_keys": NonNullable<Json>,"survivor_id": string,"tenant_id": string,"updated_at": string
@@ -218,6 +260,40 @@ isOneToOne: false
       referencedRelation: "executions"
       referencedColumns: ["tenant_id","id"]
     }
+                  ]
+                },"global_knowledge_chunks": {
+                  Row: {
+                    "content": string,"created_at": string,"document_id": string,"embedding": string | null,"embedding_model": string | null,"heading": string | null,"id": string,"metadata": NonNullable<Json>,"ordinal": number,"search_text": unknown,"tokens": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "content": string,"created_at"?: string,"document_id": string,"embedding"?: string | null,"embedding_model"?: string | null,"heading"?: string | null,"id"?: string,"metadata"?: NonNullable<Json>,"ordinal": number,"search_text"?: never,"tokens": number,"updated_at"?: string
+                  }
+                  Update: {
+                    "content"?: string,"created_at"?: string,"document_id"?: string,"embedding"?: string | null,"embedding_model"?: string | null,"heading"?: string | null,"id"?: string,"metadata"?: NonNullable<Json>,"ordinal"?: number,"search_text"?: never,"tokens"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "global_knowledge_chunks_document_id_fkey"
+      columns: ["document_id"]
+isOneToOne: false
+      referencedRelation: "global_knowledge_documents"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"global_knowledge_documents": {
+                  Row: {
+                    "chunk_count": number,"created_at": string,"id": string,"slug": string,"title": string,"updated_at": string,"version": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "chunk_count"?: number,"created_at"?: string,"id"?: string,"slug": string,"title": string,"updated_at"?: string,"version": string
+                  }
+                  Update: {
+                    "chunk_count"?: number,"created_at"?: string,"id"?: string,"slug"?: string,"title"?: string,"updated_at"?: string,"version"?: string
+                  }
+                  Relationships: [
+
                   ]
                 },"idempotency_keys": {
                   Row: {
@@ -543,6 +619,58 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"knowledge_chunks": {
+                  Row: {
+                    "content": string,"created_at": string,"document_id": string,"embedding": string | null,"embedding_model": string | null,"heading": string | null,"id": string,"metadata": NonNullable<Json>,"ordinal": number,"search_text": unknown,"tenant_id": string,"tokens": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "content": string,"created_at"?: string,"document_id": string,"embedding"?: string | null,"embedding_model"?: string | null,"heading"?: string | null,"id"?: string,"metadata"?: NonNullable<Json>,"ordinal": number,"search_text"?: never,"tenant_id": string,"tokens": number,"updated_at"?: string
+                  }
+                  Update: {
+                    "content"?: string,"created_at"?: string,"document_id"?: string,"embedding"?: string | null,"embedding_model"?: string | null,"heading"?: string | null,"id"?: string,"metadata"?: NonNullable<Json>,"ordinal"?: number,"search_text"?: never,"tenant_id"?: string,"tokens"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "knowledge_chunks_tenant_id_document_id_fkey"
+      columns: ["tenant_id","document_id"]
+isOneToOne: false
+      referencedRelation: "knowledge_documents"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "knowledge_chunks_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"knowledge_documents": {
+                  Row: {
+                    "chunk_count": number,"content_type": string | null,"created_at": string,"created_by": string | null,"embedding_model": string | null,"error": string | null,"id": string,"incident_id": string | null,"size_bytes": number | null,"source": string,"status": string,"storage_path": string | null,"tenant_id": string,"title": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "chunk_count"?: number,"content_type"?: string | null,"created_at"?: string,"created_by"?: string | null,"embedding_model"?: string | null,"error"?: string | null,"id"?: string,"incident_id"?: string | null,"size_bytes"?: number | null,"source": string,"status"?: string,"storage_path"?: string | null,"tenant_id": string,"title": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "chunk_count"?: number,"content_type"?: string | null,"created_at"?: string,"created_by"?: string | null,"embedding_model"?: string | null,"error"?: string | null,"id"?: string,"incident_id"?: string | null,"size_bytes"?: number | null,"source"?: string,"status"?: string,"storage_path"?: string | null,"tenant_id"?: string,"title"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "knowledge_documents_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "knowledge_documents_tenant_id_incident_id_fkey"
+      columns: ["tenant_id","incident_id"]
+isOneToOne: false
+      referencedRelation: "incidents"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
                 },"memberships": {
                   Row: {
                     "created_at": string,"id": string,"role": string,"tenant_id": string,"updated_at": string,"user_id": string,"require_other_owner": undefined | null
@@ -723,6 +851,11 @@ isOneToOne: false
 "create_ingestion_token":
 { Args: { "integration_id": string,"name": string,"prefix": string,"token_hash": string }; Returns: string
                            },
+"create_knowledge_document":
+{ Args: { "content_type": string,"filename": string,"size_bytes": number,"title": string }; Returns: {
+              "id": string,"storage_path": string
+            }[]
+                           },
 "create_organization":
 { Args: { "llm_provider": string,"name": string,"segment": string,"slug": string }; Returns: string
                            },
@@ -738,11 +871,17 @@ isOneToOne: false
 "custom_access_token_hook":
 { Args: { "event": Json }; Returns: Json
                            },
+"delete_knowledge_document":
+{ Args: { "target": string }; Returns: string
+                           },
 "ensure_event_partition":
 { Args: { "day": string }; Returns: string
                            },
 "finish_import":
 { Args: { "reason": string,"stored_size": number,"target": string }; Returns: undefined
+                           },
+"finish_knowledge_upload":
+{ Args: { "target": string }; Returns: undefined
                            },
 "get_connector_secret":
 { Args: { "target": string }; Returns: string

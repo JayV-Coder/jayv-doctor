@@ -17,6 +17,7 @@ export default async function MorePage() {
     <>
       <ul className="list">
         <ListItem href="/integracoes" title="Integrações" />
+        <ListItem href="/conhecimento" title="Base de conhecimento" />
         {isManager(role) && <ListItem href="/membros" title="Membros e convites" />}
       </ul>
       <ThemeSelect initial={parseTheme(store.get(THEME_COOKIE)?.value)} />

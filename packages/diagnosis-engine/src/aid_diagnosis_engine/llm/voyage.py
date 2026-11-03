@@ -17,6 +17,7 @@ BATCH = 64
 
 class VoyageEmbeddings:
     dimensions = DIMENSIONS
+    model = MODEL
 
     def __init__(
         self, api_key: str | None = None, transport: httpx.AsyncBaseTransport | None = None

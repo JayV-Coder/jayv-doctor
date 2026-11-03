@@ -87,6 +87,10 @@ def routers_for(worker: str) -> list[APIRouter]:
         from aid_correlation_worker.handlers import router as close
 
         return [close]
+    if worker == "diagnosis":
+        from aid_diagnosis_worker.handlers import router as knowledge
+
+        return [knowledge]
     return []
 
 

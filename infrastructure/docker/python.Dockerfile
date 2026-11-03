@@ -13,6 +13,7 @@ COPY packages/contracts packages/contracts
 COPY packages/correlation packages/correlation
 COPY packages/db packages/db
 COPY packages/diagnosis-engine packages/diagnosis-engine
+COPY packages/knowledge packages/knowledge
 COPY packages/security packages/security
 COPY workers/connectors workers/connectors
 COPY workers/correlation workers/correlation

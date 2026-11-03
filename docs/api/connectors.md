@@ -5,7 +5,7 @@ Exigem `Authorization: Bearer <JWT do Supabase Auth>` e Organização ativa. Tod
 | Rota | Efeito |
 |---|---|
 | `GET /api/v1/connectors` | Conectores da Organização ativa |
-| `POST /api/v1/connectors` | `{ integration_id, provider, name, config, credential }` → `201` com o Conector, sem a credencial |
+| `POST /api/v1/connectors` | `{ integration_id, provider, name, config, credential, sync_interval_seconds? }` → `201` com o Conector, sem a credencial |
 | `POST /api/v1/connectors/test` | Testa provedor, config e credencial **antes de salvar**; não grava nada → `{ ok, message }` |
 | `GET /api/v1/connectors/{id}` | Um Conector |
 | `PATCH /api/v1/connectors/{id}` | `name`, `config`, `sync_interval_seconds` (60 a 86400) e/ou `credential` |
@@ -20,6 +20,9 @@ Exigem `Authorization: Bearer <JWT do Supabase Auth>` e Organização ativa. Tod
 - **Conector desativado** pela plataforma não é pausado nem retomado pela API.
 - **Config** é validada pelo conector do provedor. O erro traz o nome do campo e a regra, nunca o valor.
 - `provider`: `fake`, `gcp`, `salesforce` ou `sap`. Hoje `fake` e `gcp` têm conector (a config do GCP está em `docs/operations/conectores.md`); `salesforce` e `sap` respondem `422 provider_unavailable` até os tickets #37 e #38.
+
+- **Resposta** traz também `paused_reason` (`auth` ou `manual`), `checkpoint` (no formato do provedor; o do GCP tem `timestamp`) e `last_sync_records`, os registros da última Sincronização terminada (`null` antes da primeira).
+- **Teste do GCP** é também a prévia do assistente: a `message` diz quantos registros da última hora atendem aos filtros.
 
 Status e política de falhas estão em [`docs/operations/conectores.md`](../operations/conectores.md).
 

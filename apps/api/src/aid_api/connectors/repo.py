@@ -15,8 +15,12 @@ from aid_api.core.db import translated_tx
 from aid_api.core.errors import ApiError
 
 COLUMNS = (
-    "id::text, integration_id::text, provider, name, config, status, consecutive_failures,"
-    " sync_interval_seconds, last_sync_at, last_error, next_run_at, created_at"
+    "c.id::text, c.integration_id::text, c.provider, c.name, c.config, c.status, c.paused_reason,"
+    " c.consecutive_failures, c.sync_interval_seconds, c.checkpoint, c.last_sync_at,"
+    " c.last_error, c.next_run_at, c.created_at,"
+    " (select s.records from doctor.connector_syncs s"
+    "  where s.tenant_id = c.tenant_id and s.connector_id = c.id and s.finished_at is not null"
+    "  order by s.started_at desc limit 1) as last_sync_records"
 )
 ACTIONS = {
     "sync": "doctor.request_connector_sync",
@@ -43,7 +47,7 @@ async def fetch(connection: AsyncConnection, target: str) -> Connector:
     row: RowMapping | None = (
         (
             await connection.execute(
-                text(f"select {COLUMNS} from doctor.connectors where id = cast(:c as uuid)"),  # noqa: S608
+                text(f"select {COLUMNS} from doctor.connectors c where c.id = cast(:c as uuid)"),  # noqa: S608
                 {"c": target},
             )
         )
@@ -59,7 +63,7 @@ class ConnectorRepository:
     async def all(self, claims: Claims) -> list[Connector]:
         async with translated_tx(claims, ERRORS) as connection:
             result = await connection.execute(
-                text(f"select {COLUMNS} from doctor.connectors order by created_at desc")  # noqa: S608
+                text(f"select {COLUMNS} from doctor.connectors c order by c.created_at desc")  # noqa: S608
             )
             return [Connector.model_validate(dict(row)) for row in result.mappings()]
 
@@ -82,6 +86,11 @@ class ConnectorRepository:
                     "s": new.credential.get_secret_value(),
                 },
             )
+            if new.sync_interval_seconds is not None:
+                await connection.execute(
+                    text("select doctor.update_connector(cast(:t as uuid), null, null, :i)"),
+                    {"t": str(created), "i": new.sync_interval_seconds},
+                )
             return await fetch(connection, str(created))
 
     async def update(

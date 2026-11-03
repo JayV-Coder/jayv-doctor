@@ -334,3 +334,18 @@ def test_token_e_reaproveitado_entre_tentativas() -> None:
 
     asyncio.run(twice())
     assert tokens == 1
+
+
+def test_teste_de_conexao_previa_quantos_registros_da_ultima_hora_atendem_aos_filtros() -> None:
+    recorder = Recorder(pages=[{"entries": [{"insertId": str(n)} for n in range(48)]}])
+    result = asyncio.run(connector(recorder).test_connection(Secret(KEY), CONFIG))
+    assert result.ok
+    assert "48 registros na última hora" in result.message
+    assert 'timestamp >= "2026-11-02T13:10:00Z"' in recorder.requests[0]["filter"]
+    assert recorder.requests[0]["pageSize"] == 1000
+
+
+def test_previa_com_mais_paginas_diz_pelo_menos() -> None:
+    page = {"entries": [{"insertId": "a"}] * 1000, "nextPageToken": "pagina-2"}
+    result = asyncio.run(connector(Recorder(pages=[page])).test_connection(Secret(KEY), CONFIG))
+    assert "Mais de 1.000 registros na última hora" in result.message

@@ -28,6 +28,9 @@ describe("activeTab", () => {
   it("põe a Importação manual sob Conectores, como no mockup", () => {
     expect(activeTab("/importar")).toBe("/conectores");
     expect(pageTitle("/importar")).toBe("Importar logs");
+    expect(pageTitle("/conectores/novo")).toBe("Conector GCP");
+    expect(activeTab("/conectores/novo")).toBe("/conectores");
+    expect(pageTitle("/conectores/abc")).toBe("Conectores");
   });
 
   it("põe em Mais as telas que se abrem de lá", () => {

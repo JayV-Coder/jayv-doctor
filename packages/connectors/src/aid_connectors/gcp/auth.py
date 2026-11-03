@@ -8,6 +8,7 @@ docs/operations/conectores.md.
 """
 
 import json
+import os
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -19,8 +20,8 @@ from aid_connectors.base import ConnectorError, Secret
 
 SCOPE = "https://www.googleapis.com/auth/logging.read"
 # Sempre este endpoint: o `token_uri` do JSON vem do cliente e levaria a plataforma a postar onde
-# ele quisesse (SSRF).
-OAUTH_ENDPOINT = "https://oauth2.googleapis.com/token"
+# ele quisesse (SSRF). A variável é da plataforma, só para os testes ponta a ponta.
+OAUTH_ENDPOINT = os.environ.get("AID_GCP_OAUTH_URL", "https://oauth2.googleapis.com/token")
 
 
 def service_account(secret: Secret) -> Mapping[str, Any]:

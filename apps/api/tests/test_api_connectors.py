@@ -24,7 +24,10 @@ def connector(**overrides: Any) -> Connector:
         "name": "Fake",
         "config": {"pages": 1},
         "status": "active",
+        "paused_reason": None,
         "consecutive_failures": 0,
+        "checkpoint": None,
+        "last_sync_records": None,
         "sync_interval_seconds": 300,
         "last_sync_at": None,
         "last_error": None,
@@ -208,4 +211,14 @@ def test_config_de_falha_malformada_e_recusada_e_nao_vira_500() -> None:
 
 def test_patch_de_config_invalida_vira_422() -> None:
     response = client().patch(f"/api/v1/connectors/{CONNECTOR_ID}", json={"config": {"pages": -1}})
+    assert response.status_code == 422
+
+
+def test_criar_aceita_o_intervalo_de_sincronizacao() -> None:
+    repository = FakeRepository()
+    client(repository=repository).post(
+        "/api/v1/connectors", json={**NEW, "sync_interval_seconds": 60}
+    )
+    assert repository.calls[0][1].sync_interval_seconds == 60
+    response = client().post("/api/v1/connectors", json={**NEW, "sync_interval_seconds": 10})
     assert response.status_code == 422

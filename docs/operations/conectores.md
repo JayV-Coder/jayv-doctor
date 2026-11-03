@@ -82,4 +82,13 @@ Config:
   - severidades do Logging para as cinco do contrato;
   - nanossegundos truncados em microssegundos.
 - **Teste de conexão sem `logging.viewer`:** a mensagem diz qual permissão falta (`logging.logEntries.list`), em qual Service Account e em qual projeto. Com a API do Logging desativada, a mensagem diz isso, e não manda conceder papel.
+- **Teste de conexão = prévia:** lê uma página (até 1.000 entradas) da última hora com os filtros e diz quantas atendem ("48 registros na última hora…", ou "Mais de 1.000…"). O assistente da Tela 12 usa o mesmo teste no passo dos filtros.
+- **E2E:** `AID_GCP_OAUTH_URL` e `AID_GCP_LOGGING_URL` apontam o conector para o GCP falso de `apps/web/e2e/fake-gcp.mjs`. São da plataforma, nunca do cliente, e ficam sem valor em produção (o Terraform não as define).
 - O enriquecimento com o Cloud Trace (opcional no ticket) fica para depois.
+
+## Tela (ticket #16)
+
+- **Tela 11** (`/conectores`): um card por Conector com status (Saudável, Aguardando, Com falhas, Pausado, Desativado), última Sincronização com a contagem de eventos, Checkpoint e, com falhas, o último erro e a próxima tentativa. Todo Papel vê; só Owner e Admin com MFA veem "Adicionar", "Testar conexão", "Sincronizar", "Retomar", "Pausar", "Editar" e "Trocar credencial".
+- **Testar conexão de um Conector salvo** pede a credencial de novo: a salva não sai do Vault. A enviada serve só ao teste.
+- **Tela 12** (`/conectores/novo`): projeto, credencial (com os comandos `gcloud` copiáveis), filtros com prévia, Integração e ativação. O rascunho fica no `sessionStorage` sem a credencial; quem volta no meio cai no passo da credencial e envia a chave de novo.
+- **Tempo real:** `doctor.connectors` está na publicação `supabase_realtime`. A tela só usa o aviso para buscar de novo na API; o evento passa pelo RLS e pelos privilégios de coluna, então não traz `secret_id`.

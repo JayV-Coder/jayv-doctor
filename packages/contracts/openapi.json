@@ -2309,6 +2309,17 @@
             "type": "string",
             "title": "Status"
           },
+          "paused_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Reason"
+          },
           "consecutive_failures": {
             "type": "integer",
             "title": "Consecutive Failures"
@@ -2316,6 +2327,18 @@
           "sync_interval_seconds": {
             "type": "integer",
             "title": "Sync Interval Seconds"
+          },
+          "checkpoint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint"
           },
           "last_sync_at": {
             "anyOf": [
@@ -2328,6 +2351,17 @@
               }
             ],
             "title": "Last Sync At"
+          },
+          "last_sync_records": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sync Records"
           },
           "last_error": {
             "anyOf": [
@@ -2359,9 +2393,12 @@
           "name",
           "config",
           "status",
+          "paused_reason",
           "consecutive_failures",
           "sync_interval_seconds",
+          "checkpoint",
           "last_sync_at",
+          "last_sync_records",
           "last_error",
           "next_run_at",
           "created_at"
@@ -3114,6 +3151,19 @@
             "format": "password",
             "title": "Credential",
             "writeOnly": true
+          },
+          "sync_interval_seconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 86400.0,
+                "minimum": 60.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Interval Seconds"
           }
         },
         "additionalProperties": false,

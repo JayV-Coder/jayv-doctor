@@ -5,6 +5,7 @@ repetidas. Respeita a cota de leitura da API, também entre tentativas, e trata
 RESOURCE_EXHAUSTED como 429."""
 
 import asyncio
+import os
 import re
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
@@ -25,12 +26,15 @@ from aid_connectors.base import (
 from aid_connectors.gcp.auth import access_token, principal
 from aid_connectors.gcp.mapping import timestamp, to_event
 
-ENTRIES = "https://logging.googleapis.com/v2/entries:list"
+# Variáveis só para os testes ponta a ponta (um GCP falso local); em produção ficam sem valor.
+ENTRIES = os.environ.get("AID_GCP_LOGGING_URL", "https://logging.googleapis.com/v2/entries:list")
 OVERLAP = timedelta(seconds=30)
 PROJECT = re.compile(r"^[a-z][a-z0-9-]{4,28}[a-z0-9]$")
 SERVICE = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 SEVERITIES = ("DEBUG", "INFO", "NOTICE", "WARNING", "ERROR", "CRITICAL", "ALERT", "EMERGENCY")
 PERMISSION = "logging.logEntries.list"
+# Uma página só na prévia: o teste não pode gastar a cota do cliente contando tudo.
+PREVIEW = 1000
 
 
 def rfc3339(moment: datetime) -> str:
@@ -198,15 +202,23 @@ class GcpLoggingConnector:
         raise ConnectorError("transient", f"Cloud Logging respondeu HTTP {response.status_code}.")
 
     async def test_connection(self, secret: Secret, config: Mapping[str, Any]) -> TestResult:
+        """Lê uma página da última hora com os filtros: prova a permissão e serve de prévia do
+        volume no assistente."""
         try:
             async with self.client() as client:
                 now = self.clock()
-                await self.entries(
-                    client, secret, config, self.query(config, now - OVERLAP, now), None, 1
-                )
+                query = self.query(config, now - timedelta(hours=1), now)
+                found = await self.entries(client, secret, config, query, None, PREVIEW)
         except ConnectorError as exc:
             return TestResult(False, exc.message)
-        return TestResult(True, "Conexão estabelecida: a Service Account lê os logs do projeto.")
+        count = len(found.get("entries") or [])
+        if found.get("nextPageToken"):
+            amount = f"Mais de {count:,}".replace(",", ".")
+        else:
+            amount = f"{count:,}".replace(",", ".")
+        return TestResult(
+            True, f"Conexão estabelecida. {amount} registros na última hora atendem aos filtros."
+        )
 
     async def collect(
         self, secret: Secret, config: Mapping[str, Any], checkpoint: Checkpoint | None

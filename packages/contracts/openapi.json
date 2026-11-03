@@ -2357,6 +2357,7 @@
       "get": {
         "tags": ["executions"],
         "summary": "Get Event",
+        "description": "`at`: o instante do Evento (a Timeline manda), para ler só a partição dele.",
         "operationId": "get_event_api_v1_events__target__get",
         "parameters": [
           {
@@ -2367,6 +2368,23 @@
               "type": "string",
               "format": "uuid",
               "title": "Target"
+            }
+          },
+          {
+            "name": "at",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "At"
             }
           },
           {

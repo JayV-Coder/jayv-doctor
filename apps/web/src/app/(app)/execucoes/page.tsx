@@ -25,8 +25,9 @@ export default async function ExecutionsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const filters = readFilters(await searchParams);
+  const now = new Date();
   const [page, integrations] = await Promise.all([
-    searchExecutions(toSearch(filters, new Date())),
+    searchExecutions(toSearch(filters, now)),
     listIntegrations(),
   ]);
   const filtered = Object.values(filters).some(Boolean);
@@ -126,7 +127,14 @@ export default async function ExecutionsPage({
           de uma Importação manual.
         </EmptyState>
       ) : (
-        page && <Explorer key={JSON.stringify(filters)} filters={filters} initial={page} />
+        page && (
+          <Explorer
+            key={JSON.stringify(filters)}
+            filters={filters}
+            initial={page}
+            since={now.toISOString()}
+          />
+        )
       )}
     </>
   );

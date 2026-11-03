@@ -60,11 +60,22 @@ export function severityTone(severity: string): ChipTone {
 // O que cada detector da Sanitização (packages/security) tira, em português.
 const KINDS: Record<string, [string, string]> = {
   bearer: ["token Bearer removido", "tokens Bearer removidos"],
-  cpf: ["CPF removido", "CPFs removidos"],
-  ip: ["IP removido", "IPs removidos"],
+  jwt: ["JWT removido", "JWTs removidos"],
+  token: ["token removido", "tokens removidos"],
+  authorization: ["cabeçalho de autorização removido", "cabeçalhos de autorização removidos"],
+  cookie: ["cookie removido", "cookies removidos"],
+  password: ["senha ou segredo removido", "senhas ou segredos removidos"],
+  private_key: ["chave privada removida", "chaves privadas removidas"],
+  salesforce_session: ["sessão do Salesforce removida", "sessões do Salesforce removidas"],
   aws_key: ["chave da AWS removida", "chaves da AWS removidas"],
   gcp_key: ["chave do Google Cloud removida", "chaves do Google Cloud removidas"],
   gcp_token: ["token do Google Cloud removido", "tokens do Google Cloud removidos"],
+  cpf: ["CPF removido", "CPFs removidos"],
+  cnpj: ["CNPJ removido", "CNPJs removidos"],
+  email: ["e-mail removido", "e-mails removidos"],
+  telefone: ["telefone removido", "telefones removidos"],
+  cartao: ["cartão removido", "cartões removidos"],
+  ip: ["IP removido", "IPs removidos"],
 };
 
 export function sanitizationLines(
@@ -74,7 +85,7 @@ export function sanitizationLines(
   const lines = Object.entries(counts)
     .filter(([kind, count]) => kind !== "referencia" && count > 0)
     .map(([kind, count]) => {
-      const [one, many] = KINDS[kind] ?? [`${kind} removido`, `${kind} removidos`];
+      const [one, many] = KINDS[kind] ?? ["dado sensível removido", "dados sensíveis removidos"];
       return `${formatNumber(count)} ${count === 1 ? one : many}`;
     });
   const references = counts.referencia ?? 0;

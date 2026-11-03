@@ -528,7 +528,10 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Get Event */
+    /**
+     * Get Event
+     * @description `at`: o instante do Evento (a Timeline manda), para ler só a partição dele.
+     */
     get: operations["get_event_api_v1_events__target__get"];
     put?: never;
     post?: never;
@@ -2520,7 +2523,9 @@ export interface operations {
   };
   get_event_api_v1_events__target__get: {
     parameters: {
-      query?: never;
+      query?: {
+        at?: string | null;
+      };
       header?: {
         authorization?: string | null;
       };

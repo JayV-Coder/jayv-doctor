@@ -511,12 +511,34 @@ async def test_download_do_log_bruto_exige_analyst(
     await add_admin(engine, first, user)
     monkeypatch.setattr(db, "get_engine", lambda: engine)
     repository = ExecutionRepository()
-    path = await repository.raw_log_path(claims_for(first, user, "admin"), seeded["raw"])
-    assert path == f"{first}/api/lote.json"
+
+    async def sign(path: str) -> str:
+        return f"https://storage.test/{path}"
+
+    async def broken(path: str) -> str:
+        raise ApiError(503, "storage_unavailable", "fora")
+
+    admin = claims_for(first, user, "admin")
+    url = await repository.raw_log_download(admin, seeded["raw"], sign)
+    assert url == f"https://storage.test/{first}/api/lote.json"
+    with pytest.raises(ApiError):
+        await repository.raw_log_download(admin, seeded["raw"], broken)
+    async with engine.begin() as connection:
+        audited = (
+            await connection.execute(
+                text(
+                    "select action, actor_id::text, resource_id from doctor.audit_logs"
+                    " where tenant_id = :t order by id"
+                ),
+                {"t": first},
+            )
+        ).all()
+    # Só o download que gerou URL fica na auditoria.
+    assert [tuple(row) for row in audited] == [("raw_log.downloaded", user, seeded["raw"])]
     async with engine.begin() as connection:
         await connection.execute(
             text("update doctor.memberships set role = 'viewer' where user_id = :u"), {"u": user}
         )
     with pytest.raises(ApiError) as denied:
-        await repository.raw_log_path(claims_for(first, user, "viewer"), seeded["raw"])
+        await repository.raw_log_download(claims_for(first, user, "viewer"), seeded["raw"], sign)
     assert denied.value.status == 403

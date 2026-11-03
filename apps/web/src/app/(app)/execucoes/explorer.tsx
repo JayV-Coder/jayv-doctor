@@ -16,9 +16,19 @@ import {
 import { formatNumber } from "@/lib/format";
 import { findExecutions } from "./actions";
 
+// Incidente resolvido ou descartado não marca a Execução como problema ativo.
+const ACTIVE = new Set(["open", "investigating"]);
 const INCIDENT_TONES = { critical: "danger", high: "danger", medium: "warning", low: "neutral" };
 
-export function Explorer({ filters, initial }: { filters: Filters; initial: ExecutionPage }) {
+export function Explorer({
+  filters,
+  initial,
+  since,
+}: {
+  filters: Filters;
+  initial: ExecutionPage;
+  since: string;
+}) {
   const [items, setItems] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.next_cursor);
   // O termo fica só na memória da página: nem URL, nem histórico, nem log.
@@ -29,7 +39,7 @@ export function Explorer({ filters, initial }: { filters: Filters; initial: Exec
 
   function run(q: string | null, after: string | null) {
     startTransition(async () => {
-      const page = await findExecutions(filters, q, after).catch(() => null);
+      const page = await findExecutions(filters, since, q, after).catch(() => null);
       if (page === null) {
         setError("Não foi possível buscar agora. Tente de novo.");
         return;
@@ -121,7 +131,7 @@ function Row({ item }: { item: ExecutionSummary }) {
       }
       detail={`${item.integration_name} · ${detail}`}
       trailing={
-        item.incident ? (
+        item.incident && ACTIVE.has(item.incident.status) ? (
           <Chip
             tone={
               INCIDENT_TONES[item.incident.severity as keyof typeof INCIDENT_TONES] as

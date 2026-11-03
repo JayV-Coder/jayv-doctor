@@ -2,6 +2,7 @@
 cima, auditado, por URL assinada de 5 min."""
 
 import os
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -54,14 +55,19 @@ async def get_execution(target: UUID, claims: Viewer, repository: Repository) ->
 
 
 @router.get("/events/{target}", response_model=EventDetail)
-async def get_event(target: UUID, claims: Viewer, repository: Repository) -> EventDetail:
-    return await repository.event(claims, str(target))
+async def get_event(
+    target: UUID, claims: Viewer, repository: Repository, at: datetime | None = None
+) -> EventDetail:
+    """`at`: o instante do Evento (a Timeline manda), para ler só a partição dele."""
+    return await repository.event(claims, str(target), at)
 
 
 @router.get("/raw-logs/{target}/download", response_model=RawLogDownload)
 async def download_raw_log(
     target: UUID, claims: Operator, token: Token, repository: Repository, storage: StorageDep
 ) -> RawLogDownload:
-    path = await repository.raw_log_path(claims, str(target))
-    url = await storage.sign_download(token, path, DOWNLOAD_SECONDS)
+    async def sign(path: str) -> str:
+        return await storage.sign_download(token, path, DOWNLOAD_SECONDS)
+
+    url = await repository.raw_log_download(claims, str(target), sign)
     return RawLogDownload(url=url, expires_in=DOWNLOAD_SECONDS)

@@ -29,7 +29,7 @@ Cada Evento da Timeline traz `rule_codes`: as Regras cujo match aponta aquele Ev
 
 - `sanitization_report` é `{ "counts": { "bearer": 1, … }, "truncated": false }`.
 - `raw_log` (id, origem, vencimento e dias restantes de retenção, nome do arquivo importado) só vem para Analyst ou acima, como o próprio bucket.
-- O download confere o Papel na tabela, registra a auditoria (`raw_log.download`) e assina a URL no Storage com o JWT do Usuário: a política do bucket repete a regra. Log vencido responde `404`.
+- O download confere o Papel na tabela, registra a auditoria (`raw_log.downloaded` em `doctor.audit_logs`, na mesma transação da assinatura: se o Storage falhar, nada fica registrado) e assina a URL no Storage com o JWT do Usuário: a política do bucket repete a regra. Log vencido responde `404`.
 
 ## Erros (`application/problem+json`)
 

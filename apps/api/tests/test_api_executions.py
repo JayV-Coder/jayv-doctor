@@ -27,8 +27,9 @@ class FakeRepository(ExecutionRepository):
         self.searches.append((query, reference))
         return ExecutionPage(items=[], next_cursor=None)
 
-    async def raw_log_path(self, claims: Claims, target: str) -> str:
-        return f"{TENANT_ID}/api/lote.json"
+    async def raw_log_download(self, claims: Claims, target: str, sign: Any) -> str:
+        url: str = await sign(f"{TENANT_ID}/api/lote.json")
+        return url
 
 
 class FakeStorage(Storage):

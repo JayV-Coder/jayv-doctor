@@ -6,11 +6,12 @@ import { toSearch, type Filters } from "@/lib/executions/filters";
 // O termo vem no corpo da Server Action e segue no corpo para a API: nunca fica numa URL.
 export async function findExecutions(
   filters: Filters,
+  since: string,
   q: string | null,
   cursor: string | null,
 ): Promise<ExecutionPage | null> {
   return searchExecutions({
-    ...toSearch(filters, new Date()),
+    ...toSearch(filters, new Date(since)),
     q: q?.trim() || null,
     cursor,
   });

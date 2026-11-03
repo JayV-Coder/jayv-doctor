@@ -16,9 +16,17 @@ const SOURCES: Record<string, string> = {
 
 // Tela 9: o Evento normalizado inteiro, sem passar por texto de IA. O Log bruto (o arquivo ou
 // lote de onde ele veio) é de Analyst para cima e sai por link de 5 min.
-export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const [event, me] = await Promise.all([getEvent(id), getMe()]);
+export default async function EventPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ em?: string | string[] }>;
+}) {
+  const [{ id }, { em }] = await Promise.all([params, searchParams]);
+  // O instante (vindo da Timeline) leva a consulta direto à partição do Evento.
+  const at = typeof em === "string" && !Number.isNaN(Date.parse(em)) ? em : null;
+  const [event, me] = await Promise.all([getEvent(id, at), getMe()]);
   if (event === "not_found") notFound();
   if (event === null) {
     return (

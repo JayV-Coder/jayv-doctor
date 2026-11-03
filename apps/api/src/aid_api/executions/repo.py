@@ -4,6 +4,7 @@ ativa. O download do Log bruto passa por uma função do banco que confere o Pap
 import base64
 import binascii
 import json
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -169,17 +170,22 @@ class ExecutionRepository:
             if row is None:
                 raise not_found()
             base = summary(row)
-            events = await self.timeline(connection, base.id)
+            events = await self.timeline(
+                connection, base.id, base.first_event_at, base.last_event_at
+            )
             rules = [
                 RuleHit.model_validate(dict(hit))
                 for hit in (
                     await connection.execute(
                         text(
-                            "select m.rule_code, m.rule_version, d.category,"
-                            " d.description, m.matched_event_ids::text[] as matched_event_ids"
+                            # Uma por Regra: a da avaliação mais recente, se houver versões.
+                            "select distinct on (m.rule_code) m.rule_code, m.rule_version,"
+                            " d.category, d.description,"
+                            " m.matched_event_ids::text[] as matched_event_ids"
                             " from doctor.rule_matches m join doctor.rule_definitions d"
                             " on d.code = m.rule_code and d.version = m.rule_version"
-                            " where m.execution_id = cast(:x as uuid) order by m.rule_code"
+                            " where m.execution_id = cast(:x as uuid)"
+                            " order by m.rule_code, m.created_at desc"
                         ),
                         {"x": base.id},
                     )
@@ -195,22 +201,25 @@ class ExecutionRepository:
             rules=rules,
         )
 
-    async def timeline(self, connection: AsyncConnection, execution: str) -> list[TimelineEvent]:
+    async def timeline(
+        self, connection: AsyncConnection, execution: str, first: datetime, last: datetime
+    ) -> list[TimelineEvent]:
+        # O intervalo da Execução leva o Postgres só às partições dela.
         result = await connection.execute(
             text(
                 "select id::text, timestamp, severity, operation, source, error, execution_id,"
                 " trace_id, business_reference, correlated_by"
                 " from doctor.events where execution_ref = cast(:x as uuid)"
-                " order by timestamp, id"
+                " and timestamp between :first and :last order by timestamp, id"
             ),
-            {"x": execution},
+            {"x": execution, "first": first, "last": last},
         )
         return [
             TimelineEvent.model_validate({**dict(row), "rule_codes": []})
             for row in result.mappings()
         ]
 
-    async def event(self, claims: Claims, target: str) -> EventDetail:
+    async def event(self, claims: Claims, target: str, at: datetime | None = None) -> EventDetail:
         async with translated_tx(claims, ERRORS) as connection:
             row = (
                 (
@@ -254,13 +263,16 @@ class ExecutionRepository:
             data.pop(key)
         return EventDetail.model_validate({**data, "raw_log": raw})
 
-    async def raw_log_path(self, claims: Claims, target: str) -> str:
-        """Confere Analyst ou acima, registra a auditoria e devolve o caminho no Storage."""
+    async def raw_log_download(
+        self, claims: Claims, target: str, sign: Callable[[str], Awaitable[str]]
+    ) -> str:
+        """Confere Analyst ou acima, assina a URL e registra a auditoria na mesma transação: se o
+        Storage falhar, nada fica registrado como baixado."""
         async with translated_tx(claims, ERRORS) as connection:
             path = await connection.scalar(
                 text("select doctor.request_raw_log_download(cast(:r as uuid))"), {"r": target}
             )
-        return str(path)
+            return await sign(str(path))
 
 
 def get_execution_repository() -> ExecutionRepository:

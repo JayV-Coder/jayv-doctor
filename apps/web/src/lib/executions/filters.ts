@@ -1,4 +1,6 @@
 import type { ExecutionSearch } from "@/lib/api";
+import { ENVIRONMENTS as ENVIRONMENT_OPTIONS } from "@/lib/integrations/labels";
+import { STATUSES as STATUS_LIST } from "./labels";
 
 // Filtros que podem ir na URL (nada sensível): Integração, Ambiente, status e período. O termo de
 // busca (`q`) nunca vai: pode ser um número de pedido.
@@ -12,8 +14,8 @@ export interface Filters {
 type Search = Partial<ExecutionSearch>;
 
 export const PERIODS = { "24h": 24, "7d": 24 * 7, "30d": 24 * 30 } as const;
-const STATUSES = new Set(["failed", "success", "pending_confirmation", "unknown"]);
-const ENVIRONMENTS = new Set(["prd", "hml", "dev"]);
+const STATUSES = new Set<string>(STATUS_LIST);
+const ENVIRONMENTS = new Set<string>(ENVIRONMENT_OPTIONS.map(({ value }) => value));
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function readFilters(params: Record<string, string | string[] | undefined>): Filters {
@@ -33,6 +35,8 @@ export function readFilters(params: Record<string, string | string[] | undefined
   };
 }
 
+// `now` é o instante da primeira página: as seguintes repetem o mesmo início, senão "Carregar
+// mais" pularia o que ficou entre uma e outra.
 export function toSearch(filters: Filters, now: Date): Search {
   const hours = filters.period ? PERIODS[filters.period as keyof typeof PERIODS] : undefined;
   return {

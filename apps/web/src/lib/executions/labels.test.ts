@@ -66,6 +66,14 @@ describe("severityTone", () => {
 });
 
 describe("sanitizationLines", () => {
+  it("traduz todos os tipos, e o desconhecido sem expor o nome interno", () => {
+    expect(sanitizationLines({ counts: { telefone: 2, cartao: 1, misterio: 1 } })).toEqual([
+      "2 telefones removidos",
+      "1 cartão removido",
+      "1 dado sensível removido",
+    ]);
+  });
+
   it("resume o que a Sanitização tirou", () => {
     expect(sanitizationLines({ counts: { bearer: 1, referencia: 2, cpf: 1 } })).toEqual([
       "1 token Bearer removido",

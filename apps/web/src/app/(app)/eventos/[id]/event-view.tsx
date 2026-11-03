@@ -16,7 +16,7 @@ export function EventView({
   sanitization: string[];
 }) {
   const [tab, setTab] = useState<"normalized" | "raw">("normalized");
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"ok" | "failed" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, startTransition] = useTransition();
   const json = JSON.stringify(event, null, 2);
@@ -29,12 +29,20 @@ export function EventView({
           type="button"
           className="btn"
           onClick={() => {
-            void navigator.clipboard.writeText(json).then(() => {
-              setCopied(true);
-            });
+            navigator.clipboard.writeText(json).then(
+              () => {
+                setCopied("ok");
+              },
+              () => {
+                setCopied("failed");
+              },
+            );
+            setTimeout(() => {
+              setCopied(null);
+            }, 2000);
           }}
         >
-          {copied ? "Copiado" : "Copiar"}
+          {copied === "ok" ? "Copiado" : copied === "failed" ? "Não copiou" : "Copiar"}
         </button>
       </div>
       <div className="segmented two" role="tablist" aria-label="Formato">

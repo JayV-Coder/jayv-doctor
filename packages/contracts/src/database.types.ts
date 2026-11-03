@@ -5,7 +5,27 @@ export type Database = {
 
   "doctor": {
           Tables: {
-            "connector_syncs": {
+            "audit_logs": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: never,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: never,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "audit_logs_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"connector_syncs": {
                   Row: {
                     "checkpoint_from": Json | null,"checkpoint_to": Json | null,"connector_id": string,"error": string | null,"finished_at": string | null,"id": string,"records": number,"started_at": string,"status": string,"tenant_id": string
                   }
@@ -94,20 +114,6 @@ isOneToOne: false
       referencedRelation: "raw_log_objects"
       referencedColumns: ["tenant_id","id"]
     }
-                  ]
-                },"events_2026_11": {
-                  Row: {
-                    "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"correlated_by": string | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"execution_ref": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key": string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id": string,"ingested_at"?: string,"integration_id": string,"operation": string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id"?: string | null
-                  }
-                  Update: {
-                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
-                  }
-                  Relationships: [
-
                   ]
                 },"execution_merges": {
                   Row: {

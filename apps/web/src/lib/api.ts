@@ -67,8 +67,12 @@ export async function getExecution(id: string): Promise<ExecutionDetail | "not_f
   return getOne<ExecutionDetail>(`/executions/${encodeURIComponent(id)}`);
 }
 
-export async function getEvent(id: string): Promise<EventDetail | "not_found" | null> {
-  return getOne<EventDetail>(`/events/${encodeURIComponent(id)}`);
+export async function getEvent(
+  id: string,
+  at: string | null = null,
+): Promise<EventDetail | "not_found" | null> {
+  const query = at ? `?at=${encodeURIComponent(at)}` : "";
+  return getOne<EventDetail>(`/events/${encodeURIComponent(id)}${query}`);
 }
 
 // `cache`: o layout do shell e a página pedem o mesmo `/me` na mesma requisição.

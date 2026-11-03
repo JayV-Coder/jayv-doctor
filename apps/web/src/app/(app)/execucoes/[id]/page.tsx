@@ -32,6 +32,8 @@ export default async function ExecutionPage({ params }: { params: Promise<{ id: 
     );
   }
   const keys = execution.correlation_keys;
+  // Resolvido ou descartado não é problema ativo.
+  const active = ["open", "investigating"].includes(execution.incident?.status ?? "");
 
   return (
     <>
@@ -40,7 +42,7 @@ export default async function ExecutionPage({ params }: { params: Promise<{ id: 
       </Link>
       <div className="row-between">
         <h2 className="title">{executionTitle(execution.id, keys)}</h2>
-        {execution.incident && <Chip tone="danger">Incidente</Chip>}
+        {active && <Chip tone="danger">Incidente</Chip>}
       </div>
       <dl className="kv">
         <dt>integração</dt>
@@ -67,7 +69,7 @@ export default async function ExecutionPage({ params }: { params: Promise<{ id: 
         <dt>duração</dt>
         <dd>{durationText(execution.duration_ms)}</dd>
       </dl>
-      {execution.incident && (
+      {active && execution.incident && (
         <p className="alert">
           <b>{execution.incident.title}</b> · severidade {execution.incident.severity}
         </p>
@@ -84,7 +86,10 @@ export default async function ExecutionPage({ params }: { params: Promise<{ id: 
           return (
             <li key={event.id} className={flagged ? "it flagged" : "it"}>
               <span className="dot" data-tone={tone} aria-hidden="true" />
-              <Link className="it-body" href={`/eventos/${event.id}`}>
+              <Link
+                className="it-body"
+                href={`/eventos/${event.id}?em=${encodeURIComponent(event.timestamp)}`}
+              >
                 <span className="it-title">
                   {eventSource(event.source)} · {event.operation}
                 </span>

@@ -26,6 +26,16 @@ export function formatDateTime(
 
 // A confiança é uma heurística, não uma probabilidade calibrada: o rótulo nunca sai. A barra e o
 // texto saem do mesmo número, para nunca discordarem.
+const decimals = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+// Confiança em decimal (0,68), como no Diagnóstico; o mesmo limite de 0 a 1 da barra.
+export function confidenceDecimal(value: number): string {
+  return decimals.format(Math.min(Math.max(value, 0), 1));
+}
+
 export function confidence(value: number): { percent: number; text: string } {
   const percent = Math.round(Math.min(Math.max(value, 0), 1) * 100);
   return { percent, text: `${percents.format(percent / 100)} · heurística` };

@@ -51,6 +51,7 @@ class Evidence(BaseModel):
     kind: Literal["event", "raw_log", "chunk", "global_chunk", "rule_match"]
     # Nulo quando a retenção já apagou o registro apontado; `label` guarda o que ele era.
     ref_id: str | None
+    # Instante do Evento a abrir (o próprio, ou o primeiro da Regra).
     event_timestamp: datetime | None
     label: str
     finding: str

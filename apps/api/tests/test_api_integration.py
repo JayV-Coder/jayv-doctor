@@ -809,6 +809,7 @@ async def test_diagnostico_pedido_pela_api_publicado_pelo_worker_e_lido_isolado(
     ]
     assert detail.evidence[1].event_id == seeded["e2"]
     assert detail.evidence[0].event_id is not None
+    assert detail.evidence[0].event_timestamp is not None
     assert [r.text for r in detail.recommendations] == ["Confira no SAP se o pedido existe."]
     assert [d.version for d in await repository.for_incident(analyst, incident)] == [1]
     with pytest.raises(ApiError) as other:

@@ -45,6 +45,9 @@ describe("Diagnóstico", () => {
       "Aplicando Regras",
       "Verificando Evidências",
     ]);
+    expect(stageSteps("llm", "hybrid", false).map((s) => s.label)).not.toContain(
+      "Consultando base",
+    );
     expect(active("queued")).toBe(true);
     expect(active("inconclusive")).toBe(false);
   });
@@ -52,6 +55,7 @@ describe("Diagnóstico", () => {
   it("confiança com vírgula e sistema indeterminado", () => {
     expect(confidenceText(0.68)).toBe("0,68");
     expect(confidenceText(null)).toBe("—");
+    expect(confidenceText(1.2)).toBe("1,00");
     expect(systemLabel(null)).toBe("Indeterminado");
     expect(systemLabel("sap")).toBe("SAP");
   });
@@ -66,6 +70,9 @@ describe("Diagnóstico", () => {
     };
     expect(evidenceChip(rule)).toBe("INT-003");
     expect(evidenceHref(rule)).toBe("/eventos/e1");
+    expect(evidenceHref({ ...rule, event_timestamp: "2026-11-02T14:00:00Z" })).toBe(
+      "/eventos/e1?em=2026-11-02T14%3A00%3A00Z",
+    );
     const event = {
       kind: "event" as const,
       label: "BAPI · ERROR",
@@ -93,7 +100,7 @@ describe("Diagnóstico", () => {
     const after = { ...before, version: 2, status: "published", confidence: 0.74 };
     expect(changes(before, after)).toEqual([
       "Status: Inconclusivo → Publicado",
-      "Confiança: 0,50 → 0,74",
+      "Confiança heurística: 0,50 → 0,74",
     ]);
     expect(changes(before, { ...before, version: 2 })).toEqual([]);
   });

@@ -9,6 +9,7 @@ const MESSAGES: Record<string, string> = {
   invalid_assignee: "O responsável não é membro da Organização.",
   forbidden: "Seu papel não permite esta ação.",
   not_found: "Incidente não encontrado.",
+  idempotency_key_reused: "Esse pedido já foi enviado com outros dados. Feche e peça de novo.",
 };
 const GENERIC = "Não foi possível concluir agora. Tente de novo.";
 

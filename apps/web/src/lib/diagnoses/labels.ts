@@ -1,4 +1,5 @@
 import type { ChipTone } from "../../components/ui/chip";
+import { confidenceDecimal } from "../format";
 
 const STATUS: Record<string, { text: string; tone: ChipTone }> = {
   queued: { text: "Na fila", tone: "info" },
@@ -39,10 +40,13 @@ const STAGES = [
 
 export type Step = { label: string; state: "done" | "current" | "todo" };
 
-export function stageSteps(stage: string, mode: string): Step[] {
-  const stages = STAGES.filter(
-    ([key]) => mode === "hybrid" || (key !== "knowledge" && key !== "llm"),
-  );
+// Só as etapas que vão rodar: sem IA, nem Base nem LLM; híbrido sem a Base, sem "Consultando base".
+export function stageSteps(stage: string, mode: string, knowledge = true): Step[] {
+  const stages = STAGES.filter(([key]) => {
+    if (key === "llm") return mode === "hybrid";
+    if (key === "knowledge") return mode === "hybrid" && knowledge;
+    return true;
+  });
   const current = stages.findIndex(([key]) => key === stage);
   return stages.map(([, label], index) => ({
     label,
@@ -54,13 +58,8 @@ export function modeLabel(mode: string): string {
   return mode === "hybrid" ? "híbrido" : "só Regras";
 }
 
-const decimal = new Intl.NumberFormat("pt-BR", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
 export function confidenceText(value: number | null | undefined): string {
-  return value === null || value === undefined ? "—" : decimal.format(value);
+  return value === null || value === undefined ? "—" : confidenceDecimal(value);
 }
 
 const SYSTEMS: Record<string, string> = {
@@ -94,7 +93,8 @@ export function evidenceHref(item: EvidenceLink): string | null {
   if (item.kind === "chunk") return "/conhecimento";
   if (item.kind === "global_chunk") return "/conhecimento?aba=global";
   if (item.event_id) {
-    const at = item.kind === "event" && item.event_timestamp ? item.event_timestamp : null;
+    // O instante leva a consulta direto à partição do Evento (também o da Regra, quando há).
+    const at = item.event_timestamp;
     return `/eventos/${item.event_id}${at ? `?em=${encodeURIComponent(at)}` : ""}`;
   }
   return item.execution_id ? `/execucoes/${item.execution_id}` : null;
@@ -119,7 +119,7 @@ export function changes(before: Comparable, after: Comparable): string[] {
   }
   if (before.confidence !== after.confidence) {
     found.push(
-      `Confiança: ${confidenceText(before.confidence)} → ${confidenceText(after.confidence)}`,
+      `Confiança heurística: ${confidenceText(before.confidence)} → ${confidenceText(after.confidence)}`,
     );
   }
   if (before.responsible_system !== after.responsible_system) {

@@ -31,7 +31,8 @@ export function DiagnosisCard({ diagnosis }: Props) {
           <Progress diagnosis={diagnosis} />
         ) : diagnosis.status === "failed" ? (
           <p className="alert" role="alert">
-            O Diagnóstico não pôde rodar: {diagnosis.error ?? "erro desconhecido"}. Peça um novo.
+            O Diagnóstico não pôde rodar:{" "}
+            {(diagnosis.error ?? "erro desconhecido").replace(/\.$/, "")}. Peça um novo.
           </p>
         ) : (
           <Result diagnosis={diagnosis} />
@@ -42,7 +43,11 @@ export function DiagnosisCard({ diagnosis }: Props) {
 }
 
 function Progress({ diagnosis }: Props) {
-  const steps = stageSteps(diagnosis.stage, diagnosis.requested_mode);
+  const steps = stageSteps(
+    diagnosis.stage,
+    diagnosis.requested_mode,
+    diagnosis.include_knowledge_base,
+  );
   const current = steps.find((step) => step.state === "current");
   return (
     <>
@@ -183,7 +188,7 @@ export function DiagnosisHypotheses({ diagnosis }: Props) {
               <span>{item.statement}</span>
             </span>
             <Chip tone={item.rank === 1 ? "warning" : "neutral"}>
-              {confidenceText(item.confidence)}
+              {confidenceText(item.confidence)} · heurística
             </Chip>
           </div>
         </li>

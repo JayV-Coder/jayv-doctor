@@ -6,7 +6,9 @@ import { FormMessage } from "@/components/auth-shell";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { requestDiagnosis } from "../actions";
 
-// "Novo diagnóstico" cria a versão N+1; o pedido é assíncrono e o progresso aparece no card.
+// "Novo diagnóstico" cria a versão N+1; o pedido é assíncrono e o progresso aparece no card. A
+// chave fica a mesma enquanto o pedido for o mesmo (repetir depois de uma resposta perdida devolve
+// o mesmo Diagnóstico) e muda junto com o modo ou a Base.
 export function NewDiagnosis({ incidentId }: { incidentId: string }) {
   const router = useRouter();
   const [mode, setMode] = useState<"hybrid" | "rules_only">("hybrid");
@@ -20,6 +22,8 @@ export function NewDiagnosis({ incidentId }: { incidentId: string }) {
       title="Novo diagnóstico"
       trigger="Novo diagnóstico"
       onClose={() => {
+        // Fechar depois de um erro recomeça o pedido com chave nova.
+        if (error !== null) setKey(crypto.randomUUID());
         setError(null);
       }}
     >
@@ -32,6 +36,7 @@ export function NewDiagnosis({ incidentId }: { incidentId: string }) {
             checked={mode === "hybrid"}
             onChange={() => {
               setMode("hybrid");
+              setKey(crypto.randomUUID());
             }}
           />
           Híbrido: Regras, Base de conhecimento e IA
@@ -43,6 +48,7 @@ export function NewDiagnosis({ incidentId }: { incidentId: string }) {
             checked={mode === "rules_only"}
             onChange={() => {
               setMode("rules_only");
+              setKey(crypto.randomUUID());
             }}
           />
           Só Regras (sem IA)
@@ -54,6 +60,7 @@ export function NewDiagnosis({ incidentId }: { incidentId: string }) {
             disabled={mode === "rules_only"}
             onChange={(event) => {
               setKnowledge(event.currentTarget.checked);
+              setKey(crypto.randomUUID());
             }}
           />
           Consultar a Base de conhecimento

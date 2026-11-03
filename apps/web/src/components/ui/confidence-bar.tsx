@@ -1,4 +1,4 @@
-import { confidence } from "@/lib/format";
+import { confidence, confidenceDecimal } from "@/lib/format";
 
 // Confiança é heurística, nunca probabilidade: o rótulo vai junto da barra, sempre. O Diagnóstico
 // mostra o valor em decimal (0,68) com o rótulo longo, como no mockup da Tela 6.
@@ -12,11 +12,7 @@ export function ConfidenceBar({
   decimal?: boolean;
 }) {
   const { percent, text } = confidence(value);
-  const shown = decimal
-    ? new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
-        value,
-      )
-    : text;
+  const shown = decimal ? confidenceDecimal(value) : text;
   return (
     <div
       className="confidence"

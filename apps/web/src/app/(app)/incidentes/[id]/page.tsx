@@ -6,7 +6,7 @@ import {
   DiagnosisHypotheses,
   DiagnosisRecommendations,
 } from "@/components/diagnosis/diagnosis-card";
-import { PollWhileActive } from "@/components/diagnosis/poll-while-active";
+import { DiagnosisLive } from "@/components/diagnosis/diagnosis-live";
 import { LiveRefresh } from "@/components/live-refresh";
 import { Chip } from "@/components/ui/chip";
 import { ErrorState } from "@/components/ui/error-state";
@@ -78,7 +78,11 @@ export default async function IncidentPage({
   }
   const operator = OPERATORS.includes(me?.active_role ?? "");
   const chosen = versions?.find((item) => String(item.version) === versao) ?? versions?.[0] ?? null;
-  const previous = chosen ? versions?.find((item) => item.version === chosen.version - 1) : null;
+  // A anterior só serve para as diferenças, que não aparecem enquanto a escolhida roda.
+  const previous =
+    chosen && !active(chosen.status)
+      ? versions?.find((item) => item.version === chosen.version - 1)
+      : null;
   const [diagnosis, before] = await Promise.all([
     chosen ? getDiagnosis(chosen.id) : null,
     previous ? getDiagnosis(previous.id) : null,
@@ -95,8 +99,10 @@ export default async function IncidentPage({
   return (
     <>
       <LiveRefresh table="incidents" id={incident.id} />
-      {diagnosis && <LiveRefresh table="diagnoses" id={diagnosis.id} />}
-      <PollWhileActive active={diagnosis ? active(diagnosis.status) : false} />
+      <DiagnosisLive
+        incidentId={incident.id}
+        active={versions?.some((item) => active(item.status)) ?? false}
+      />
       <Link className="small" href="/incidentes">
         ‹ Incidentes
       </Link>
@@ -165,8 +171,8 @@ export default async function IncidentPage({
               </div>
               <div className="win-body">
                 <p className="small">
-                  {versions === null
-                    ? "Não foi possível carregar o Diagnóstico."
+                  {versions === null || chosen
+                    ? "Não foi possível carregar o Diagnóstico. Tente de novo em instantes."
                     : "Ainda não há Diagnóstico. A classificação abaixo é das Regras determinísticas: aponta o sintoma, sem atribuir responsabilidade."}
                 </p>
               </div>

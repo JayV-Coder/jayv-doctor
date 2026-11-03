@@ -158,3 +158,64 @@ class TestFakeConnectorContract(ConnectorContractTests):
 
     def secret(self) -> str:
         return FAKE_CREDENTIAL
+
+
+@pytest.mark.asyncio
+async def test_retry_after_do_provedor_e_limitado() -> None:
+    from aid_connectors.base import ConnectorError
+
+    waits: list[float] = []
+
+    async def record(seconds: float) -> None:
+        waits.append(seconds)
+
+    class SlowDown(FakeConnector):
+        calls = 0
+
+        async def collect(self, secret: Any, config: Any, checkpoint: Any) -> Any:
+            SlowDown.calls += 1
+            if SlowDown.calls == 1:
+                raise ConnectorError("rate_limit", "429", retry_after=3600)
+            async for batch in super().collect(secret, config, checkpoint):
+                yield batch
+
+    await run_sync(SlowDown(), FAKE_CREDENTIAL, {"pages": 1}, None, Sink(), POLICY, sleep=record)
+    assert waits == [POLICY.max_seconds]
+
+
+@pytest.mark.asyncio
+async def test_prazo_total_encerra_com_o_que_foi_gravado_e_pede_continuacao() -> None:
+    clock = iter(range(0, 1000, 10))
+    policy = RetryPolicy(
+        attempts=4, base_seconds=0.01, max_seconds=0.05, batch_timeout=1, deadline_seconds=25
+    )
+    sink = Sink()
+    result = await run_sync(
+        FakeConnector(),
+        FAKE_CREDENTIAL,
+        {"pages": 10, "page_size": 1},
+        None,
+        sink,
+        policy,
+        sleep=no_sleep,
+        monotonic=lambda: float(next(clock)),
+    )
+    assert result.status == "succeeded"
+    assert result.more
+    assert 0 < result.records < 10
+    assert result.checkpoint_to == sink.checkpoint
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_que_volta_a_um_valor_ja_visto_e_paginacao_quebrada() -> None:
+    from aid_connectors.base import Batch
+
+    class Cycle(FakeConnector):
+        async def collect(self, secret: Any, config: Any, checkpoint: Any) -> Any:
+            for cursor in ("a", "b", "a", "b"):
+                yield Batch([], {"cursor": cursor})
+
+    result = await run_sync(
+        Cycle(), FAKE_CREDENTIAL, {"pages": 1}, None, Sink(), POLICY, sleep=no_sleep
+    )
+    assert (result.status, result.error_kind) == ("failed", "invalid")

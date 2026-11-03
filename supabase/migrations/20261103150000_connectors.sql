@@ -39,6 +39,8 @@ create table doctor.connectors (
 );
 comment on table doctor.connectors is 'Conector: coleta autenticada de um provedor para uma Integração.';
 
+-- Exceção à convenção (índice sem tenant_id na frente): o agendador é job de plataforma e busca
+-- os vencidos de todas as Organizações, em ordem de vencimento.
 create index connectors_due_idx on doctor.connectors (next_run_at) where status in ('active', 'failing');
 create index connectors_tenant_idx on doctor.connectors (tenant_id, created_at desc);
 
@@ -67,9 +69,12 @@ create index connector_syncs_connector_idx on doctor.connector_syncs (tenant_id,
 -- Lotes de Conector entram pelo mesmo caminho dos lotes da API (ticket #12).
 alter table doctor.ingestion_batches alter column token_id drop not null;
 alter table doctor.ingestion_batches add column connector_id uuid;
+-- Lote é transitório (vence em 7 dias): sai junto com o Conector.
 alter table doctor.ingestion_batches
   add constraint ingestion_batches_connector_fk
-  foreign key (tenant_id, connector_id) references doctor.connectors (tenant_id, id);
+  foreign key (tenant_id, connector_id) references doctor.connectors (tenant_id, id) on delete cascade;
+create index ingestion_batches_connector_idx on doctor.ingestion_batches (tenant_id, connector_id)
+  where connector_id is not null;
 alter table doctor.ingestion_batches
   add constraint ingestion_batches_one_source check (num_nonnulls(token_id, connector_id) = 1);
 
@@ -150,8 +155,11 @@ begin
   else
     perform vault.update_secret(current_secret, secret);
   end if;
-  -- Credencial nova: um Conector pausado por erro de autenticação pode voltar.
-  update doctor.connectors set consecutive_failures = 0 where id = target;
+  -- Credencial nova: o Conector pausado por erro de autenticação volta a rodar já.
+  update doctor.connectors
+  set consecutive_failures = 0, last_error = null, next_run_at = now(),
+      status = case when status = 'paused' then 'active' else status end
+  where id = target;
   perform doctor.record_audit(tenant, 'connector.secret.update', target::text);
 end;
 $$;

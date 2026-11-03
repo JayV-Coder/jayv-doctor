@@ -20,11 +20,13 @@ Se o worker cair no meio, a próxima Sincronização retoma do último Checkpoin
 | Situação | Conector | Próxima tentativa |
 |---|---|---|
 | Sucesso | `active`, zera as falhas | depois de `sync_interval_seconds` (padrão 5 min) |
-| Erro de autenticação | `paused` até uma ação humana (trocar a credencial) | nenhuma |
+| Erro de autenticação | `paused` até uma ação humana: trocar a credencial (`doctor.put_connector_secret`) reativa na hora | nenhuma |
+| Prazo da Sincronização (8 min) com lotes a coletar | mantém, com o Checkpoint gravado | em 1 min, do Checkpoint |
+| Erro inesperado (bug, banco, credencial ausente) | conta como falha | como as falhas acima |
 | 1ª e 2ª falha seguida | `active` | em 1 min |
 | 3ª falha seguida em diante | `failing` | backoff de 5 min, dobrando até 1 h |
 
-Dentro de uma Sincronização, timeout, 429 e erro temporário são repetidos até 5 vezes, com backoff. Autenticação e configuração inválida não são repetidas.
+Dentro de uma Sincronização, timeout, 429 e erro temporário são repetidos até 5 vezes, com backoff. O `Retry-After` do provedor é respeitado até 60 s. Autenticação, configuração inválida e Checkpoint que não avança ou volta a um valor já visto (paginação quebrada) não são repetidos. Pausa ou desativação feitas durante a Sincronização continuam valendo no fim dela.
 
 ## Escrever um Conector
 

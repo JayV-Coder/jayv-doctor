@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(18);
+select plan(19);
 
 select has_table('doctor', 'connectors', 'tabela doctor.connectors existe');
 select has_table('doctor', 'connector_syncs', 'tabela doctor.connector_syncs existe');
@@ -74,6 +74,13 @@ select tests.clear_authentication();
 set local role service_role;
 select is(doctor.get_connector_secret((select id from created)), 'novo-segredo', 'a credencial nova vale');
 reset role;
+update doctor.connectors set status = 'paused' where id = (select id from created);
+select tests.authenticate_as(
+  '00000000-0000-4000-8000-0000000a0001', '00000000-0000-4000-8000-00000000ac01', 'admin', 'aal2'
+);
+select doctor.put_connector_secret((select id from created), 'segredo-corrigido');
+select is((select status from doctor.connectors), 'active', 'credencial nova tira o Conector da pausa');
+select tests.clear_authentication();
 
 -- Outra Organização não vê nem troca.
 select tests.authenticate_as(

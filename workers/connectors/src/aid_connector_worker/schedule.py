@@ -2,6 +2,7 @@
 jayv-coder). Cada Conector vencido ganha uma mensagem `connector.sync` na outbox e passa a vencer
 de novo só depois do intervalo dele: a fila não recebe o mesmo Conector a cada minuto."""
 
+from aid_db import platform_role
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -10,7 +11,7 @@ BATCH = 200
 
 async def enqueue_due(engine: AsyncEngine) -> int:
     async with engine.begin() as connection:
-        await connection.execute(text("set local role service_role"))
+        await platform_role(connection)
         result = await connection.execute(
             text(
                 "with due as ("

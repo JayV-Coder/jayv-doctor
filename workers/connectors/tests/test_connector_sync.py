@@ -229,3 +229,44 @@ async def test_agendador_enfileira_cada_conector_vencido_uma_vez(
         t=tenant["tenant"],
     )
     assert queued["ids"] == [due]
+
+
+@pytest.mark.asyncio
+async def test_erro_inesperado_registra_a_falha_em_vez_de_prender_a_sincronizacao(
+    engine: AsyncEngine, tenant: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aid_connector_worker.sync as module
+
+    async def broken(*args: Any, **kwargs: Any) -> None:
+        raise RuntimeError("bug")
+
+    monkeypatch.setattr(module, "store_batch", broken)
+    connector_id = await connector(engine, tenant, {"pages": 1})
+    assert await sync(engine, connector_id) == "failed"
+    current = await state(engine, connector_id)
+    assert (current["consecutive_failures"], current["last_error"]) == (
+        1,
+        "Erro inesperado na Sincronização.",
+    )
+    monkeypatch.undo()
+    assert await sync(engine, connector_id) == "succeeded"
+
+
+@pytest.mark.asyncio
+async def test_desativacao_durante_a_sincronizacao_vale(
+    engine: AsyncEngine, tenant: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aid_connector_worker.sync as module
+
+    connector_id = await connector(engine, tenant, {"pages": 1})
+    original = module.store_batch
+
+    async def disable_meanwhile(*args: Any, **kwargs: Any) -> None:
+        await run(
+            engine, "update doctor.connectors set status = 'disabled' where id = :c", c=connector_id
+        )
+        await original(*args, **kwargs)
+
+    monkeypatch.setattr(module, "store_batch", disable_meanwhile)
+    assert await sync(engine, connector_id) == "succeeded"
+    assert (await state(engine, connector_id))["status"] == "disabled"

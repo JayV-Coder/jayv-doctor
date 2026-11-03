@@ -7,6 +7,7 @@ Política de falhas: erro de autenticação pausa até ação humana; 3 falhas s
 """
 
 import json
+import logging
 from collections.abc import Mapping
 from datetime import timedelta
 from typing import Any
@@ -14,9 +15,11 @@ from typing import Any
 from aid_connectors.base import Batch, Connector
 from aid_connectors.fake import FakeConnector
 from aid_connectors.runtime import RetryPolicy, SyncResult, run_sync
+from aid_db import platform_role
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine
 
+logger = logging.getLogger(__name__)
 REGISTRY: dict[str, type[Connector]] = {"fake": FakeConnector}
 # Sincronização em `running` há mais que isso é de um worker que morreu.
 LEASE = timedelta(minutes=10)
@@ -25,14 +28,10 @@ MAX_BACKOFF_SECONDS = 3600
 RETRY_SOON_SECONDS = 60
 
 
-async def platform(connection: AsyncConnection) -> None:
-    await connection.execute(text("set local role service_role"))
-
-
 async def claim(engine: AsyncEngine, connector_id: str) -> tuple[Mapping[str, Any], str] | str:
     """(Conector, id da Sincronização) ou o motivo de não rodar: `ignored` ou `busy`."""
     async with engine.begin() as connection:
-        await platform(connection)
+        await platform_role(connection)
         found = (
             (
                 await connection.execute(
@@ -51,10 +50,11 @@ async def claim(engine: AsyncEngine, connector_id: str) -> tuple[Mapping[str, An
             return "ignored"
         running = await connection.scalar(
             text(
-                "select count(*) from doctor.connector_syncs where connector_id = cast(:c as uuid)"
-                " and status = 'running' and started_at > now() - cast(:lease as interval)"
+                "select count(*) from doctor.connector_syncs where tenant_id = cast(:t as uuid)"
+                " and connector_id = cast(:c as uuid) and status = 'running'"
+                " and started_at > now() - cast(:lease as interval)"
             ),
-            {"c": connector_id, "lease": LEASE},
+            {"t": found["tenant_id"], "c": connector_id, "lease": LEASE},
         )
         if running:
             return "busy"
@@ -62,9 +62,10 @@ async def claim(engine: AsyncEngine, connector_id: str) -> tuple[Mapping[str, An
             text(
                 "update doctor.connector_syncs set status = 'failed', finished_at = now(),"
                 " error = 'Sincronização interrompida'"
-                " where connector_id = cast(:c as uuid) and status = 'running'"
+                " where tenant_id = cast(:t as uuid) and connector_id = cast(:c as uuid)"
+                " and status = 'running'"
             ),
-            {"c": connector_id},
+            {"t": found["tenant_id"], "c": connector_id},
         )
         sync_id = await connection.scalar(
             text(
@@ -88,7 +89,7 @@ async def store_batch(
     repetir a deduplicação da ingestão descarta."""
     events = [{**event, "integration_id": connector["integration_id"]} for event in batch.events]
     async with engine.begin() as connection:
-        await platform(connection)
+        await platform_role(connection)
         batch_id = await connection.scalar(
             text(
                 "insert into doctor.ingestion_batches"
@@ -141,7 +142,7 @@ async def finish(
     engine: AsyncEngine, connector: Mapping[str, Any], sync_id: str, result: SyncResult
 ) -> None:
     async with engine.begin() as connection:
-        await platform(connection)
+        await platform_role(connection)
         await connection.execute(
             text(
                 "update doctor.connector_syncs set status = :status, finished_at = now(),"
@@ -150,14 +151,18 @@ async def finish(
             {"status": result.status, "error": result.error_message, "s": sync_id},
         )
         if result.status == "succeeded":
+            # Pausa ou desativação feitas durante a Sincronização valem: o status não volta.
             await connection.execute(
                 text(
-                    "update doctor.connectors set status = 'active', consecutive_failures = 0,"
+                    "update doctor.connectors set consecutive_failures = 0,"
+                    " status = case when status in ('paused', 'disabled') then status"
+                    " else 'active' end,"
                     " last_sync_at = now(), last_error = null,"
-                    " next_run_at = now() + make_interval(secs => sync_interval_seconds)"
+                    " next_run_at = now() + make_interval(secs =>"
+                    " case when :more then :soon else sync_interval_seconds end)"
                     " where id = cast(:c as uuid)"
                 ),
-                {"c": connector["id"]},
+                {"c": connector["id"], "more": result.more, "soon": RETRY_SOON_SECONDS},
             )
             return
         failures = int(
@@ -174,7 +179,8 @@ async def finish(
         status, seconds = next_status(result, failures)
         await connection.execute(
             text(
-                "update doctor.connectors set status = :status,"
+                "update doctor.connectors set"
+                " status = case when status = 'disabled' then status else :status end,"
                 " next_run_at = now() + make_interval(secs => :seconds)"
                 " where id = cast(:c as uuid)"
             ),
@@ -184,7 +190,7 @@ async def finish(
 
 async def secret_of(engine: AsyncEngine, connector_id: str) -> str:
     async with engine.begin() as connection:
-        await platform(connection)
+        await platform_role(connection)
         return str(
             await connection.scalar(
                 text("select doctor.get_connector_secret(cast(:c as uuid))"), {"c": connector_id}
@@ -203,6 +209,31 @@ async def sync_connector(
     if isinstance(claimed, str):
         return claimed
     connector, sync_id = claimed
+    try:
+        result = await execute(engine, registry, policy, connector, sync_id)
+    except Exception:
+        # Bug do conector, credencial ausente ou banco: a falha fica registrada e a política de
+        # falhas reagenda, em vez de a Sincronização ficar presa em `running`.
+        logger.exception("conector %s: Sincronização falhou", connector["id"])
+        result = SyncResult(
+            "failed",
+            0,
+            connector["checkpoint"],
+            0,
+            "transient",
+            "Erro inesperado na Sincronização.",
+        )
+    await finish(engine, connector, sync_id, result)
+    return result.status
+
+
+async def execute(
+    engine: AsyncEngine,
+    registry: Mapping[str, type[Connector]],
+    policy: RetryPolicy,
+    connector: Mapping[str, Any],
+    sync_id: str,
+) -> SyncResult:
     implementation = registry.get(connector["provider"])
     if implementation is None:
         result = SyncResult(
@@ -234,5 +265,4 @@ async def sync_connector(
             result = await run_sync(
                 instance, secret, connector["config"], connector["checkpoint"], sink, policy
             )
-    await finish(engine, connector, sync_id, result)
-    return result.status
+    return result

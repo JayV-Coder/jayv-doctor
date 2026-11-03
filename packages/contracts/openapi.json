@@ -3255,6 +3255,327 @@
           }
         }
       }
+    },
+    "/api/v1/incidents/{incident}/diagnoses": {
+      "post": {
+        "tags": ["diagnoses"],
+        "summary": "Request Diagnosis",
+        "operationId": "request_diagnosis_api_v1_incidents__incident__diagnoses_post",
+        "parameters": [
+          {
+            "name": "incident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Incident"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiagnosisRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosisQueued"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["diagnoses"],
+        "summary": "List Diagnoses",
+        "operationId": "list_diagnoses_api_v1_incidents__incident__diagnoses_get",
+        "parameters": [
+          {
+            "name": "incident",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Incident"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DiagnosisSummary"
+                  },
+                  "title": "Response List Diagnoses Api V1 Incidents  Incident  Diagnoses Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/diagnoses/{target}": {
+      "get": {
+        "tags": ["diagnoses"],
+        "summary": "Get Diagnosis",
+        "operationId": "get_diagnosis_api_v1_diagnoses__target__get",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosisDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings/diagnosis": {
+      "get": {
+        "tags": ["diagnoses"],
+        "summary": "Get Settings",
+        "operationId": "get_settings_api_v1_settings_diagnosis_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosisSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["diagnoses"],
+        "summary": "Put Settings",
+        "operationId": "put_settings_api_v1_settings_diagnosis_put",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiagnosisSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiagnosisSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3792,6 +4113,396 @@
         ],
         "title": "Dashboard"
       },
+      "DiagnosisDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "incident_id": {
+            "type": "string",
+            "title": "Incident Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["queued", "running", "published", "inconclusive", "failed_llm", "failed"],
+            "title": "Status"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "validation",
+              "correlation",
+              "rules",
+              "knowledge",
+              "llm",
+              "verification",
+              "done"
+            ],
+            "title": "Stage"
+          },
+          "requested_mode": {
+            "type": "string",
+            "enum": ["hybrid", "rules_only"],
+            "title": "Requested Mode"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["hybrid", "rules_only"],
+            "title": "Mode"
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classification"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "requires_human_review": {
+            "type": "boolean",
+            "title": "Requires Human Review"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "probable_cause": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Probable Cause"
+          },
+          "responsible_system": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": ["sap", "salesforce", "gcp", "other"]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible System"
+          },
+          "include_knowledge_base": {
+            "type": "boolean",
+            "title": "Include Knowledge Base"
+          },
+          "verification_notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Verification Notes"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "ruleset_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ruleset Version"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "title": "Input Tokens"
+          },
+          "output_tokens": {
+            "type": "integer",
+            "title": "Output Tokens"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "hypotheses": {
+            "items": {
+              "$ref": "#/components/schemas/Hypothesis"
+            },
+            "type": "array",
+            "title": "Hypotheses"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/Recommendation"
+            },
+            "type": "array",
+            "title": "Recommendations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "incident_id",
+          "version",
+          "status",
+          "stage",
+          "requested_mode",
+          "mode",
+          "classification",
+          "confidence",
+          "requires_human_review",
+          "created_at",
+          "published_at",
+          "probable_cause",
+          "responsible_system",
+          "include_knowledge_base",
+          "verification_notes",
+          "provider",
+          "model",
+          "ruleset_version",
+          "input_tokens",
+          "output_tokens",
+          "duration_ms",
+          "error",
+          "hypotheses",
+          "evidence",
+          "recommendations"
+        ],
+        "title": "DiagnosisDetail"
+      },
+      "DiagnosisQueued": {
+        "properties": {
+          "diagnosis_id": {
+            "type": "string",
+            "title": "Diagnosis Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["queued", "running", "published", "inconclusive", "failed_llm", "failed"],
+            "title": "Status"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": ["diagnosis_id", "status", "version"],
+        "title": "DiagnosisQueued"
+      },
+      "DiagnosisRequest": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["hybrid", "rules_only"],
+            "title": "Mode",
+            "default": "hybrid"
+          },
+          "include_knowledge_base": {
+            "type": "boolean",
+            "title": "Include Knowledge Base",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DiagnosisRequest"
+      },
+      "DiagnosisSettings": {
+        "properties": {
+          "auto_diagnose_critical": {
+            "type": "boolean",
+            "title": "Auto Diagnose Critical"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["auto_diagnose_critical"],
+        "title": "DiagnosisSettings"
+      },
+      "DiagnosisSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "incident_id": {
+            "type": "string",
+            "title": "Incident Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["queued", "running", "published", "inconclusive", "failed_llm", "failed"],
+            "title": "Status"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "validation",
+              "correlation",
+              "rules",
+              "knowledge",
+              "llm",
+              "verification",
+              "done"
+            ],
+            "title": "Stage"
+          },
+          "requested_mode": {
+            "type": "string",
+            "enum": ["hybrid", "rules_only"],
+            "title": "Requested Mode"
+          },
+          "mode": {
+            "type": "string",
+            "enum": ["hybrid", "rules_only"],
+            "title": "Mode"
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classification"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "requires_human_review": {
+            "type": "boolean",
+            "title": "Requires Human Review"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "incident_id",
+          "version",
+          "status",
+          "stage",
+          "requested_mode",
+          "mode",
+          "classification",
+          "confidence",
+          "requires_human_review",
+          "created_at",
+          "published_at"
+        ],
+        "title": "DiagnosisSummary"
+      },
       "EventDetail": {
         "properties": {
           "id": {
@@ -3954,6 +4665,53 @@
         ],
         "title": "EventDetail",
         "description": "O Evento normalizado inteiro (já sanitizado), para a Tela 9."
+      },
+      "Evidence": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["event", "raw_log", "chunk", "global_chunk", "rule_match"],
+            "title": "Kind"
+          },
+          "ref_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Id"
+          },
+          "event_timestamp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Timestamp"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "finding": {
+            "type": "string",
+            "title": "Finding"
+          }
+        },
+        "type": "object",
+        "required": ["rank", "kind", "ref_id", "event_timestamp", "label", "finding"],
+        "title": "Evidence"
       },
       "ExecutionDetail": {
         "properties": {
@@ -4385,6 +5143,32 @@
         "type": "object",
         "required": ["action", "from_value", "to_value", "note", "actor_id", "created_at"],
         "title": "HistoryEntry"
+      },
+      "Hypothesis": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "statement": {
+            "type": "string",
+            "title": "Statement"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          }
+        },
+        "type": "object",
+        "required": ["rank", "statement", "confidence"],
+        "title": "Hypothesis"
       },
       "Import": {
         "properties": {
@@ -6083,6 +6867,26 @@
         "type": "object",
         "required": ["id", "source", "expires_at", "retention_days_left", "import_filename"],
         "title": "RawLogRef"
+      },
+      "Recommendation": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["investigate", "fix", "verify"],
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": ["rank", "text", "kind"],
+        "title": "Recommendation"
       },
       "RejectedEvent": {
         "properties": {

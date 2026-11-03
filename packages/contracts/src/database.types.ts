@@ -77,6 +77,140 @@ isOneToOne: false
       referencedColumns: ["tenant_id","id"]
     }
                   ]
+                },"diagnoses": {
+                  Row: {
+                    "attempts": number,"classification": string | null,"confidence": number | null,"created_at": string,"duration_ms": number | null,"error": string | null,"id": string,"incident_id": string,"include_knowledge_base": boolean,"input_tokens": number,"mode": string,"model": string | null,"output_tokens": number,"probable_cause": string | null,"processing_key": string,"provider": string | null,"published_at": string | null,"requested_by": string | null,"requested_mode": string,"requires_human_review": boolean,"responsible_system": string | null,"ruleset_version": string | null,"stage": string,"started_at": string | null,"status": string,"tenant_id": string,"updated_at": string,"verification_notes": NonNullable<Json>,"version": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attempts"?: number,"classification"?: string | null,"confidence"?: number | null,"created_at"?: string,"duration_ms"?: number | null,"error"?: string | null,"id"?: string,"incident_id": string,"include_knowledge_base"?: boolean,"input_tokens"?: number,"mode": string,"model"?: string | null,"output_tokens"?: number,"probable_cause"?: string | null,"processing_key": string,"provider"?: string | null,"published_at"?: string | null,"requested_by"?: string | null,"requested_mode": string,"requires_human_review"?: boolean,"responsible_system"?: string | null,"ruleset_version"?: string | null,"stage"?: string,"started_at"?: string | null,"status"?: string,"tenant_id": string,"updated_at"?: string,"verification_notes"?: NonNullable<Json>,"version": number
+                  }
+                  Update: {
+                    "attempts"?: number,"classification"?: string | null,"confidence"?: number | null,"created_at"?: string,"duration_ms"?: number | null,"error"?: string | null,"id"?: string,"incident_id"?: string,"include_knowledge_base"?: boolean,"input_tokens"?: number,"mode"?: string,"model"?: string | null,"output_tokens"?: number,"probable_cause"?: string | null,"processing_key"?: string,"provider"?: string | null,"published_at"?: string | null,"requested_by"?: string | null,"requested_mode"?: string,"requires_human_review"?: boolean,"responsible_system"?: string | null,"ruleset_version"?: string | null,"stage"?: string,"started_at"?: string | null,"status"?: string,"tenant_id"?: string,"updated_at"?: string,"verification_notes"?: NonNullable<Json>,"version"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "diagnoses_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "diagnoses_tenant_id_incident_id_fkey"
+      columns: ["tenant_id","incident_id"]
+isOneToOne: false
+      referencedRelation: "incidents"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"diagnosis_evidence": {
+                  Row: {
+                    "chunk_id": string | null,"created_at": string,"diagnosis_id": string,"event_id": string | null,"event_timestamp": string | null,"finding": string,"global_chunk_id": string | null,"id": string,"kind": string,"label": string,"rank": number,"raw_log_object_id": string | null,"rule_match_id": string | null,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "chunk_id"?: string | null,"created_at"?: string,"diagnosis_id": string,"event_id"?: string | null,"event_timestamp"?: string | null,"finding": string,"global_chunk_id"?: string | null,"id"?: string,"kind": string,"label": string,"rank": number,"raw_log_object_id"?: string | null,"rule_match_id"?: string | null,"tenant_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "chunk_id"?: string | null,"created_at"?: string,"diagnosis_id"?: string,"event_id"?: string | null,"event_timestamp"?: string | null,"finding"?: string,"global_chunk_id"?: string | null,"id"?: string,"kind"?: string,"label"?: string,"rank"?: number,"raw_log_object_id"?: string | null,"rule_match_id"?: string | null,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "diagnosis_evidence_global_chunk_id_fkey"
+      columns: ["global_chunk_id"]
+isOneToOne: false
+      referencedRelation: "global_knowledge_chunks"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "diagnosis_evidence_tenant_id_chunk_id_fkey"
+      columns: ["tenant_id","chunk_id"]
+isOneToOne: false
+      referencedRelation: "knowledge_chunks"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "diagnosis_evidence_tenant_id_diagnosis_id_fkey"
+      columns: ["tenant_id","diagnosis_id"]
+isOneToOne: false
+      referencedRelation: "diagnoses"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "diagnosis_evidence_tenant_id_event_id_event_timestamp_fkey"
+      columns: ["tenant_id","event_id","event_timestamp"]
+isOneToOne: false
+      referencedRelation: "events"
+      referencedColumns: ["tenant_id","id","timestamp"]
+    },{
+      foreignKeyName: "diagnosis_evidence_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "diagnosis_evidence_tenant_id_raw_log_object_id_fkey"
+      columns: ["tenant_id","raw_log_object_id"]
+isOneToOne: false
+      referencedRelation: "raw_log_objects"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "diagnosis_evidence_tenant_id_rule_match_id_fkey"
+      columns: ["tenant_id","rule_match_id"]
+isOneToOne: false
+      referencedRelation: "rule_matches"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"diagnosis_hypotheses": {
+                  Row: {
+                    "confidence": number | null,"created_at": string,"diagnosis_id": string,"id": string,"rank": number,"statement": string,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "confidence"?: number | null,"created_at"?: string,"diagnosis_id": string,"id"?: string,"rank": number,"statement": string,"tenant_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "confidence"?: number | null,"created_at"?: string,"diagnosis_id"?: string,"id"?: string,"rank"?: number,"statement"?: string,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "diagnosis_hypotheses_tenant_id_diagnosis_id_fkey"
+      columns: ["tenant_id","diagnosis_id"]
+isOneToOne: false
+      referencedRelation: "diagnoses"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "diagnosis_hypotheses_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"diagnosis_recommendations": {
+                  Row: {
+                    "created_at": string,"diagnosis_id": string,"id": string,"kind": string,"rank": number,"tenant_id": string,"text": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"diagnosis_id": string,"id"?: string,"kind": string,"rank": number,"tenant_id": string,"text": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"diagnosis_id"?: string,"id"?: string,"kind"?: string,"rank"?: number,"tenant_id"?: string,"text"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "diagnosis_recommendations_tenant_id_diagnosis_id_fkey"
+      columns: ["tenant_id","diagnosis_id"]
+isOneToOne: false
+      referencedRelation: "diagnoses"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "diagnosis_recommendations_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"events": {
                   Row: {
                     "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"correlated_by": string | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"execution_ref": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
@@ -793,14 +927,14 @@ isOneToOne: false
                   ]
                 },"tenants": {
                   Row: {
-                    "created_at": string,"dpa_accepted_at": string | null,"id": string,"llm_provider": string,"mttr_baseline_minutes": number | null,"plan": string,"segment": string | null,"status": string,"updated_at": string
+                    "auto_diagnose_critical": boolean,"created_at": string,"dpa_accepted_at": string | null,"id": string,"llm_provider": string,"mttr_baseline_minutes": number | null,"plan": string,"segment": string | null,"status": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"dpa_accepted_at"?: string | null,"id": string,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"segment"?: string | null,"status"?: string,"updated_at"?: string
+                    "auto_diagnose_critical"?: boolean,"created_at"?: string,"dpa_accepted_at"?: string | null,"id": string,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"segment"?: string | null,"status"?: string,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"dpa_accepted_at"?: string | null,"id"?: string,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"segment"?: string | null,"status"?: string,"updated_at"?: string
+                    "auto_diagnose_critical"?: boolean,"created_at"?: string,"dpa_accepted_at"?: string | null,"id"?: string,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"segment"?: string | null,"status"?: string,"updated_at"?: string
                   }
                   Relationships: [
 
@@ -873,6 +1007,9 @@ isOneToOne: false
                            },
 "delete_knowledge_document":
 { Args: { "target": string }; Returns: string
+                           },
+"diagnosis_is_final":
+{ Args: { "status": string }; Returns: boolean
                            },
 "ensure_event_partition":
 { Args: { "day": string }; Returns: string
@@ -982,6 +1119,11 @@ isOneToOne: false
 "request_connector_sync":
 { Args: { "target": string }; Returns: undefined
                            },
+"request_diagnosis":
+{ Args: { "incident": string,"include_knowledge_base": boolean,"processing_key": string,"requested_mode": string }; Returns: {
+              "created": boolean,"id": string,"status": string,"version": number
+            }[]
+                           },
 "request_raw_log_download":
 { Args: { "target": string }; Returns: string
                            },
@@ -1009,6 +1151,9 @@ isOneToOne: false
                            },
 "revoke_invitation":
 { Args: { "target": string }; Returns: undefined
+                           },
+"set_auto_diagnosis":
+{ Args: { "enabled": boolean }; Returns: undefined
                            },
 "switch_organization":
 { Args: { "target": string }; Returns: undefined

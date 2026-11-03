@@ -2,38 +2,23 @@
 
 import json
 import os
-from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
 import pytest
-import pytest_asyncio
 from aid_correlation_worker.close import close_idle
 from aid_correlation_worker.correlate import correlate_integration
 from aid_diagnosis_engine.rules import RULES
 from aid_diagnosis_engine.rules import catalog as catalog_module
 from aid_diagnosis_worker.evaluate import evaluate_execution
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
-from sqlalchemy.pool import NullPool
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 URL = os.environ.get("INTEGRATION_DB_URL")
 pytestmark = pytest.mark.skipif(URL is None, reason="sem INTEGRATION_DB_URL")
 T0 = datetime(2026, 11, 2, 14, 0, tzinfo=UTC)
 TIMEOUT_504 = {"category": "UNKNOWN", "http_status": 504, "message": "UPSTREAM_TIMEOUT"}
-
-
-@pytest_asyncio.fixture
-async def engine() -> AsyncIterator[AsyncEngine]:
-    assert URL is not None
-    created = create_async_engine(
-        URL.replace("postgresql://", "postgresql+asyncpg://", 1), poolclass=NullPool
-    )
-    async with created.begin() as connection:
-        await connection.execute(text("select doctor.ensure_event_partition('2026-11-02')"))
-    yield created
-    await created.dispose()
 
 
 async def run(engine: AsyncEngine, sql: str, **params: Any) -> None:
@@ -44,45 +29,6 @@ async def run(engine: AsyncEngine, sql: str, **params: Any) -> None:
 async def rows(engine: AsyncEngine, sql: str, **params: Any) -> list[Any]:
     async with engine.begin() as connection:
         return list((await connection.execute(text(sql), params)).mappings())
-
-
-@pytest_asyncio.fixture
-async def tenant(engine: AsyncEngine) -> AsyncIterator[dict[str, str]]:
-    ids = {"tenant": str(uuid4()), "integration": str(uuid4())}
-    await run(
-        engine,
-        "insert into public.organizations (id, name, slug) values (:t, 'T', :s)",
-        t=ids["tenant"],
-        s=f"t-{ids['tenant'][:30]}",
-    )
-    await run(engine, "insert into doctor.tenants (id) values (:t)", t=ids["tenant"])
-    await run(
-        engine,
-        "insert into doctor.integrations (id, tenant_id, name, source_system, target_system,"
-        " environment) values (:i, :t, 'Pedidos SF → SAP', 'salesforce', 'sap', 'prd')",
-        i=ids["integration"],
-        t=ids["tenant"],
-    )
-    yield ids
-    for table in (
-        "knowledge_chunks",
-        "knowledge_documents",
-        "execution_stats_hourly",
-        "incident_history",
-        "incident_comments",
-        "incident_executions",
-        "incidents",
-        "rule_matches",
-        "events",
-        "execution_merges",
-        "executions",
-        "outbox_messages",
-        "integrations",
-    ):
-        await run(engine, f"delete from doctor.{table} where tenant_id = :t", t=ids["tenant"])  # noqa: S608
-    await run(engine, "delete from doctor.incident_counters where tenant_id = :t", t=ids["tenant"])
-    await run(engine, "delete from doctor.tenants where id = :t", t=ids["tenant"])
-    await run(engine, "delete from public.organizations where id = :t", t=ids["tenant"])
 
 
 async def closed_execution(

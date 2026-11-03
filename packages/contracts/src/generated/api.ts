@@ -719,6 +719,59 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/incidents/{incident}/diagnoses": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Diagnoses */
+    get: operations["list_diagnoses_api_v1_incidents__incident__diagnoses_get"];
+    put?: never;
+    /** Request Diagnosis */
+    post: operations["request_diagnosis_api_v1_incidents__incident__diagnoses_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/diagnoses/{target}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Diagnosis */
+    get: operations["get_diagnosis_api_v1_diagnoses__target__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/settings/diagnosis": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Settings */
+    get: operations["get_settings_api_v1_settings_diagnosis_get"];
+    /** Put Settings */
+    put: operations["put_settings_api_v1_settings_diagnosis_put"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -922,6 +975,165 @@ export interface components {
       /** Recent Incidents */
       recent_incidents: components["schemas"]["IncidentRow"][];
     };
+    /** DiagnosisDetail */
+    DiagnosisDetail: {
+      /** Id */
+      id: string;
+      /** Incident Id */
+      incident_id: string;
+      /** Version */
+      version: number;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "queued" | "running" | "published" | "inconclusive" | "failed_llm" | "failed";
+      /**
+       * Stage
+       * @enum {string}
+       */
+      stage:
+        | "queued"
+        | "validation"
+        | "correlation"
+        | "rules"
+        | "knowledge"
+        | "llm"
+        | "verification"
+        | "done";
+      /**
+       * Requested Mode
+       * @enum {string}
+       */
+      requested_mode: "hybrid" | "rules_only";
+      /**
+       * Mode
+       * @enum {string}
+       */
+      mode: "hybrid" | "rules_only";
+      /** Classification */
+      classification: string | null;
+      /** Confidence */
+      confidence: number | null;
+      /** Requires Human Review */
+      requires_human_review: boolean;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Published At */
+      published_at: string | null;
+      /** Probable Cause */
+      probable_cause: string | null;
+      /** Responsible System */
+      responsible_system: ("sap" | "salesforce" | "gcp" | "other") | null;
+      /** Include Knowledge Base */
+      include_knowledge_base: boolean;
+      /** Verification Notes */
+      verification_notes: string[];
+      /** Provider */
+      provider: string | null;
+      /** Model */
+      model: string | null;
+      /** Ruleset Version */
+      ruleset_version: string | null;
+      /** Input Tokens */
+      input_tokens: number;
+      /** Output Tokens */
+      output_tokens: number;
+      /** Duration Ms */
+      duration_ms: number | null;
+      /** Error */
+      error: string | null;
+      /** Hypotheses */
+      hypotheses: components["schemas"]["Hypothesis"][];
+      /** Evidence */
+      evidence: components["schemas"]["Evidence"][];
+      /** Recommendations */
+      recommendations: components["schemas"]["Recommendation"][];
+    };
+    /** DiagnosisQueued */
+    DiagnosisQueued: {
+      /** Diagnosis Id */
+      diagnosis_id: string;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "queued" | "running" | "published" | "inconclusive" | "failed_llm" | "failed";
+      /** Version */
+      version: number;
+    };
+    /** DiagnosisRequest */
+    DiagnosisRequest: {
+      /**
+       * Mode
+       * @default hybrid
+       * @enum {string}
+       */
+      mode: "hybrid" | "rules_only";
+      /**
+       * Include Knowledge Base
+       * @default true
+       */
+      include_knowledge_base: boolean;
+    };
+    /** DiagnosisSettings */
+    DiagnosisSettings: {
+      /** Auto Diagnose Critical */
+      auto_diagnose_critical: boolean;
+    };
+    /** DiagnosisSummary */
+    DiagnosisSummary: {
+      /** Id */
+      id: string;
+      /** Incident Id */
+      incident_id: string;
+      /** Version */
+      version: number;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "queued" | "running" | "published" | "inconclusive" | "failed_llm" | "failed";
+      /**
+       * Stage
+       * @enum {string}
+       */
+      stage:
+        | "queued"
+        | "validation"
+        | "correlation"
+        | "rules"
+        | "knowledge"
+        | "llm"
+        | "verification"
+        | "done";
+      /**
+       * Requested Mode
+       * @enum {string}
+       */
+      requested_mode: "hybrid" | "rules_only";
+      /**
+       * Mode
+       * @enum {string}
+       */
+      mode: "hybrid" | "rules_only";
+      /** Classification */
+      classification: string | null;
+      /** Confidence */
+      confidence: number | null;
+      /** Requires Human Review */
+      requires_human_review: boolean;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Published At */
+      published_at: string | null;
+    };
     /**
      * EventDetail
      * @description O Evento normalizado inteiro (já sanitizado), para a Tela 9.
@@ -976,6 +1188,24 @@ export interface components {
       /** Correlated By */
       correlated_by: string | null;
       raw_log: components["schemas"]["RawLogRef"] | null;
+    };
+    /** Evidence */
+    Evidence: {
+      /** Rank */
+      rank: number;
+      /**
+       * Kind
+       * @enum {string}
+       */
+      kind: "event" | "raw_log" | "chunk" | "global_chunk" | "rule_match";
+      /** Ref Id */
+      ref_id: string | null;
+      /** Event Timestamp */
+      event_timestamp: string | null;
+      /** Label */
+      label: string;
+      /** Finding */
+      finding: string;
     };
     /** ExecutionDetail */
     ExecutionDetail: {
@@ -1131,6 +1361,15 @@ export interface components {
        * Format: date-time
        */
       created_at: string;
+    };
+    /** Hypothesis */
+    Hypothesis: {
+      /** Rank */
+      rank: number;
+      /** Statement */
+      statement: string;
+      /** Confidence */
+      confidence: number | null;
     };
     /** Import */
     Import: {
@@ -1786,6 +2025,18 @@ export interface components {
       retention_days_left: number;
       /** Import Filename */
       import_filename: string | null;
+    };
+    /** Recommendation */
+    Recommendation: {
+      /** Rank */
+      rank: number;
+      /** Text */
+      text: string;
+      /**
+       * Kind
+       * @enum {string}
+       */
+      kind: "investigate" | "fix" | "verify";
     };
     /** RejectedEvent */
     RejectedEvent: {
@@ -3592,6 +3843,177 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["KnowledgeResults"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_diagnoses_api_v1_incidents__incident__diagnoses_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        incident: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DiagnosisSummary"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  request_diagnosis_api_v1_incidents__incident__diagnoses_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        "idempotency-key"?: string | null;
+        authorization?: string | null;
+      };
+      path: {
+        incident: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DiagnosisRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DiagnosisQueued"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_diagnosis_api_v1_diagnoses__target__get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DiagnosisDetail"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_settings_api_v1_settings_diagnosis_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DiagnosisSettings"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  put_settings_api_v1_settings_diagnosis_put: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DiagnosisSettings"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["DiagnosisSettings"];
         };
       };
       /** @description Validation Error */

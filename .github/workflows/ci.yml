@@ -101,6 +101,7 @@ jobs:
             workers/connectors/tests/test_connector_sync.py \
             workers/correlation/tests/test_correlation_worker.py \
             workers/diagnosis/tests/test_rules_worker.py \
+            workers/diagnosis/tests/test_diagnose.py \
             packages/knowledge/tests/test_knowledge_db.py
 
   terraform:

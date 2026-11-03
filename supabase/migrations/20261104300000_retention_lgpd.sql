@@ -346,7 +346,7 @@ security definer
 set search_path = ''
 as $$
 declare
-  dropped text[] := '{}';
+  dropped text[] := '{}'::text[];
   part record;
   horizon timestamptz;
 begin

@@ -30,12 +30,14 @@ def check_config(provider: str, config: Mapping[str, Any]) -> None:
         raise ApiError(422, "invalid_config", f"Configuração inválida ({detail}).")
 
 
-async def test_connection(provider: str, config: Mapping[str, Any], credential: str) -> TestResult:
+async def test_connection(
+    provider: str, config: Mapping[str, Any], credential: str, *, preview: bool
+) -> TestResult:
     check_config(provider, config)
     connector = implementation(provider)
     try:
         result = await asyncio.wait_for(
-            connector.test_connection(Secret(credential), config), TEST_TIMEOUT
+            connector.test_connection(Secret(credential), config, preview=preview), TEST_TIMEOUT
         )
     except TimeoutError:
         return TestResult(ok=False, message="O provedor não respondeu a tempo.")

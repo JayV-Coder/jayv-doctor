@@ -528,12 +528,20 @@ export interface components {
       };
       /** Status */
       status: string;
+      /** Paused Reason */
+      paused_reason: string | null;
       /** Consecutive Failures */
       consecutive_failures: number;
       /** Sync Interval Seconds */
       sync_interval_seconds: number;
+      /** Checkpoint */
+      checkpoint: {
+        [key: string]: unknown;
+      } | null;
       /** Last Sync At */
       last_sync_at: string | null;
+      /** Last Sync Records */
+      last_sync_records: number | null;
       /** Last Error */
       last_error: string | null;
       /**
@@ -819,6 +827,8 @@ export interface components {
        * Format: password
        */
       credential: string;
+      /** Sync Interval Seconds */
+      sync_interval_seconds?: number | null;
     };
     /** NewImport */
     NewImport: {

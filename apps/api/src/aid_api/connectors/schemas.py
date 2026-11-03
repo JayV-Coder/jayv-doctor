@@ -26,6 +26,7 @@ class NewConnector(BaseModel):
     name: str = Field(min_length=2, max_length=80)
     config: dict[str, Any] = Field(default_factory=dict)
     credential: Credential = Field(min_length=1, max_length=16384)
+    sync_interval_seconds: int | None = Interval
 
     _strip = field_validator("name", mode="before")(strip_name)
 
@@ -77,9 +78,15 @@ class Connector(BaseModel):
     name: str
     config: dict[str, Any]
     status: str
+    # `auth` (credencial recusada; volta com credencial nova) ou `manual`.
+    paused_reason: str | None
     consecutive_failures: int
     sync_interval_seconds: int
+    # Formato do provedor: o GCP grava `timestamp`; a tela mostra só ele.
+    checkpoint: dict[str, Any] | None
     last_sync_at: datetime | None
+    # Registros da última Sincronização terminada; `None` antes da primeira.
+    last_sync_records: int | None
     last_error: str | None
     next_run_at: datetime
     created_at: datetime

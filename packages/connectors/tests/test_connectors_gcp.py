@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 import pytest
 from aid_connectors.base import Batch, ConnectorError, Secret
+from aid_connectors.gcp.auth import Endpoints
 from aid_connectors.gcp.connector import GcpLoggingConnector
 from aid_connectors.testing import ConnectorContractTests
 from cryptography.hazmat.primitives import serialization
@@ -334,3 +335,55 @@ def test_token_e_reaproveitado_entre_tentativas() -> None:
 
     asyncio.run(twice())
     assert tokens == 1
+
+
+def preview(recorder: Recorder) -> Any:
+    return asyncio.run(connector(recorder).test_connection(Secret(KEY), CONFIG, preview=True))
+
+
+def test_teste_de_conexao_previa_quantos_registros_da_ultima_hora_atendem_aos_filtros() -> None:
+    recorder = Recorder(pages=[{"entries": [{"insertId": str(n)} for n in range(48)]}])
+    result = preview(recorder)
+    assert result.ok
+    assert "48 registros na última hora" in result.message
+    assert 'timestamp >= "2026-11-02T13:10:00Z"' in recorder.requests[0]["filter"]
+    assert recorder.requests[0]["pageSize"] == 1000
+
+
+def test_previa_com_mais_paginas_diz_pelo_menos() -> None:
+    page = {"entries": [{"insertId": "a"}] * 1000, "nextPageToken": "pagina-2"}
+    assert "Mais de 1.000 registros na última hora" in preview(Recorder(pages=[page])).message
+
+
+def test_pagina_vazia_com_continuacao_nao_inventa_contagem() -> None:
+    result = preview(Recorder(pages=[{"nextPageToken": "x"}]))
+    assert result.ok
+    assert "atendem aos filtros" not in result.message
+    assert "Não deu para contar" in result.message
+
+
+def test_teste_sem_previa_le_so_uma_entrada() -> None:
+    recorder = Recorder(pages=[{"entries": [{"insertId": "a"}]}])
+    result = asyncio.run(connector(recorder).test_connection(Secret(KEY), CONFIG))
+    assert result.ok
+    assert recorder.requests[0]["pageSize"] == 1
+    assert "registros" not in result.message
+
+
+@pytest.mark.parametrize(
+    "url", ["https://exemplo.com/token", "http://10.0.0.5/token", "http://localhost.evil.com/t"]
+)
+def test_endpoints_trocados_so_aceitam_loopback(url: str) -> None:
+    with pytest.raises(ValueError, match="loopback"):
+        Endpoints.from_environment({"AID_GCP_OAUTH_URL": url})
+
+
+def test_endpoints_do_e2e_e_padrao_do_google() -> None:
+    assert Endpoints.from_environment({}).oauth == "https://oauth2.googleapis.com/token"
+    local = Endpoints.from_environment(
+        {
+            "AID_GCP_OAUTH_URL": "http://127.0.0.1:8095/token",
+            "AID_GCP_LOGGING_URL": "http://127.0.0.1:8095/v2/entries:list",
+        }
+    )
+    assert local.logging == "http://127.0.0.1:8095/v2/entries:list"

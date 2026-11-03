@@ -1033,3 +1033,96 @@ p {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Tela 11: o card com falhas tem a borda de atenção; o do que ainda não existe, tracejada. */
+.card[data-tone="warning"] {
+  border-color: var(--ask);
+}
+
+.card.soon {
+  border-style: dashed;
+}
+
+.grid2 > .action-message {
+  grid-column: 1 / -1;
+}
+
+/* Tela 12: assistente do Conector GCP. */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.steps i {
+  height: 3px;
+  border-radius: 1px;
+  background: var(--bd);
+}
+
+.steps i.on {
+  background: var(--fg);
+}
+
+.method {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--bd);
+  border-radius: 3px;
+  background: var(--card);
+}
+
+.method[aria-disabled="true"] {
+  border-style: dashed;
+  color: var(--mu);
+}
+
+.method.chosen {
+  border-left: 2px solid var(--go);
+}
+
+.method > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cmd {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid var(--bd);
+  border-radius: 3px;
+  background: var(--sec);
+}
+
+.cmd code {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.cmd .btn {
+  flex: none;
+  width: auto;
+}
+
+.done {
+  gap: 2px;
+  font-size: 12px;
+}
+
+.done span::before {
+  content: "✓ ";
+  color: var(--go);
+}
+
+.wizard-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 10px;
+}

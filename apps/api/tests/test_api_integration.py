@@ -3,6 +3,7 @@
 import asyncio
 import os
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
@@ -346,3 +347,81 @@ async def test_conector_criado_pela_api_guarda_a_credencial_so_no_vault(
             {"c": created.id},
         )
     assert stored == "trocada"
+
+
+@pytest.mark.asyncio
+async def test_conector_mostra_intervalo_checkpoint_e_registros_da_ultima_sincronizacao(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from aid_api.connectors.repo import ConnectorRepository
+    from aid_api.connectors.schemas import NewConnector
+    from aid_api.integrations.repo import IntegrationRepository
+
+    first, _ = tenants
+    await add_admin(engine, first, user)
+    admin = claims_for(first, user, "admin", "aal2")
+    integration = await IntegrationRepository(engine).create(
+        admin,
+        NewIntegration(
+            name="GCP tela", source_system="gcp", target_system="sap", environment="prd"
+        ),
+    )
+    import aid_api.core.db as db
+
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    repository = ConnectorRepository()
+    created = await repository.create(
+        admin,
+        NewConnector.model_validate(
+            {
+                "integration_id": integration.id,
+                "provider": "fake",
+                "name": "Fake tela",
+                "config": {"pages": 1},
+                "credential": "c",
+                "sync_interval_seconds": 60,
+            }
+        ),
+    )
+    assert created.sync_interval_seconds == 60
+    assert created.last_sync_records is None
+    async with engine.begin() as connection:
+        for minute, records in ((0, 7), (5, 1204)):
+            await connection.execute(
+                text(
+                    "insert into doctor.connector_syncs"
+                    " (tenant_id, connector_id, started_at, finished_at, status, records)"
+                    " values (:t, cast(:c as uuid), :s, :s,"
+                    " 'succeeded', :r)"
+                ),
+                {
+                    "t": first,
+                    "c": created.id,
+                    "s": datetime(2026, 11, 3, 10, minute, tzinfo=UTC),
+                    "r": records,
+                },
+            )
+        # Em andamento não conta: a contagem é da última que terminou.
+        await connection.execute(
+            text(
+                "insert into doctor.connector_syncs (tenant_id, connector_id, started_at)"
+                " values (:t, cast(:c as uuid), '2026-11-03 10:10Z')"
+            ),
+            {"t": first, "c": created.id},
+        )
+        await connection.execute(
+            text(
+                "update doctor.connectors set checkpoint = '{\"page\": 3}'"
+                " where id = cast(:c as uuid)"
+            ),
+            {"c": created.id},
+        )
+    shown = await repository.get(admin, created.id)
+    assert shown.last_sync_records == 1204
+    assert shown.checkpoint == {"page": 3}
+    assert shown.paused_reason is None
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("delete from vault.secrets where name = 'doctor/connector/' || :c"),
+            {"c": created.id},
+        )

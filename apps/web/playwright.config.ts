@@ -45,7 +45,14 @@ export default defineConfig({
         SUPABASE_URL: "http://127.0.0.1:54321",
         SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "",
         APP_URL: "http://127.0.0.1:3000",
+        AID_GCP_OAUTH_URL: "http://127.0.0.1:8095/token",
+        AID_GCP_LOGGING_URL: "http://127.0.0.1:8095/v2/entries:list",
       },
+    },
+    {
+      command: "node e2e/fake-gcp.mjs",
+      url: "http://127.0.0.1:8095/",
+      reuseExistingServer: true,
     },
   ],
 });

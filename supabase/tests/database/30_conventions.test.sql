@@ -20,6 +20,7 @@ insert into exceptions values
 create temporary table keyless (relname name primary key, reason text not null);
 insert into keyless values
   ('events', 'particionada: a chave inclui a partição, (tenant_id, id, timestamp)'),
+  ('audit_logs', 'particionada: a chave inclui a partição, (tenant_id, id, occurred_at)'),
   ('execution_stats_dirty', 'fila de horas a recalcular: (tenant_id, integration_id, hour)'),
   ('incident_counters', 'um contador por Organização: tenant_id é a chave'),
   ('user_active_tenant', 'uma Organização ativa por Usuário: user_id é a chave');

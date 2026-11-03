@@ -7,23 +7,247 @@ export type Database = {
           Tables: {
             "audit_logs": {
                   Row: {
-                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: never,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
                   }
                   Update: {
-                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: never,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
                     {
-      foreignKeyName: "audit_logs_tenant_id_fkey"
+      foreignKeyName: "audit_logs_tenant_id_fkey1"
       columns: ["tenant_id"]
 isOneToOne: false
       referencedRelation: "tenants"
       referencedColumns: ["id"]
     }
+                  ]
+                },"audit_logs_2026_10": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"audit_logs_2026_11": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"audit_logs_2026_12": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"audit_logs_2027_01": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"audit_logs_2027_02": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"audit_logs_2027_03": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"audit_logs_2027_04": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"audit_logs_2027_05": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"audit_logs_2027_06": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"audit_logs_2027_07": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"audit_logs_2027_08": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"audit_logs_2027_09": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"audit_logs_2027_10": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"audit_logs_2027_11": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"audit_logs_2027_12": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
+                  ]
+                },"audit_logs_default": {
+                  Row: {
+                    "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor_id"?: string | null,"actor_type": string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id": string,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
+                  }
+                  Relationships: [
+
                   ]
                 },"connector_syncs": {
                   Row: {
@@ -1037,6 +1261,9 @@ isOneToOne: false
 "diagnosis_is_final":
 { Args: { "status": string }; Returns: boolean
                            },
+"ensure_audit_partition":
+{ Args: { "day": string }; Returns: string
+                           },
 "ensure_event_partition":
 { Args: { "day": string }; Returns: string
                            },
@@ -1055,6 +1282,9 @@ isOneToOne: false
 "has_role":
 { Args: { "roles": (string)[] }; Returns: boolean
                            },
+"import_auth_events":
+{ Args: { "since": string }; Returns: number
+                           },
 "import_storage_path":
 { Args: { "format": string,"import_id": string,"tenant": string }; Returns: string
                            },
@@ -1068,6 +1298,11 @@ isOneToOne: false
                            },
 "is_manager":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"list_audit_actors":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "email": string,"user_id": string
+            }[]
                            },
 "list_invitations":
 { Args: Record<PropertyKey, never>; Returns: {
@@ -1083,6 +1318,9 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: {
               "id": string,"name": string,"role": string,"slug": string
             }[]
+                           },
+"lock_audit_partition":
+{ Args: { "partition_name": string }; Returns: undefined
                            },
 "locked_target":
 { Args: { "actor_role": string,"target": string }; Returns: {
@@ -1138,6 +1376,9 @@ isOneToOne: false
                            },
 "record_audit":
 { Args: { "action": string,"target": string,"tenant": string }; Returns: undefined
+                           },
+"record_audit_export":
+{ Args: { "filters": Json }; Returns: undefined
                            },
 "refresh_execution_stats":
 { Args: { "batch"?: number }; Returns: number
@@ -1219,6 +1460,9 @@ isOneToOne: false
                            },
 "utc_hour":
 { Args: { "moment": string }; Returns: string
+                           },
+"write_audit":
+{ Args: { "action": string,"after": Json,"before": Json,"resource_id": string,"resource_type": string,"tenant": string }; Returns: undefined
                            }
           }
           Enums: {

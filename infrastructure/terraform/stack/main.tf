@@ -138,8 +138,10 @@ module "api" {
   min_instances       = var.api_min_instances
   deletion_protection = var.environment == "prod"
   env = {
-    SUPABASE_JWT_ISSUER      = var.supabase_jwt_issuer
-    SUPABASE_URL             = trimsuffix(var.supabase_jwt_issuer, "/auth/v1")
+    SUPABASE_JWT_ISSUER = var.supabase_jwt_issuer
+    SUPABASE_URL        = trimsuffix(var.supabase_jwt_issuer, "/auth/v1")
+    # A web repassa o IP do navegador: balanceador do Cloud Run + web (Trilha de auditoria, #28).
+    AID_TRUSTED_PROXY_HOPS   = "2"
     SUPABASE_PUBLISHABLE_KEY = var.supabase_publishable_key
     APP_URL                  = var.app_url
     OTEL_ENABLED             = "true"
@@ -377,6 +379,28 @@ resource "google_cloud_scheduler_job" "dashboard_stats" {
   http_target {
     http_method = "POST"
     uri         = "${module.workers["correlation"].uri}/stats"
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = module.workers["correlation"].uri
+    }
+  }
+
+  depends_on = [module.project]
+}
+
+# Trilha de auditoria (#28): login e MFA do Supabase Auth e as partições dos próximos meses.
+resource "google_cloud_scheduler_job" "audit_auth_events" {
+  project          = var.project_id
+  region           = var.region
+  name             = "${local.name_prefix}-audit-auth-events"
+  schedule         = "40 3 * * *"
+  time_zone        = "Etc/UTC"
+  attempt_deadline = "300s"
+
+  http_target {
+    http_method = "POST"
+    uri         = "${module.workers["correlation"].uri}/audit/auth-events"
 
     oidc_token {
       service_account_email = google_service_account.scheduler.email

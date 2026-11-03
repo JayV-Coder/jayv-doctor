@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 
 from aid_api import __version__
+from aid_api.audit import router as audit
 from aid_api.connectors import router as connectors
-from aid_api.core import errors, telemetry
+from aid_api.core import errors, request_meta, telemetry
 from aid_api.dashboard import router as dashboard
 from aid_api.diagnoses import router as diagnoses
 from aid_api.executions import router as executions
@@ -22,6 +23,7 @@ def create_app() -> FastAPI:
         openapi_url="/api/v1/openapi.json",
     )
     errors.install(app)
+    request_meta.install(app)
     app.include_router(health.router)
     app.include_router(orgs.router)
     app.include_router(integrations.router)
@@ -34,6 +36,7 @@ def create_app() -> FastAPI:
     app.include_router(dashboard.router)
     app.include_router(knowledge.router)
     app.include_router(diagnoses.router)
+    app.include_router(audit.router)
     telemetry.configure(app)
     return app
 

@@ -359,3 +359,80 @@ async def test_agregado_do_dashboard_e_idempotente_e_segue_a_execucao(
     )
     assert (hour["total"], hour["failed"]) == (2, 1)
     assert hour["by_category"] == {"UNCLASSIFIED": 1}
+
+
+def test_particoes_do_mes_atual_e_dos_dois_seguintes() -> None:
+    from datetime import date
+
+    from aid_correlation_worker.audit import next_months
+
+    assert next_months(date(2026, 12, 31)) == [
+        date(2026, 12, 1),
+        date(2027, 1, 1),
+        date(2027, 2, 1),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_importa_login_do_auth_uma_vez(engine: AsyncEngine, tenant: dict[str, str]) -> None:
+    from uuid import uuid4
+
+    from aid_correlation_worker.audit import import_auth_events
+
+    user, event = str(uuid4()), str(uuid4())
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "insert into auth.users (id, instance_id, aud, role, email) values (:u,"
+                " '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', :e)"
+            ),
+            {"u": user, "e": f"{user}@auditoria.test"},
+        )
+        await connection.execute(
+            text(
+                "insert into public.organization_members (org_id, user_id, role)"
+                " values (:t, :u, 'member')"
+            ),
+            {"t": tenant["tenant"], "u": user},
+        )
+        await connection.execute(
+            text(
+                "insert into doctor.memberships (tenant_id, user_id, role)"
+                " values (:t, :u, 'viewer')"
+            ),
+            {"t": tenant["tenant"], "u": user},
+        )
+        await connection.execute(
+            text(
+                "insert into auth.audit_log_entries (instance_id, id, payload, created_at,"
+                " ip_address) values ('00000000-0000-0000-0000-000000000000', :id,"
+                " cast(:p as json), now(), '177.10.0.9')"
+            ),
+            {"id": event, "p": f'{{"action": "login", "actor_id": "{user}"}}'},
+        )
+    try:
+        assert await import_auth_events(engine) >= 1
+        assert await import_auth_events(engine) == 0
+        async with engine.begin() as connection:
+            row = (
+                await connection.execute(
+                    text(
+                        "select action, host(ip) from doctor.audit_logs"
+                        " where tenant_id = cast(:t as uuid) and request_id = :id"
+                    ),
+                    {"t": tenant["tenant"], "id": event},
+                )
+            ).one()
+        assert tuple(row) == ("auth.login", "177.10.0.9")
+    finally:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("delete from auth.audit_log_entries where id = :id"), {"id": event}
+            )
+            await connection.execute(
+                text("delete from doctor.memberships where user_id = :u"), {"u": user}
+            )
+            await connection.execute(
+                text("delete from public.organization_members where user_id = :u"), {"u": user}
+            )
+            await connection.execute(text("delete from auth.users where id = :u"), {"u": user})

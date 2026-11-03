@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import type { ApiComponents } from "@aid/contracts";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
@@ -22,6 +23,26 @@ export type ConnectorSync = Schemas["ConnectorSync"];
 type Me = Schemas["Me"];
 
 // Só no servidor: o token sai do cookie da sessão e a API o valida.
+// Para a Trilha de auditoria: o IP do navegador (último salto, posto pelo balanceador do Cloud
+// Run) e o user agent dele seguem para a API, que confia em AID_TRUSTED_PROXY_HOPS saltos.
+async function clientHeaders(): Promise<Record<string, string>> {
+  try {
+    const incoming = await headers();
+    const hops = (incoming.get("x-forwarded-for") ?? "")
+      .split(",")
+      .map((hop) => hop.trim())
+      .filter(Boolean);
+    const agent = incoming.get("user-agent");
+    return {
+      ...(hops.length > 0 && { "x-forwarded-for": hops[hops.length - 1] ?? "" }),
+      ...(agent && { "user-agent": agent }),
+    };
+  } catch {
+    // Fora de uma requisição (build, script): não há navegador a descrever.
+    return {};
+  }
+}
+
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const supabase = await createClient();
   const { data } = await supabase.auth.getSession();
@@ -31,6 +52,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     // Headers de quem chama (ex.: Idempotency-Key) entram; a autorização é sempre a da sessão.
     headers: {
       "content-type": "application/json",
+      ...(await clientHeaders()),
       ...Object.fromEntries(new Headers(init.headers)),
       authorization: `Bearer ${data.session?.access_token ?? ""}`,
     },

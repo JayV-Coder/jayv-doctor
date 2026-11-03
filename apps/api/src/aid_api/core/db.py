@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from aid_api.core import request_meta
 from aid_api.core.auth import Claims
 from aid_api.core.errors import ApiError
 
@@ -38,8 +39,11 @@ async def tenant_tx(
     async with (engine or get_engine()).begin() as connection:
         await connection.execute(text("set local role authenticated"))
         await connection.execute(
-            text("select set_config('request.jwt.claims', :claims, true)"),
-            {"claims": json.dumps(claims.raw)},
+            text(
+                "select set_config('request.jwt.claims', :claims, true),"
+                " set_config('doctor.request', :meta, true)"
+            ),
+            {"claims": json.dumps(claims.raw), "meta": request_meta.current() or ""},
         )
         yield connection
 

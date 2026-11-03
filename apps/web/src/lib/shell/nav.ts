@@ -23,6 +23,7 @@ const TITLES: Record<string, string> = {
   "/importar": "Importar logs",
   "/eventos": "Evento original",
   "/conhecimento": "Conhecimento",
+  "/auditoria": "Auditoria",
   "/conectores/novo": "Conector GCP",
 };
 

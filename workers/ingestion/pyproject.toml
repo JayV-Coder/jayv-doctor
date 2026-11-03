@@ -4,6 +4,7 @@ version = "0.0.0"
 description = "Worker de ingestão: Log bruto → Sanitização → Contrato de evento v1 → events"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "aid-db",
     "aid-contracts",
     "aid-security",
     "asyncpg>=0.30",
@@ -12,6 +13,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
+aid-db = { workspace = true }
 aid-contracts = { workspace = true }
 aid-security = { workspace = true }
 

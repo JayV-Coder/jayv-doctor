@@ -55,7 +55,7 @@ run "workers_sao_privados_e_a_api_so_entra_pelo_load_balancer" {
     error_message = "A API não pode ficar exposta fora do Load Balancer."
   }
   assert {
-    condition     = toset(keys(module.workers)) == toset(["ingestion", "correlation", "diagnosis", "connectors"])
+    condition     = toset(keys(module.workers)) == toset(["ingestion", "correlation", "diagnosis", "connectors", "relay"])
     error_message = "Um serviço por worker."
   }
 }
@@ -64,7 +64,7 @@ run "cada_servico_tem_conta_propria_sem_chave_exportada" {
   command = plan
 
   assert {
-    condition     = length(toset(concat([google_service_account.api.account_id], [for account in google_service_account.worker : account.account_id]))) == 5
+    condition     = length(toset(concat([google_service_account.api.account_id], [for account in google_service_account.worker : account.account_id]))) == 6
     error_message = "API e workers usam service accounts separadas."
   }
 }
@@ -156,6 +156,23 @@ run "so_o_worker_de_ingestao_le_a_chave_de_servico" {
   assert {
     condition     = contains(keys(module.secrets.accessors), "supabase-service-role-key/ingestion") && !contains(keys(module.secrets.accessors), "supabase-service-role-key/api") && !contains(keys(module.secrets.accessors), "supabase-service-role-key/correlation")
     error_message = "A chave de serviço do Supabase é só do worker de ingestão."
+  }
+}
+
+run "so_o_relay_publica_e_o_scheduler_o_chama" {
+  command = plan
+
+  assert {
+    condition     = alltrue([for t in module.topics : toset(keys(t.publishers)) == toset(["relay"])])
+    error_message = "Toda publicação passa pela outbox: só o relay publica."
+  }
+  assert {
+    condition     = google_cloud_scheduler_job.outbox_relay.schedule == "* * * * *"
+    error_message = "O relay roda a cada minuto."
+  }
+  assert {
+    condition     = !contains(keys(google_cloud_run_v2_service_iam_member.pubsub_invoker), "relay")
+    error_message = "O Pub/Sub não chama o relay."
   }
 }
 

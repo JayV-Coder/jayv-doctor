@@ -58,3 +58,18 @@ def test_payload_json_chega_decodificado_ao_handler() -> None:
 
     asyncio.run(deliver())
     assert received == [{"import_id": "abc"}]
+
+
+def test_so_o_relay_expoe_a_rota_do_scheduler(monkeypatch: Any) -> None:
+    import aid_relay.handlers as relay
+    from aid_relay.relay import Stats
+
+    async def drain(*args: object) -> Stats:
+        return Stats(published=3)
+
+    monkeypatch.setattr(relay, "drain", drain)
+    monkeypatch.setattr(relay, "engine", lambda: None)
+    monkeypatch.setattr(relay, "publisher", lambda: None)
+    response = TestClient(create_app("relay", {})).post("/relay")
+    assert response.json() == {"published": 3, "failed": 0}
+    assert TestClient(create_app("ingestion", {})).post("/relay").status_code == 404

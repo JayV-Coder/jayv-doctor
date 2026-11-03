@@ -8,16 +8,18 @@ locals {
     correlation = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "300s" }
     diagnosis   = { secrets = ["supabase-db-url", "anthropic-api-key"], memory = "1Gi", timeout = "600s" }
     connectors  = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "600s" }
+    # Relay da outbox: o único que publica nos tópicos, chamado pelo Cloud Scheduler.
+    relay = { secrets = ["supabase-db-url"], memory = "256Mi", timeout = "60s" }
   }
 
   # ack_deadline >= timeout do worker: no push, o Pub/Sub reentrega ao fim do prazo, mesmo com o
   # worker ainda processando. 600 s é o máximo do Pub/Sub.
   topics = {
-    "ingestion.raw"         = { worker = "ingestion", publishers = ["api", "connectors"], ack_deadline = 300 }
-    "ingestion.normalized"  = { worker = "correlation", publishers = ["ingestion"], ack_deadline = 300 }
-    "correlation.requested" = { worker = "correlation", publishers = ["ingestion"], ack_deadline = 300 }
-    "diagnosis.requested"   = { worker = "diagnosis", publishers = ["api", "correlation"], ack_deadline = 600 }
-    "connector.sync"        = { worker = "connectors", publishers = ["api"], ack_deadline = 600 }
+    "ingestion.raw"         = { worker = "ingestion", publishers = ["relay"], ack_deadline = 300 }
+    "ingestion.normalized"  = { worker = "correlation", publishers = ["relay"], ack_deadline = 300 }
+    "correlation.requested" = { worker = "correlation", publishers = ["relay"], ack_deadline = 300 }
+    "diagnosis.requested"   = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    "connector.sync"        = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
   }
 
   api_secrets = ["supabase-db-url", "hmac-master-key", "smtp-url"]
@@ -163,8 +165,9 @@ module "workers" {
   timeout               = each.value.timeout
   deletion_protection   = var.environment == "prod"
   env = {
-    WORKER_NAME  = each.key
-    SUPABASE_URL = trimsuffix(var.supabase_jwt_issuer, "/auth/v1")
+    WORKER_NAME    = each.key
+    SUPABASE_URL   = trimsuffix(var.supabase_jwt_issuer, "/auth/v1")
+    GCP_PROJECT_ID = var.project_id
   }
   secret_env = { for secret in each.value.secrets : local.secret_env[secret] => secret }
   depends_on = [module.secrets]
@@ -179,10 +182,11 @@ resource "google_service_account" "pubsub_push" {
 }
 
 resource "google_cloud_run_v2_service_iam_member" "pubsub_invoker" {
-  for_each = local.workers
+  # Só quem tem assinatura: o relay é chamado pelo Cloud Scheduler, não pelo Pub/Sub.
+  for_each = toset([for topic in local.topics : topic.worker])
   project  = var.project_id
   location = var.region
-  name     = module.workers[each.key].name
+  name     = module.workers[each.value].name
   role     = "roles/run.invoker"
   member   = "serviceAccount:${google_service_account.pubsub_push.email}"
 }
@@ -240,5 +244,42 @@ module "observability" {
   project_id = var.project_id
   region     = var.region
   api_domain = var.api_domain
+  depends_on = [module.project]
+}
+
+# A outbox é drenada a cada minuto: o lag máximo de uma mensagem é ~1 min mais a rodada.
+resource "google_service_account" "scheduler" {
+  project      = var.project_id
+  account_id   = "${local.name_prefix}-scheduler"
+  display_name = "Cloud Scheduler"
+  depends_on   = [module.project]
+}
+
+resource "google_cloud_run_v2_service_iam_member" "scheduler_invoker" {
+  project  = var.project_id
+  location = var.region
+  name     = module.workers["relay"].name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.scheduler.email}"
+}
+
+resource "google_cloud_scheduler_job" "outbox_relay" {
+  project          = var.project_id
+  region           = var.region
+  name             = "${local.name_prefix}-outbox-relay"
+  schedule         = "* * * * *"
+  time_zone        = "Etc/UTC"
+  attempt_deadline = "60s"
+
+  http_target {
+    http_method = "POST"
+    uri         = "${module.workers["relay"].uri}/relay"
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = module.workers["relay"].uri
+    }
+  }
+
   depends_on = [module.project]
 }

@@ -58,6 +58,6 @@ jobs:
               --image "$REGISTRY/$PROJECT/aid/$2:$SHA" --quiet
           }
           publish api api
-          for worker in ingestion correlation diagnosis connectors; do
+          for worker in ingestion correlation diagnosis connectors relay; do
             publish "worker-$worker" worker
           done

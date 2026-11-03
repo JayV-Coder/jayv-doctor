@@ -9,7 +9,7 @@ requires-python = ">=3.12,<3.13"
 package = false
 
 [tool.uv.workspace]
-members = ["apps/api", "packages/contracts", "packages/security", "workers/ingestion", "workers/runtime"]
+members = ["apps/api", "packages/contracts", "packages/db", "packages/security", "workers/ingestion", "workers/relay", "workers/runtime"]
 
 [dependency-groups]
 dev = [
@@ -52,10 +52,13 @@ files = [
     "apps/api/tests",
     "packages/contracts/python",
     "packages/contracts/tests",
+    "packages/db/src",
     "packages/security/src",
     "packages/security/tests",
     "workers/ingestion/src",
     "workers/ingestion/tests",
+    "workers/relay/src",
+    "workers/relay/tests",
     "workers/runtime/src",
     "workers/runtime/tests",
 ]

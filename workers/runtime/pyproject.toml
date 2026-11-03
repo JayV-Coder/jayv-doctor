@@ -5,12 +5,14 @@ description = "Runtime dos workers acionados por push do Pub/Sub"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "aid-ingestion",
+    "aid-relay",
     "fastapi>=0.162",
     "uvicorn>=0.54",
 ]
 
 [tool.uv.sources]
 aid-ingestion = { workspace = true }
+aid-relay = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.9.5,<0.10"]

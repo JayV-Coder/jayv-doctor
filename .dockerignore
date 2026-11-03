@@ -3,8 +3,10 @@
 !uv.lock
 !apps/api/**
 !packages/contracts/**
+!packages/db/**
 !packages/security/**
 !workers/ingestion/**
+!workers/relay/**
 !workers/runtime/**
 **/node_modules
 **/__pycache__

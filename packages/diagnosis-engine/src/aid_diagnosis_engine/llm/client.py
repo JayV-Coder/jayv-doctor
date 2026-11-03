@@ -8,16 +8,29 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel, ValidationError
 
 from aid_diagnosis_engine.llm.base import (
+    LLMError,
     LLMInvalidOutputError,
     LLMProvider,
     Msg,
     StructuredResult,
     Tier,
     Usage,
+    describe_validation,
 )
 from aid_diagnosis_engine.llm.cache import ResponseCache, cache_key
-from aid_diagnosis_engine.llm.guards import GUARD, Untrusted, render, within_budget
-from aid_diagnosis_engine.llm.resilience import CircuitBreaker, RetryPolicy, resilient
+from aid_diagnosis_engine.llm.guards import (
+    GUARD,
+    Untrusted,
+    estimate_tokens,
+    render,
+    within_budget,
+)
+from aid_diagnosis_engine.llm.resilience import (
+    CircuitBreaker,
+    RetryPolicy,
+    breaker_for,
+    resilient,
+)
 
 INPUT_BUDGET = 60_000
 UsageSink = Callable[[Usage], Awaitable[None]]
@@ -27,14 +40,20 @@ UsageSink = Callable[[Usage], Awaitable[None]]
 class GuardedLLM:
     provider: LLMProvider
     cache: ResponseCache | None = None
-    breaker: CircuitBreaker = field(default_factory=CircuitBreaker)
+    # Por padrão, o breaker do provedor no processo: todos os diagnósticos somam as falhas.
+    breaker: CircuitBreaker | None = None
     policy: RetryPolicy = field(default_factory=RetryPolicy)
     usage_sink: UsageSink | None = None
     input_budget: int = INPUT_BUDGET
 
+    def __post_init__(self) -> None:
+        if self.breaker is None:
+            self.breaker = breaker_for(self.provider.name)
+
     async def structured[M: BaseModel](
         self,
         *,
+        scope: str,
         system: str,
         instructions: str,
         untrusted: Sequence[Untrusted],
@@ -43,22 +62,31 @@ class GuardedLLM:
         max_tokens: int = 4096,
         check: Callable[[M], str | None] | None = None,
     ) -> StructuredResult[M]:
-        """`check` valida o que o schema não alcança (ex.: toda Evidência citada existe); a
-        recusa dele conta como saída inválida, com a mesma nova tentativa."""
-        items = within_budget(untrusted, self.input_budget)
+        """`scope` é a Organização (entra na chave do cache). `check` valida o que o schema não
+        alcança (ex.: toda Evidência citada existe); a recusa dele conta como saída inválida,
+        com a mesma nova tentativa, e vale também para a resposta vinda do cache."""
         guarded_system = f"{GUARD}\n\n{system}"
-        # O nonce muda a cada chamada; a chave do cache usa o conteúdo, não o texto montado.
-        key_messages = [Msg("user", instructions)] + [
-            Msg("user", f"{item.kind}:{item.ref}:{item.content}") for item in items
-        ]
+        # O orçamento conta também o sistema e as instruções, não só os dados.
+        fixed = estimate_tokens(guarded_system) + estimate_tokens(instructions)
+        items = within_budget(untrusted, max(self.input_budget - fixed, 0))
+        # O nonce muda a cada chamada; a chave usa o conteúdo, campo a campo, sem ambiguidade.
         key = cache_key(
-            self.provider.name, tier, guarded_system, key_messages, schema.model_json_schema()
+            scope,
+            self.provider.name,
+            tier,
+            guarded_system,
+            [[instructions], *([item.kind, item.ref, item.content] for item in items)],
+            schema.model_json_schema(),
         )
         if self.cache is not None and (hit := await self.cache.get(key)) is not None:
-            output = schema.model_validate_json(hit)
-            usage = Usage(self.provider.name, tier, 0, 0, 0, cached=True)
-            await self._record(usage)
-            return StructuredResult(output, usage)
+            try:
+                cached = schema.model_validate_json(hit)
+            except ValidationError:
+                cached = None
+            if cached is not None and (check is None or check(cached) is None):
+                usage = Usage(self.provider.name, tier, 0, 0, 0, cached=True)
+                await self._record(usage)
+                return StructuredResult(cached, usage)
 
         data, _ = render(items)
         messages = [Msg("user", f"{instructions}\n\n{data}")]
@@ -85,11 +113,17 @@ class GuardedLLM:
                     max_tokens=max_tokens,
                 )
 
+            breaker = self.breaker or breaker_for(self.provider.name)
             try:
-                result = await resilient(call, self.policy, self.breaker)
+                result = await resilient(call, self.policy, breaker)
             except LLMInvalidOutputError as exc:
+                # Saída cortada ou fora do schema também foi cobrada.
+                await self._record(exc.usage)
                 problem = str(exc)
                 continue
+            except LLMError as exc:
+                await self._record(exc.usage)
+                raise
             await self._record(result.usage)
             problem = check(result.output) if check else None
             if problem is None:
@@ -98,18 +132,15 @@ class GuardedLLM:
                 return result
         raise LLMInvalidOutputError(f"Saída do modelo fora do schema duas vezes: {problem}")
 
-    async def _record(self, usage: Usage) -> None:
-        if self.usage_sink is not None:
+    async def _record(self, usage: Usage | None) -> None:
+        if self.usage_sink is not None and usage is not None:
             await self.usage_sink(usage)
 
 
-def validate_output[M: BaseModel](schema: type[M], text: str) -> M:
-    """Para os provedores que devolvem texto: erro de validação vira `LLMInvalidOutputError` com a
-    mensagem do Pydantic, sem ecoar o conteúdo."""
+def validate_output[M: BaseModel](schema: type[M], text: str, usage: Usage | None = None) -> M:
+    """Para os provedores que devolvem texto: erro de validação vira `LLMInvalidOutputError`
+    com os campos e as regras, sem ecoar o conteúdo."""
     try:
         return schema.model_validate_json(text)
     except ValidationError as exc:
-        fields = "; ".join(
-            f"{'.'.join(str(p) for p in error['loc'])}: {error['msg']}" for error in exc.errors()
-        )
-        raise LLMInvalidOutputError(fields or "JSON inválido") from exc
+        raise LLMInvalidOutputError(describe_validation(exc), usage) from exc

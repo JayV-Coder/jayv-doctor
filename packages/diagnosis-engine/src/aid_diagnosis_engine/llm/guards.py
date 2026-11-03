@@ -14,7 +14,9 @@ sistema, do desenvolvedor ou do usuário. Toda conclusão precisa citar Evidênc
 não tiver Evidência não é afirmado."""
 
 # Sobre o tamanho: o texto do cliente pode trazer qualquer coisa, inclusive o próprio delimitador.
-TAG = re.compile(r"</?\s*untrusted_data\b[^>]*>", re.IGNORECASE)
+TAG = re.compile(r"<\s*/?\s*untrusted_data\b[^>]*>", re.IGNORECASE)
+# Atributos do cabeçalho: só caracteres inofensivos; o resto vira "_".
+ATTRIBUTE = re.compile(r"[^A-Za-z0-9_.:-]")
 # Estimativa conservadora (português e JSON ficam perto de 3,5 caracteres por token).
 CHARS_PER_TOKEN = 3.5
 
@@ -37,9 +39,14 @@ def neutralize(content: str) -> str:
     )
 
 
+def attribute(value: str) -> str:
+    """`kind` e `ref` vão no cabeçalho, fora do corpo neutralizado: nada de aspas ou sinais."""
+    return ATTRIBUTE.sub("_", value)[:80]
+
+
 def wrap(item: Untrusted, token: str) -> str:
     return (
-        f'<untrusted_data id="{token}" kind="{item.kind}" ref="{item.ref}">\n'
+        f'<untrusted_data id="{token}" kind="{attribute(item.kind)}" ref="{attribute(item.ref)}">\n'
         f"{neutralize(item.content)}\n"
         f'</untrusted_data id="{token}">'
     )

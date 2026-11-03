@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 Tier = Literal["reasoning", "fast"]
 InputType = Literal["document", "query"]
@@ -37,7 +37,12 @@ class StructuredResult[M: BaseModel]:
 
 
 class LLMError(Exception):
-    """Falha do provedor que o diagnóstico trata como modo degradado (as Regras continuam)."""
+    """Falha do provedor que o diagnóstico trata como modo degradado (as Regras continuam).
+    `usage`: o que o provedor cobrou mesmo assim (recusa, saída cortada ou fora do schema)."""
+
+    def __init__(self, message: str, usage: Usage | None = None) -> None:
+        super().__init__(message)
+        self.usage = usage
 
 
 class LLMTransientError(LLMError):
@@ -74,3 +79,14 @@ class LLMProvider(Protocol):
     def embedding_dimensions(self) -> int:
         """Registrada junto com cada vetor: trocar de provedor exige reindexar."""
         ...
+
+
+def describe_validation(exc: ValidationError) -> str:
+    """Só os campos e as regras: o valor pode trazer dado do cliente."""
+    return (
+        "; ".join(
+            f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
+            for error in exc.errors()
+        )
+        or "JSON inválido"
+    )

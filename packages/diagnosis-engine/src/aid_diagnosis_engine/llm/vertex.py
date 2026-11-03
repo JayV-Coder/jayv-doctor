@@ -1,6 +1,6 @@
 """Gemini no Vertex AI, em southamerica-east1 (provedor alternativo, ADR-0007): para quem
 precisa que os dados não saiam da região. Autenticação pela conta de serviço do Cloud Run
-(servidor de metadados); saída em JSON com `responseSchema`, validada de novo pelo Pydantic.
+(servidor de metadados); saída em JSON com `responseJsonSchema`, validada de novo pelo Pydantic.
 Embeddings `text-embedding-005` (768 dimensões).
 """
 
@@ -25,12 +25,18 @@ from aid_diagnosis_engine.llm.client import validate_output
 
 REGION = "southamerica-east1"
 MODELS: dict[Tier, str] = {"reasoning": "gemini-2.5-pro", "fast": "gemini-2.5-flash"}
+# O Gemini 2.5 pensa antes de responder e esse pensamento sai do mesmo teto de tokens: um
+# orçamento fixo, somado ao teto pedido, impede que a resposta saia cortada.
+THINKING_BUDGET: dict[Tier, int] = {"reasoning": 2048, "fast": 0}
 EMBEDDING_MODEL = "text-embedding-005"
 DIMENSIONS = 768
+EMBED_BATCH = 64
 METADATA_URL = (
     "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token"
 )
 TASKS: dict[InputType, str] = {"document": "RETRIEVAL_DOCUMENT", "query": "RETRIEVAL_QUERY"}
+# Bloqueio de segurança do Gemini: é recusa (modo degradado), não saída inválida.
+REFUSALS = {"SAFETY", "RECITATION", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "IMAGE_SAFETY"}
 
 
 class VertexProvider:
@@ -47,6 +53,15 @@ class VertexProvider:
         self.region = region
         self.transport = transport
         self.token: tuple[str, float] | None = None
+        self._client: httpx.AsyncClient | None = None
+
+    @property
+    def client(self) -> httpx.AsyncClient:
+        """Um cliente por instância (e o registro guarda uma instância por processo): a conexão
+        TLS é reaproveitada."""
+        if self._client is None:
+            self._client = httpx.AsyncClient(transport=self.transport, timeout=httpx.Timeout(90.0))
+        return self._client
 
     def base(self, model: str) -> str:
         return (
@@ -54,9 +69,17 @@ class VertexProvider:
             f"/locations/{self.region}/publishers/google/models/{model}"
         )
 
-    async def bearer(self, client: httpx.AsyncClient) -> str:
+    async def bearer(self) -> str:
         if self.token is None or self.token[1] < time.monotonic() + 60:
-            response = await client.get(METADATA_URL, headers={"metadata-flavor": "Google"})
+            try:
+                response = await self.client.get(
+                    METADATA_URL, headers={"metadata-flavor": "Google"}
+                )
+            except httpx.HTTPError as exc:
+                # Fora do GCP ou sem conta de serviço: repetir não traz a credencial.
+                raise LLMUnavailableError(
+                    "Sem credencial do Google Cloud para o Vertex AI."
+                ) from exc
             if response.status_code != 200:
                 raise LLMUnavailableError("Sem credencial do Google Cloud para o Vertex AI.")
             body = response.json()
@@ -66,14 +89,11 @@ class VertexProvider:
     async def post(self, url: str, body: dict[str, Any]) -> dict[str, Any]:
         if not self.project:
             raise LLMUnavailableError("GCP_PROJECT_ID não configurado para o Vertex AI.")
+        token = await self.bearer()
         try:
-            async with httpx.AsyncClient(
-                transport=self.transport, timeout=httpx.Timeout(90.0)
-            ) as client:
-                token = await self.bearer(client)
-                response = await client.post(
-                    url, json=body, headers={"authorization": f"Bearer {token}"}
-                )
+            response = await self.client.post(
+                url, json=body, headers={"authorization": f"Bearer {token}"}
+            )
         except httpx.HTTPError as exc:
             raise LLMTransientError("Vertex AI não respondeu.") from exc
         if response.status_code == 429 or response.status_code >= 500:
@@ -93,6 +113,7 @@ class VertexProvider:
         max_tokens: int,
     ) -> StructuredResult[Any]:
         model = MODELS[model_tier]
+        thinking = THINKING_BUDGET[model_tier]
         start = time.monotonic()
         body = {
             "systemInstruction": {"parts": [{"text": system}]},
@@ -106,35 +127,43 @@ class VertexProvider:
             "generationConfig": {
                 "responseMimeType": "application/json",
                 "responseJsonSchema": schema.model_json_schema(),
-                "maxOutputTokens": max_tokens,
+                "maxOutputTokens": max_tokens + thinking,
+                "thinkingConfig": {"thinkingBudget": thinking},
             },
         }
         found = await self.post(f"{self.base(model)}:generateContent", body)
+        metadata = found.get("usageMetadata", {})
+        usage = Usage(
+            provider=self.name,
+            model=model,
+            input_tokens=int(metadata.get("promptTokenCount", 0)),
+            # O pensamento também é cobrado como saída.
+            output_tokens=int(metadata.get("candidatesTokenCount", 0))
+            + int(metadata.get("thoughtsTokenCount", 0)),
+            latency_ms=round((time.monotonic() - start) * 1000),
+        )
         candidates = found.get("candidates") or []
-        if not candidates:
-            raise LLMUnavailableError("O modelo recusou a análise.")
+        if not candidates or candidates[0].get("finishReason") in REFUSALS:
+            raise LLMUnavailableError("O modelo recusou a análise.", usage)
         first = candidates[0]
         if first.get("finishReason") == "MAX_TOKENS":
-            raise LLMInvalidOutputError("resposta cortada pelo limite de tokens")
+            raise LLMInvalidOutputError("resposta cortada pelo limite de tokens", usage)
         text = "".join(part.get("text", "") for part in first.get("content", {}).get("parts", []))
-        output = validate_output(schema, text)
-        usage = found.get("usageMetadata", {})
-        return StructuredResult(
-            output,
-            Usage(
-                provider=self.name,
-                model=model,
-                input_tokens=int(usage.get("promptTokenCount", 0)),
-                output_tokens=int(usage.get("candidatesTokenCount", 0)),
-                latency_ms=round((time.monotonic() - start) * 1000),
-            ),
-        )
+        return StructuredResult(validate_output(schema, text, usage), usage)
 
     async def embed(self, texts: Sequence[str], *, input_type: InputType) -> list[list[float]]:
-        if not texts:
-            return []
-        found = await self.post(
-            f"{self.base(EMBEDDING_MODEL)}:predict",
-            {"instances": [{"content": text, "task_type": TASKS[input_type]} for text in texts]},
-        )
-        return [list(map(float, p["embeddings"]["values"])) for p in found["predictions"]]
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), EMBED_BATCH):
+            found = await self.post(
+                f"{self.base(EMBEDDING_MODEL)}:predict",
+                {
+                    "instances": [
+                        {"content": text, "task_type": TASKS[input_type]}
+                        for text in texts[start : start + EMBED_BATCH]
+                    ]
+                },
+            )
+            vectors.extend(
+                list(map(float, p["embeddings"]["values"])) for p in found["predictions"]
+            )
+        return vectors

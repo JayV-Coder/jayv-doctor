@@ -11,6 +11,8 @@ from aid_diagnosis_engine.llm.base import InputType, LLMTransientError, LLMUnava
 URL = "https://api.voyageai.com/v1/embeddings"
 MODEL = "voyage-3"
 DIMENSIONS = 1024
+# Textos por pedido (o limite da API é maior; lotes menores falham menos de uma vez).
+BATCH = 64
 
 
 class VoyageEmbeddings:
@@ -23,8 +25,12 @@ class VoyageEmbeddings:
         self.transport = transport
 
     async def embed(self, texts: Sequence[str], *, input_type: InputType) -> list[list[float]]:
-        if not texts:
-            return []
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), BATCH):
+            vectors.extend(await self._embed(texts[start : start + BATCH], input_type))
+        return vectors
+
+    async def _embed(self, texts: Sequence[str], input_type: InputType) -> list[list[float]]:
         if not self.api_key:
             raise LLMUnavailableError("VOYAGE_API_KEY não configurada.")
         try:

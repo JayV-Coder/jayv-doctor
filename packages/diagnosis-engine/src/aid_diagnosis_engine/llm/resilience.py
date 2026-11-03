@@ -12,29 +12,40 @@ from aid_diagnosis_engine.llm.base import LLMTransientError, LLMUnavailableError
 
 @dataclass
 class CircuitBreaker:
+    """Um por provedor e processo (`breaker_for`): conta as falhas de todos os diagnósticos."""
+
     failures_to_open: int = 5
     cooldown_seconds: float = 60.0
     clock: Callable[[], float] = time.monotonic
     failures: int = 0
     opened_at: float | None = None
+    trial: bool = False
 
     def check(self) -> None:
         if self.opened_at is None:
             return
-        if self.clock() - self.opened_at < self.cooldown_seconds:
+        if self.trial or self.clock() - self.opened_at < self.cooldown_seconds:
             raise LLMUnavailableError("Provedor de IA indisponível no momento (circuito aberto).")
-        # Meia-abertura: deixa uma chamada passar; se falhar, abre de novo.
-        self.opened_at = None
-        self.failures = self.failures_to_open - 1
+        # Meia-abertura: uma chamada só passa; as outras esperam o resultado dela.
+        self.trial = True
 
     def success(self) -> None:
         self.failures = 0
         self.opened_at = None
+        self.trial = False
 
     def failure(self) -> None:
         self.failures += 1
-        if self.failures >= self.failures_to_open:
+        if self.trial or self.failures >= self.failures_to_open:
             self.opened_at = self.clock()
+        self.trial = False
+
+
+BREAKERS: dict[str, CircuitBreaker] = {}
+
+
+def breaker_for(provider: str) -> CircuitBreaker:
+    return BREAKERS.setdefault(provider, CircuitBreaker())
 
 
 @dataclass

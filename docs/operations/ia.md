@@ -15,10 +15,11 @@ A dimensão do embedding é do provedor: trocar de provedor numa Organização c
 - **Sem ferramentas:** nenhuma ferramenta é declarada. A resposta estruturada vem de *structured outputs* (`messages.parse` com o schema Pydantic), não de *tool use*: o Sonnet 5.5 e o Haiku 5.5 recusam `tool_choice` forçado (400), e o formato de saída já garante o schema. É o desvio em relação ao texto do ticket #22.
 - **Validação:** Pydantic no schema e, opcionalmente, uma checagem do chamador (toda Evidência citada existe). Saída recusada ganha 1 nova tentativa com o erro; na segunda, `LLMInvalidOutputError` e o diagnóstico fica `failed_llm`, com o resultado das Regras disponível.
 - **Orçamento de entrada:** 60 mil tokens por chamada; as Evidências entram em ordem de relevância enquanto couberem, inteiras.
-- **Resiliência:** timeout de 90 s, até 3 tentativas com backoff e jitter em 429/5xx/rede, e circuit breaker (5 falhas abrem por 60 s). Os retries do SDK ficam desligados para não somar.
+- **Resiliência:** timeout de 90 s, até 3 tentativas com backoff e jitter em 429/5xx/rede, e circuit breaker por provedor no processo (5 falhas abrem por 60 s; na meia-abertura passa uma chamada só). Credencial ausente, 413, 422 e afins não são repetidos. Os retries do SDK ficam desligados para não somar.
 - **Recusa do modelo:** vira `LLMUnavailableError` (modo degradado). Não há fallback automático para outro modelo.
-- **Cache:** por hash de (provedor, tier, sistema, instruções, conteúdo, schema), por 24 h. O nonce não entra na chave. Hoje em memória, por processo.
-- **Uso:** cada chamada (e cada acerto de cache) gera um `Usage` (provedor, modelo, tokens, latência) para `usage_records` (#31), sem conteúdo.
+- **Cache:** por hash de (Organização, provedor, tier, sistema, instruções, cada Evidência, schema), por 24 h. O nonce não entra na chave. A checagem do chamador roda também na resposta guardada (Evidência apagada invalida o acerto). Hoje em memória, por processo, com teto de entradas.
+- **Uso:** cada chamada gera um `Usage` (provedor, modelo, tokens, latência) para `usage_records` (#31), sem conteúdo, inclusive quando falha depois de cobrada (recusa, resposta cortada, fora do schema) e no acerto de cache (tokens zero).
+- **Gemini:** o tier `reasoning` tem orçamento de pensamento de 2.048 tokens, somado ao teto pedido, e os tokens de pensamento entram no uso. Bloqueio de segurança (`SAFETY` e afins) é recusa, como no Claude.
 
 ## Red team
 

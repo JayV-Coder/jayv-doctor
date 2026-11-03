@@ -8,20 +8,26 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from aid_diagnosis_engine.llm.base import Msg
-
 TTL_SECONDS = 24 * 3600
+MAX_ENTRIES = 2000
 
 
 def cache_key(
-    provider: str, model: str, system: str, messages: Sequence[Msg], schema: dict[str, Any]
+    scope: str,
+    provider: str,
+    model: str,
+    system: str,
+    parts: Sequence[Sequence[str]],
+    schema: dict[str, Any],
 ) -> str:
+    """`scope` é a Organização: duas Organizações com o mesmo log nunca dividem resposta."""
     payload = json.dumps(
         {
+            "scope": scope,
             "provider": provider,
             "model": model,
             "system": system,
-            "messages": [[m.role, m.content] for m in messages],
+            "parts": [list(part) for part in parts],
             "schema": schema,
         },
         sort_keys=True,
@@ -41,6 +47,7 @@ class MemoryCache:
     """Por processo; o worker de diagnóstico pode trocar por um cache no banco."""
 
     ttl_seconds: float = TTL_SECONDS
+    max_entries: int = MAX_ENTRIES
     clock: Callable[[], float] = time.monotonic
     entries: dict[str, tuple[float, str]] = field(default_factory=dict)
 
@@ -52,4 +59,10 @@ class MemoryCache:
         return found[1]
 
     async def put(self, key: str, value: str) -> None:
-        self.entries[key] = (self.clock(), value)
+        now = self.clock()
+        # Vencidos saem a cada gravação; acima do teto, saem os mais antigos.
+        for stale in [k for k, (at, _) in self.entries.items() if now - at > self.ttl_seconds]:
+            del self.entries[stale]
+        while len(self.entries) >= self.max_entries:
+            del self.entries[next(iter(self.entries))]
+        self.entries[key] = (now, value)

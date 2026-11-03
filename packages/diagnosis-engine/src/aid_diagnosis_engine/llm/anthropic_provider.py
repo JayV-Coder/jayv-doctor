@@ -24,6 +24,7 @@ from aid_diagnosis_engine.llm.base import (
     StructuredResult,
     Tier,
     Usage,
+    describe_validation,
 )
 from aid_diagnosis_engine.llm.voyage import VoyageEmbeddings
 
@@ -86,35 +87,29 @@ class AnthropicProvider:
         except UNAVAILABLE as exc:
             raise LLMUnavailableError(f"Anthropic: {type(exc).__name__}") from exc
         except ValidationError as exc:
-            raise LLMInvalidOutputError(_fields(exc)) from exc
+            raise LLMInvalidOutputError(describe_validation(exc)) from exc
+        except (anthropic.AnthropicError, TypeError) as exc:
+            # 413, 409, 422, resposta inesperada ou credencial ausente (o SDK levanta TypeError
+            # sem chave): nada que uma nova tentativa resolva.
+            raise LLMUnavailableError(f"Anthropic: {type(exc).__name__}") from exc
+        usage = Usage(
+            provider=self.name,
+            model=model,
+            input_tokens=response.usage.input_tokens
+            + (response.usage.cache_read_input_tokens or 0)
+            + (response.usage.cache_creation_input_tokens or 0),
+            output_tokens=response.usage.output_tokens,
+            latency_ms=round((time.monotonic() - start) * 1000),
+        )
         if response.stop_reason == "refusal":
             # Sem fallback para outro modelo: o diagnóstico cai no modo degradado (só Regras).
-            raise LLMUnavailableError("O modelo recusou a análise.")
+            raise LLMUnavailableError("O modelo recusou a análise.", usage)
         if response.stop_reason == "max_tokens":
-            raise LLMInvalidOutputError("resposta cortada pelo limite de tokens")
+            raise LLMInvalidOutputError("resposta cortada pelo limite de tokens", usage)
         output = response.parsed_output
         if not isinstance(output, BaseModel):
-            raise LLMInvalidOutputError("resposta sem o objeto do schema")
-        usage = response.usage
-        return StructuredResult(
-            output,
-            Usage(
-                provider=self.name,
-                model=model,
-                input_tokens=usage.input_tokens
-                + (usage.cache_read_input_tokens or 0)
-                + (usage.cache_creation_input_tokens or 0),
-                output_tokens=usage.output_tokens,
-                latency_ms=round((time.monotonic() - start) * 1000),
-            ),
-        )
+            raise LLMInvalidOutputError("resposta sem o objeto do schema", usage)
+        return StructuredResult(output, usage)
 
     async def embed(self, texts: Sequence[str], *, input_type: InputType) -> list[list[float]]:
         return await self.embeddings.embed(texts, input_type=input_type)
-
-
-def _fields(exc: ValidationError) -> str:
-    """Só os campos e as regras: o valor pode trazer dado do cliente."""
-    return "; ".join(
-        f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}" for error in exc.errors()
-    )

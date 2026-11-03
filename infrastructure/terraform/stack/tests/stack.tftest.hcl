@@ -178,6 +178,10 @@ run "so_o_relay_publica_e_o_scheduler_o_chama" {
     condition     = google_cloud_scheduler_job.connector_schedule.http_target[0].http_method == "POST"
     error_message = "O agendador dos Conectores roda pelo Cloud Scheduler."
   }
+  assert {
+    condition     = google_cloud_scheduler_job.correlation_close.schedule == "* * * * *"
+    error_message = "O fechamento das Execuções roda pelo Cloud Scheduler."
+  }
 }
 
 run "chave_secreta_do_supabase_e_recusada" {

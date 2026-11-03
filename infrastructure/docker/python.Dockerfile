@@ -10,9 +10,11 @@ COPY pyproject.toml uv.lock ./
 COPY apps/api apps/api
 COPY packages/connectors packages/connectors
 COPY packages/contracts packages/contracts
+COPY packages/correlation packages/correlation
 COPY packages/db packages/db
 COPY packages/security packages/security
 COPY workers/connectors workers/connectors
+COPY workers/correlation workers/correlation
 COPY workers/ingestion workers/ingestion
 COPY workers/relay workers/relay
 COPY workers/runtime workers/runtime

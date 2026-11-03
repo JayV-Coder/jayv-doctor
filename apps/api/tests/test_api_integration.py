@@ -677,3 +677,70 @@ async def test_conector_mostra_intervalo_checkpoint_e_registros_da_ultima_sincro
             text("delete from vault.secrets where name = 'doctor/connector/' || :c"),
             {"c": created.id},
         )
+
+
+@pytest.mark.asyncio
+async def test_dashboard_bate_com_as_consultas_de_controle(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aid_api.core.db as db
+    from aid_api.dashboard.repo import DashboardRepository
+
+    first, second = tenants
+    integration = str(uuid4())
+    now = datetime.now(UTC)
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "insert into doctor.integrations (id, tenant_id, name, source_system,"
+                " target_system, environment) values (:i, :t, 'Painel', 'salesforce', 'sap', 'prd')"
+            ),
+            {"i": integration, "t": first},
+        )
+        await connection.execute(
+            text(
+                "insert into doctor.incidents (tenant_id, integration_id, title, category,"
+                " severity, rule_code, rule_version, first_seen_at, last_seen_at, status,"
+                " resolution_note, resolved_at) values (:t, :i, 'Timeout', 'TIMEOUT', 'high',"
+                " 'INT-003', '2026.10.1', :f, :f, 'resolved', 'ok', :r),"
+                " (:t, :i, 'Auth', 'AUTH', 'high', 'INT-001', '2026.10.1', :f, :f, 'open',"
+                " null, null)"
+            ),
+            {
+                "t": first,
+                "i": integration,
+                "f": now - timedelta(hours=3),
+                "r": now - timedelta(hours=1),
+            },
+        )
+        # Execuções recentes para o agregado: 3 falhas e 1 sucesso na última hora.
+        for index, status in enumerate(("failed", "failed", "failed", "success")):
+            await connection.execute(
+                text(
+                    "insert into doctor.executions (tenant_id, integration_id, status,"
+                    " first_event_at, last_event_at) values (:t, :i, :s, :at, :at)"
+                ),
+                {
+                    "t": first,
+                    "i": integration,
+                    "s": status,
+                    "at": now - timedelta(minutes=30 + index),
+                },
+            )
+        await connection.execute(text("set local role service_role"))
+        await connection.execute(
+            text("select doctor.refresh_execution_stats(now() - interval '1 day')")
+        )
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    board = await DashboardRepository().load(claims_for(first, user), "24h", None, None, now)
+    assert board.executions.value == 4
+    assert board.error_rate.value == 0.75
+    assert board.mttr_minutes.value == 120.0
+    # O aberto conta; o resolvido entra no MTTR (2 h).
+    assert board.open_incidents == 1
+    assert sum(bucket.failed for bucket in board.failures) == 3
+    assert [(c.category, c.count) for c in board.failures_by_category] == [("UNCLASSIFIED", 3)]
+    empty = await DashboardRepository().load(claims_for(second, user), "24h", None, None, now)
+    assert empty.executions.value == 0
+    assert empty.error_rate.value is None
+    assert empty.mttr_minutes.value is None

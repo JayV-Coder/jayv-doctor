@@ -328,6 +328,28 @@ resource "google_cloud_scheduler_job" "correlation_close" {
   depends_on = [module.project]
 }
 
+# Agregado do Dashboard (ticket #21): recalcula as horas tocadas desde a última rodada.
+resource "google_cloud_scheduler_job" "dashboard_stats" {
+  project          = var.project_id
+  region           = var.region
+  name             = "${local.name_prefix}-dashboard-stats"
+  schedule         = "*/10 * * * *"
+  time_zone        = "Etc/UTC"
+  attempt_deadline = "120s"
+
+  http_target {
+    http_method = "POST"
+    uri         = "${module.workers["correlation"].uri}/stats"
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = module.workers["correlation"].uri
+    }
+  }
+
+  depends_on = [module.project]
+}
+
 resource "google_cloud_scheduler_job" "outbox_relay" {
   project          = var.project_id
   region           = var.region

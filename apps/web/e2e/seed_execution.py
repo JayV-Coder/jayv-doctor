@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 from aid_correlation_worker.close import close_idle
 from aid_correlation_worker.correlate import correlate_integration
+from aid_correlation_worker.stats import refresh_stats
 from aid_diagnosis_worker.evaluate import evaluate_execution
 from aid_security.references import derive_tenant_key, reference_hmac
 from sqlalchemy import text
@@ -113,6 +114,7 @@ async def main(organization: str, integration_name: str) -> None:
             {"i": found.integration},
         )
     await evaluate_execution(engine, {"execution_id": execution})
+    await refresh_stats(engine)
     await engine.dispose()
     print(execution)  # noqa: T201
 

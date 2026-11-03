@@ -2825,6 +2825,98 @@
           }
         }
       }
+    },
+    "/api/v1/dashboard": {
+      "get": {
+        "tags": ["dashboard"],
+        "summary": "Dashboard",
+        "operationId": "dashboard_api_v1_dashboard_get",
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["24h", "7d", "30d"],
+              "type": "string",
+              "default": "24h",
+              "title": "Period"
+            }
+          },
+          {
+            "name": "environment",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": ["prd", "hml", "dev"],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Environment"
+            }
+          },
+          {
+            "name": "integration_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Integration Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dashboard"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2851,6 +2943,41 @@
         "type": "object",
         "required": ["tenant_id"],
         "title": "AcceptedInvitation"
+      },
+      "Bucket": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          }
+        },
+        "type": "object",
+        "required": ["start", "total", "failed"],
+        "title": "Bucket"
+      },
+      "CategoryCount": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": ["category", "count"],
+        "title": "CategoryCount"
       },
       "Comment": {
         "properties": {
@@ -3215,6 +3342,102 @@
         "type": "object",
         "required": ["id"],
         "title": "CreatedOrganization"
+      },
+      "Dashboard": {
+        "properties": {
+          "period": {
+            "type": "string",
+            "enum": ["24h", "7d", "30d"],
+            "title": "Period"
+          },
+          "bucket": {
+            "type": "string",
+            "enum": ["hour", "day"],
+            "title": "Bucket"
+          },
+          "executions": {
+            "$ref": "#/components/schemas/Kpi"
+          },
+          "error_rate": {
+            "$ref": "#/components/schemas/Kpi"
+          },
+          "mttr_minutes": {
+            "$ref": "#/components/schemas/Kpi"
+          },
+          "open_incidents": {
+            "type": "integer",
+            "title": "Open Incidents"
+          },
+          "mttr_baseline_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mttr Baseline Minutes"
+          },
+          "mttr_vs_baseline": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mttr Vs Baseline"
+          },
+          "failures": {
+            "items": {
+              "$ref": "#/components/schemas/Bucket"
+            },
+            "type": "array",
+            "title": "Failures"
+          },
+          "failures_by_category": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryCount"
+            },
+            "type": "array",
+            "title": "Failures By Category"
+          },
+          "critical_incident": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IncidentRow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recent_incidents": {
+            "items": {
+              "$ref": "#/components/schemas/IncidentRow"
+            },
+            "type": "array",
+            "title": "Recent Incidents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "period",
+          "bucket",
+          "executions",
+          "error_rate",
+          "mttr_minutes",
+          "open_incidents",
+          "mttr_baseline_minutes",
+          "mttr_vs_baseline",
+          "failures",
+          "failures_by_category",
+          "critical_incident",
+          "recent_incidents"
+        ],
+        "title": "Dashboard"
       },
       "EventDetail": {
         "properties": {
@@ -4189,6 +4412,66 @@
         "required": ["id", "title", "severity", "status"],
         "title": "IncidentRef"
       },
+      "IncidentRow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "integration_name": {
+            "type": "string",
+            "title": "Integration Name"
+          },
+          "environment": {
+            "type": "string",
+            "enum": ["prd", "hml", "dev"],
+            "title": "Environment"
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Seen At"
+          },
+          "execution_count": {
+            "type": "integer",
+            "title": "Execution Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "title",
+          "severity",
+          "status",
+          "category",
+          "integration_name",
+          "environment",
+          "last_seen_at",
+          "execution_count"
+        ],
+        "title": "IncidentRow"
+      },
       "IncidentSearch": {
         "properties": {
           "q": {
@@ -4712,6 +4995,46 @@
         "type": "object",
         "required": ["id", "email", "role", "expires_at"],
         "title": "Invitation"
+      },
+      "Kpi": {
+        "properties": {
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous"
+          },
+          "change": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change"
+          }
+        },
+        "type": "object",
+        "required": ["value", "previous", "change"],
+        "title": "Kpi"
       },
       "Me": {
         "properties": {

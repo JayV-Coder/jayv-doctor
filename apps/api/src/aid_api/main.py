@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from aid_api import __version__
 from aid_api.connectors import router as connectors
 from aid_api.core import errors, telemetry
+from aid_api.dashboard import router as dashboard
 from aid_api.executions import router as executions
 from aid_api.health import router as health
 from aid_api.imports import router as imports
@@ -28,6 +29,7 @@ def create_app() -> FastAPI:
     app.include_router(connectors.router)
     app.include_router(executions.router)
     app.include_router(incidents.router)
+    app.include_router(dashboard.router)
     telemetry.configure(app)
     return app
 

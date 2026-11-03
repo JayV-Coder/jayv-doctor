@@ -22,3 +22,7 @@ O Cloud Scheduler chama `POST /close` a cada minuto (`aid-correlation-close`). E
 | o resto | `success` |
 
 Cada Execução fechada põe `rules.evaluate` (`execution_id`, `integration_id`) na outbox, consumido pelo worker `diagnosis` (Regras e Incidentes, `docs/operations/regras.md`).
+
+## Agregado do Dashboard
+
+O Cloud Scheduler chama `POST /stats` a cada 10 min (`aid-dashboard-stats`): `doctor.refresh_execution_stats` recalcula as horas tocadas desde 25 min antes (`docs/api/dashboard.md`). O worker de Regras marca a Execução como alterada quando a põe num Incidente, para a categoria entrar na hora certa.

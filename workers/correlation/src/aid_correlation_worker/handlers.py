@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aid_correlation_worker.close import close_idle
 from aid_correlation_worker.correlate import correlate_integration
+from aid_correlation_worker.stats import refresh_stats
 
 Handler = Callable[[Mapping[str, Any]], Awaitable[None]]
 
@@ -33,3 +34,8 @@ router = APIRouter()
 @router.post("/close")
 async def close() -> dict[str, int]:
     return {"closed": await close_idle(engine())}
+
+
+@router.post("/stats")
+async def stats() -> dict[str, int]:
+    return {"hours": await refresh_stats(engine())}

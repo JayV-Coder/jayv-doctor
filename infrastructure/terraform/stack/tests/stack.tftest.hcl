@@ -183,6 +183,10 @@ run "so_o_relay_publica_e_o_scheduler_o_chama" {
     condition     = google_cloud_scheduler_job.correlation_close.schedule == "* * * * *"
     error_message = "O fechamento das Execuções roda pelo Cloud Scheduler."
   }
+  assert {
+    condition     = google_cloud_scheduler_job.dashboard_stats.schedule == "*/10 * * * *"
+    error_message = "O agregado do Dashboard recalcula a cada 10 min (atraso bem abaixo de 1 h)."
+  }
 }
 
 run "chave_secreta_do_supabase_e_recusada" {

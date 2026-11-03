@@ -4,6 +4,7 @@ segundo. O contexto é lido com a claim do tenant do Incidente (RLS, como na API
 Organização entra no prompt nem vira Evidência. A publicação grava tudo numa transação só."""
 
 import json
+import os
 from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
 from typing import Any, cast
@@ -41,16 +42,63 @@ DESCRIPTIONS = {rule.code: (rule.category, rule.description_pt) for rule in RULE
 ProviderFor = Callable[[str], LLMProvider]
 
 
-async def ai_allowed(engine: AsyncEngine, tenant: str) -> bool:
-    """A Organização permite enviar evidências ao LLM (#29)? A Cota de IA entra aqui com o #31
-    (`usage_records`); até lá, só a chave da Organização decide."""
+LLM_DISABLED = (
+    "Envio de evidências ao LLM desligado pela Organização: Diagnóstico só com as Regras."
+)
+QUOTA_EXHAUSTED = "Cota de IA do mês esgotada: Diagnóstico só com as Regras."
+
+
+async def ai_gate(engine: AsyncEngine, tenant: str) -> tuple[bool, bool]:
+    """(envio ao LLM ligado pela Organização (#29), ainda há Cota de IA no mês (#31))."""
     async with engine.begin() as connection:
         await platform_role(connection)
-        enabled = await connection.scalar(
-            text("select llm_enabled from doctor.tenants where id = cast(:t as uuid)"),
-            {"t": tenant},
+        row = (
+            await connection.execute(
+                text(
+                    "select t.llm_enabled, doctor.llm_quota_available(t.id) as quota"
+                    " from doctor.tenants t where t.id = cast(:t as uuid)"
+                ),
+                {"t": tenant},
+            )
+        ).first()
+    return (bool(row.llm_enabled), bool(row.quota)) if row else (False, False)
+
+
+def estimate_cost(model: str | None, input_tokens: int, output_tokens: int) -> float | None:
+    """Pela tabela de preços (`AID_LLM_PRICES`, JSON por modelo, por milhão de tokens), copiada
+    da tabela oficial do provedor; sem ela, o custo fica em aberto."""
+    raw = os.environ.get("AID_LLM_PRICES")
+    if not raw or not model:
+        return None
+    price = json.loads(raw).get(model)
+    if not price:
+        return None
+    total = input_tokens / 1e6 * float(price["input_per_mtok"]) + output_tokens / 1e6 * float(
+        price["output_per_mtok"]
+    )
+    return round(total, 6)
+
+
+async def record_llm_usage(engine: AsyncEngine, diagnosis: Any, draft: DiagnosisDraft) -> None:
+    if draft.input_tokens == 0 and draft.output_tokens == 0:
+        return
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        await connection.execute(
+            text(
+                "select doctor.record_llm_usage(cast(:t as uuid), cast(:d as uuid), :p, :m,"
+                " :i, :o, :c)"
+            ),
+            {
+                "t": diagnosis.tenant_id,
+                "d": diagnosis.id,
+                "p": draft.provider or "desconhecido",
+                "m": draft.model,
+                "i": draft.input_tokens,
+                "o": draft.output_tokens,
+                "c": estimate_cost(draft.model, draft.input_tokens, draft.output_tokens),
+            },
         )
-    return bool(enabled)
 
 
 class DbLoader:
@@ -371,15 +419,12 @@ async def diagnose(
     try:
         provider = provider_for(diagnosis.llm_provider)
         hybrid = diagnosis.requested_mode == "hybrid"
-        llm_enabled = await ai_allowed(engine, diagnosis.tenant_id)
-        allowed = hybrid and llm_enabled
+        llm_enabled, quota = await ai_gate(engine, diagnosis.tenant_id)
+        allowed = hybrid and llm_enabled and quota
         motor = DiagnosisEngine(
             GuardedLLM(provider) if allowed else None,
             scope=diagnosis.tenant_id,
-            without_ai=(
-                "Envio de evidências ao LLM desligado pela Organização: Diagnóstico só com"
-                " as Regras."
-            ),
+            without_ai=LLM_DISABLED if not llm_enabled else QUOTA_EXHAUSTED,
         )
         # Envio ao LLM desligado: a Base também não gera o embedding da pergunta (só o texto). No
         # rules_only com o envio ligado, o embedding da Base continua.
@@ -393,6 +438,9 @@ async def diagnose(
             on_stage=on_stage,
         )
         published = await publish(engine, diagnosis, draft)
+        if published:
+            # Tokens cobrados (inclusive numa falha do LLM depois de chamado) e a Cota de IA.
+            await record_llm_usage(engine, diagnosis, draft)
     except DiagnosisError as exc:
         await fail(engine, diagnosis, str(exc))
         return "failed"

@@ -208,3 +208,27 @@ async def test_retencao_de_logs_brutos_acima_de_30_dias_vale(
     await run(
         engine, "delete from doctor.retention_policies where tenant_id = :t", t=tenant["tenant"]
     )
+
+
+@pytest.mark.asyncio
+async def test_armazenamento_medido_por_organizacao(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    from aid_diagnosis_worker.retention import measure_storage
+
+    storage = RecordingStorage()
+    path = f"{tenant['tenant']}/api/{uuid4()}.json"
+    await storage.put(RAW_LOGS, path)
+    try:
+        await measure_storage(engine)
+        async with engine.begin() as connection:
+            used = await connection.scalar(
+                text(
+                    "select quantity from doctor.usage_records where tenant_id = cast(:t as uuid)"
+                    " and resource = 'storage_bytes'"
+                ),
+                {"t": tenant["tenant"]},
+            )
+        assert used == len(b"conteudo")
+    finally:
+        await storage.remove(RAW_LOGS, [path])

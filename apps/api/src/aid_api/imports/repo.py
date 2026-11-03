@@ -38,6 +38,7 @@ ERRORS = {
     "42501": lambda: ApiError(403, "forbidden", "Seu Papel não permite esta ação."),
     "22023": lambda: ApiError(422, "invalid_filename", "Nome de arquivo inválido."),
     "DR005": not_pending,
+    "DR050": lambda: ApiError(429, "quota_exceeded", "A Cota de Eventos do mês foi esgotada."),
 }
 
 

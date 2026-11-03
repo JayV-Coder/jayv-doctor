@@ -29,6 +29,9 @@ ERRORS: dict[str, Callable[[], ApiError]] = {
         403, "invitation_email_mismatch", "Este convite é de outro e-mail confirmado."
     ),
     "DR004": lambda: ApiError(409, "already_member", "Esta pessoa já é membro da Organização."),
+    "DR051": lambda: ApiError(
+        409, "plan_limit", "O plano da Organização chegou ao limite de membros (com os convites)."
+    ),
     "23505": lambda: ApiError(
         409, "already_invited", "Já há um convite pendente para este e-mail."
     ),

@@ -97,6 +97,12 @@ begin
   insert into doctor.audit_logs (tenant_id, actor_type, action) values (t, 'system', 'teste.isolamento');
   insert into doctor.retention_policies (tenant_id, data_class, days) values (t, 'raw_logs', 15);
   insert into doctor.deletion_receipts (tenant_id, requested_at) values (t, now());
+  insert into doctor.usage_records (tenant_id, resource, period_start, quantity)
+  values (t, 'diagnoses_llm', date_trunc('month', now())::date, 1)
+  on conflict (tenant_id, resource, period_start) do nothing;
+  insert into doctor.usage_llm (tenant_id, diagnosis_id, provider) values (t, diagnosis, 'fake');
+  insert into doctor.usage_alerts (tenant_id, resource, period_start, threshold)
+  values (t, 'diagnoses_llm', date_trunc('month', now())::date, 80);
 end;
 $$;
 

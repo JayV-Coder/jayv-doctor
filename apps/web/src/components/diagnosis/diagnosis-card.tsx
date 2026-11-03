@@ -84,6 +84,15 @@ function Result({ diagnosis }: Props) {
           {correction.correct_cause && <p className="cause">{correction.correct_cause}</p>}
         </div>
       )}
+      {diagnosis.requested_mode === "hybrid" &&
+        diagnosis.mode === "rules_only" &&
+        diagnosis.status !== "failed_llm" &&
+        diagnosis.verification_notes[0] && (
+          // Pedido híbrido que rodou só com as Regras: a tela diz por quê (Cota ou envio desligado).
+          <p className="alert" role="status">
+            {diagnosis.verification_notes[0]}
+          </p>
+        )}
       {diagnosis.status === "failed_llm" && (
         <p className="alert" role="status">
           O modelo de IA falhou: este Diagnóstico foi montado só com as Regras determinísticas.

@@ -6,7 +6,7 @@ locals {
     # O Log bruto chega a 50 MB e é lido inteiro: 1 GiB de folga para o parse e a Sanitização.
     ingestion   = { secrets = ["supabase-db-url", "hmac-master-key", "supabase-service-role-key"], memory = "1Gi", timeout = "300s" }
     correlation = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "300s" }
-    diagnosis   = { secrets = ["supabase-db-url", "anthropic-api-key", "voyage-api-key", "supabase-service-role-key"], memory = "1Gi", timeout = "600s" }
+    diagnosis   = { secrets = ["supabase-db-url", "anthropic-api-key", "voyage-api-key", "supabase-service-role-key", "smtp-url"], memory = "1Gi", timeout = "600s" }
     connectors  = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "600s" }
     # Relay da outbox: o único que publica nos tópicos, chamado pelo Cloud Scheduler.
     relay = { secrets = ["supabase-db-url"], memory = "256Mi", timeout = "60s" }
@@ -28,7 +28,9 @@ locals {
     "diagnosis.requested" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
     # Diagnóstico publicado (#24): quem consome chega com os alertas (v0.3).
     "diagnosis.published" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
-    "connector.sync"      = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
+    # Avisos de Cota aos 80% e 100% (#31): e-mail para Owner e Admin.
+    "usage.threshold" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    "connector.sync"  = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
   }
 
   # voyage-api-key: a busca da Base de conhecimento gera o embedding da pergunta (#23).

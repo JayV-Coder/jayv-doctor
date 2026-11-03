@@ -1,17 +1,16 @@
 """Rotas do Explorador de Execuções (ticket #19). Todo Papel lê; o Log bruto é de Analyst para
 cima, auditado, por URL assinada de 5 min."""
 
-import os
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from aid_security.references import derive_tenant_key, reference_hmac
 from fastapi import APIRouter, Depends
 
 from aid_api.core.auth import Claims, get_bearer_token, require_role
 from aid_api.core.permissions import OPERATE, VIEW
 from aid_api.core.rate_limit import rate_limit
+from aid_api.core.references import reference_of
 from aid_api.core.storage import Storage, get_storage
 from aid_api.executions.repo import ExecutionRepository, get_execution_repository
 from aid_api.executions.schemas import (
@@ -31,15 +30,6 @@ Operator = Annotated[Claims, Depends(require_role(*OPERATE))]
 Repository = Annotated[ExecutionRepository, Depends(get_execution_repository)]
 StorageDep = Annotated[Storage, Depends(get_storage)]
 Token = Annotated[str, Depends(get_bearer_token)]
-
-
-def reference_of(claims: Claims, term: str | None) -> str | None:
-    """O termo vira HMAC com a chave da Organização, como na ingestão: o número digitado nunca
-    chega ao banco nem aos logs. Sem a chave configurada, a busca fica só pelos ids técnicos."""
-    master = os.environ.get("HMAC_MASTER_KEY")
-    if not term or not master or claims.tenant_id is None:
-        return None
-    return reference_hmac(derive_tenant_key(master.encode(), UUID(claims.tenant_id)), term)
 
 
 @router.post("/executions/search", response_model=ExecutionPage)

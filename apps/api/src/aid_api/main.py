@@ -6,6 +6,7 @@ from aid_api.core import errors, telemetry
 from aid_api.executions import router as executions
 from aid_api.health import router as health
 from aid_api.imports import router as imports
+from aid_api.incidents import router as incidents
 from aid_api.ingestion import router as ingestion
 from aid_api.integrations import router as integrations
 from aid_api.orgs import router as orgs
@@ -26,6 +27,7 @@ def create_app() -> FastAPI:
     app.include_router(ingestion.events)
     app.include_router(connectors.router)
     app.include_router(executions.router)
+    app.include_router(incidents.router)
     telemetry.configure(app)
     return app
 

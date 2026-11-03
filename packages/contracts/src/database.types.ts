@@ -2,7 +2,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
-
+  
   "doctor": {
           Tables: {
             "audit_logs": {
@@ -263,6 +263,52 @@ isOneToOne: false
       referencedColumns: ["tenant_id","id"]
     }
                   ]
+                },"incident_comments": {
+                  Row: {
+                    "author_id": string | null,"body_md": string,"created_at": string,"edited_at": string | null,"id": string,"incident_id": string,"mentions": (string)[],"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "author_id"?: string | null,"body_md": string,"created_at"?: string,"edited_at"?: string | null,"id"?: string,"incident_id": string,"mentions"?: (string)[],"tenant_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "author_id"?: string | null,"body_md"?: string,"created_at"?: string,"edited_at"?: string | null,"id"?: string,"incident_id"?: string,"mentions"?: (string)[],"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "incident_comments_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "incident_comments_tenant_id_incident_id_fkey"
+      columns: ["tenant_id","incident_id"]
+isOneToOne: false
+      referencedRelation: "incidents"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"incident_counters": {
+                  Row: {
+                    "last_number": number,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "last_number"?: number,"tenant_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "last_number"?: number,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "incident_counters_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: true
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"incident_executions": {
                   Row: {
                     "created_at": string,"execution_id": string,"id": string,"incident_id": string,"tenant_id": string,"updated_at": string
@@ -295,16 +341,42 @@ isOneToOne: false
       referencedColumns: ["tenant_id","id"]
     }
                   ]
-                },"incidents": {
+                },"incident_history": {
                   Row: {
-                    "assignee_id": string | null,"category": string,"created_at": string,"execution_count": number,"first_seen_at": string,"id": string,"integration_id": string,"last_seen_at": string,"resolution_note": string | null,"resolved_at": string | null,"rule_code": string,"rule_version": string,"severity": string,"status": string,"tenant_id": string,"title": string,"updated_at": string
+                    "action": string,"actor_id": string | null,"created_at": string,"from_value": string | null,"id": string,"incident_id": string,"note": string | null,"tenant_id": string,"to_value": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "assignee_id"?: string | null,"category": string,"created_at"?: string,"execution_count"?: number,"first_seen_at": string,"id"?: string,"integration_id": string,"last_seen_at": string,"resolution_note"?: string | null,"resolved_at"?: string | null,"rule_code": string,"rule_version": string,"severity": string,"status"?: string,"tenant_id": string,"title": string,"updated_at"?: string
+                    "action": string,"actor_id"?: string | null,"created_at"?: string,"from_value"?: string | null,"id"?: string,"incident_id": string,"note"?: string | null,"tenant_id": string,"to_value"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "assignee_id"?: string | null,"category"?: string,"created_at"?: string,"execution_count"?: number,"first_seen_at"?: string,"id"?: string,"integration_id"?: string,"last_seen_at"?: string,"resolution_note"?: string | null,"resolved_at"?: string | null,"rule_code"?: string,"rule_version"?: string,"severity"?: string,"status"?: string,"tenant_id"?: string,"title"?: string,"updated_at"?: string
+                    "action"?: string,"actor_id"?: string | null,"created_at"?: string,"from_value"?: string | null,"id"?: string,"incident_id"?: string,"note"?: string | null,"tenant_id"?: string,"to_value"?: string | null,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "incident_history_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "incident_history_tenant_id_incident_id_fkey"
+      columns: ["tenant_id","incident_id"]
+isOneToOne: false
+      referencedRelation: "incidents"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"incidents": {
+                  Row: {
+                    "assignee_id": string | null,"category": string,"created_at": string,"execution_count": number,"first_seen_at": string,"id": string,"integration_id": string,"last_seen_at": string,"number": number,"resolution_note": string | null,"resolved_at": string | null,"rule_code": string,"rule_version": string,"severity": string,"status": string,"tenant_id": string,"title": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "assignee_id"?: string | null,"category": string,"created_at"?: string,"execution_count"?: number,"first_seen_at": string,"id"?: string,"integration_id": string,"last_seen_at": string,"number": number,"resolution_note"?: string | null,"resolved_at"?: string | null,"rule_code": string,"rule_version": string,"severity": string,"status"?: string,"tenant_id": string,"title": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "assignee_id"?: string | null,"category"?: string,"created_at"?: string,"execution_count"?: number,"first_seen_at"?: string,"id"?: string,"integration_id"?: string,"last_seen_at"?: string,"number"?: number,"resolution_note"?: string | null,"resolved_at"?: string | null,"rule_code"?: string,"rule_version"?: string,"severity"?: string,"status"?: string,"tenant_id"?: string,"title"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -503,7 +575,7 @@ isOneToOne: false
                     "active"?: boolean,"category"?: string,"code"?: string,"created_at"?: string,"description"?: string,"severity_hint"?: string,"version"?: string
                   }
                   Relationships: [
-
+                    
                   ]
                 },"rule_matches": {
                   Row: {
@@ -549,7 +621,7 @@ isOneToOne: false
                     "applied_at"?: string,"version"?: string
                   }
                   Relationships: [
-
+                    
                   ]
                 },"tenants": {
                   Row: {
@@ -563,7 +635,7 @@ isOneToOne: false
                     "created_at"?: string,"dpa_accepted_at"?: string | null,"id"?: string,"llm_provider"?: string,"plan"?: string,"segment"?: string | null,"status"?: string,"updated_at"?: string
                   }
                   Relationships: [
-
+                    
                   ]
                 },"user_active_tenant": {
                   Row: {
@@ -597,8 +669,11 @@ isOneToOne: false
 "accept_invitation":
 { Args: { "token_hash": string }; Returns: string
                            },
+"add_incident_comment":
+{ Args: { "body": string,"mentioned": (string)[],"target": string }; Returns: string
+                           },
 "create_connector":
-{ Args: { "config": Json,"integration_id": string,"name": string,"provider": string,"secret": string }; Returns: string
+{ Args: { "config": Json,"integration_id": string,"name": string,"provider": string,"secret": string,"sync_interval_seconds"?: number }; Returns: string
                            },
 "create_import":
 { Args: { "filename": string,"integration_id": string,"sha256": string,"size_bytes": number }; Returns: {
@@ -759,6 +834,9 @@ isOneToOne: false
 "update_connector":
 { Args: { "config": Json,"name": string,"sync_interval_seconds": number,"target": string }; Returns: undefined
                            },
+"update_incident":
+{ Args: { "new_assignee": string,"new_severity": string,"new_status": string,"note": string,"set_assignee": boolean,"target": string }; Returns: undefined
+                           },
 "update_member_role":
 { Args: { "role": string,"target": string }; Returns: undefined
                            }
@@ -880,7 +958,7 @@ export type CompositeTypes<
 export const Constants = {
   "doctor": {
           Enums: {
-
+            
           }
         }
 } as const

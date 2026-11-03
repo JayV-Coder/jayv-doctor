@@ -545,6 +545,63 @@ async def test_download_do_log_bruto_exige_analyst(
 
 
 @pytest.mark.asyncio
+async def test_incidentes_busca_contagens_fluxo_e_comentarios(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aid_api.core.db as db
+    from aid_api.incidents.repo import IncidentRepository
+    from aid_api.incidents.schemas import IncidentChange, IncidentSearch, NewComment
+
+    first, second = tenants
+    seeded = await seed_explorer(engine, first, second)
+    await add_admin(engine, first, user)
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("update doctor.memberships set role = 'analyst' where user_id = :u"), {"u": user}
+        )
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    analyst = claims_for(first, user, "analyst")
+    repository = IncidentRepository()
+
+    page = await repository.search(analyst, IncidentSearch(), None)
+    (incident,) = page.items
+    assert page.counts == {"open": 1}
+    assert incident.number == 1
+    for term, reference in (("INC-0001", None), ("1", None), ("trace-abc", None)):
+        found = await repository.search(analyst, IncidentSearch(q=term), reference)
+        assert [item.id for item in found.items] == [incident.id]
+    found = await repository.search(analyst, IncidentSearch(q="4500012345"), seeded["reference"])
+    assert [item.id for item in found.items] == [incident.id]
+    assert (await repository.search(analyst, IncidentSearch(q="INC-0002"), None)).items == []
+
+    detail = await repository.detail(analyst, incident.id)
+    assert [e.id for e in detail.executions] == [seeded["x1"]]
+    assert detail.evidence[0].rule_code == "INT-003"
+    assert detail.evidence[0].matched_event_ids == [seeded["e2"]]
+
+    changed = await repository.update(
+        analyst,
+        incident.id,
+        IncidentChange.model_validate({"status": "resolved", "resolution_note": "Gateway ok."}),
+    )
+    assert changed.status == "resolved"
+    assert changed.resolution_note == "Gateway ok."
+    assert [h.action for h in changed.history] == ["status"]
+    with pytest.raises(ApiError) as invalid:
+        await repository.update(
+            analyst, incident.id, IncidentChange.model_validate({"status": "investigating"})
+        )
+    assert invalid.value.code == "invalid_transition"
+    assert (await repository.search(analyst, IncidentSearch(), None)).counts == {"resolved": 1}
+
+    created = await repository.comment(analyst, incident.id, NewComment(body_md="Resolvido."))
+    assert [c.id for c in await repository.comments(analyst, incident.id)] == [created.id]
+    with pytest.raises(ApiError) as other:
+        await repository.detail(claims_for(second, user, "analyst"), incident.id)
+    assert other.value.status == 404
+
+
+@pytest.mark.asyncio
 async def test_conector_mostra_intervalo_checkpoint_e_registros_da_ultima_sincronizacao(
     engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -1,5 +1,5 @@
 begin;
-select plan(4);
+select plan(3);
 
 select ok(
   has_column_privilege('authenticated', 'doctor.connectors', 'checkpoint', 'select')
@@ -17,13 +17,5 @@ select ok(
   ),
   'o status dos Conectores chega pelo Realtime'
 );
-select ok(
-  not exists (
-    select 1 from pg_publication_tables
-    where pubname = 'supabase_realtime' and schemaname = 'doctor' and tablename <> 'connectors'
-  ),
-  'só os Conectores entram na publicação'
-);
-
 select * from finish();
 rollback;

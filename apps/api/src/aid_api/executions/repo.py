@@ -1,8 +1,6 @@
 """Explorador de Execuções dentro de `tenant_tx`: tudo é leitura, e o RLS limita à Organização
 ativa. O download do Log bruto passa por uma função do banco que confere o Papel e audita."""
 
-import base64
-import binascii
 import json
 from collections.abc import Awaitable, Callable
 from datetime import datetime
@@ -16,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from aid_api.core.auth import Claims
 from aid_api.core.db import translated_tx
 from aid_api.core.errors import ApiError
+from aid_api.core.pagination import decode_cursor, encode_cursor
 from aid_api.executions.schemas import (
     EventDetail,
     ExecutionDetail,
@@ -31,10 +30,6 @@ from aid_api.executions.schemas import (
 
 def not_found(what: str = "Execução") -> ApiError:
     return ApiError(404, "not_found", f"{what} não encontrado(a).")
-
-
-def bad_cursor() -> ApiError:
-    return ApiError(422, "invalid_cursor", "Cursor de paginação inválido.")
 
 
 ERRORS = {
@@ -54,19 +49,6 @@ SUMMARY = (
     "  on ie.tenant_id = x.tenant_id and ie.execution_id = x.id"
     " left join doctor.incidents inc on inc.tenant_id = ie.tenant_id and inc.id = ie.incident_id"
 )
-
-
-def encode_cursor(row: ExecutionSummary) -> str:
-    raw = json.dumps([row.first_event_at.isoformat(), row.id]).encode()
-    return base64.urlsafe_b64encode(raw).decode()
-
-
-def decode_cursor(cursor: str) -> tuple[datetime, str]:
-    try:
-        moment, target = json.loads(base64.urlsafe_b64decode(cursor.encode()))
-        return datetime.fromisoformat(moment), str(UUID(target))
-    except (ValueError, TypeError, binascii.Error) as exc:
-        raise bad_cursor() from exc
 
 
 def summary(row: RowMapping) -> ExecutionSummary:
@@ -147,7 +129,10 @@ class ExecutionRepository:
             ]
         more = len(rows) > query.limit
         items = rows[: query.limit]
-        return ExecutionPage(items=items, next_cursor=encode_cursor(items[-1]) if more else None)
+        return ExecutionPage(
+            items=items,
+            next_cursor=encode_cursor(items[-1].first_event_at, items[-1].id) if more else None,
+        )
 
     async def detail(self, claims: Claims, target: str) -> ExecutionDetail:
         async with translated_tx(claims, ERRORS) as connection:

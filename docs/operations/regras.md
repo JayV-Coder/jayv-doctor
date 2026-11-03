@@ -34,6 +34,8 @@ O worker `diagnosis` consome `rules.evaluate` (posto pelo fechamento da Execuç�
 - o aberto (`open` ou `investigating`) da mesma Integração e categoria cuja janela de ocorrências, alargada em 30 min para cada lado, cruza a da Execução;
 - senão, um novo, com título "Categoria · Integração" e a Regra/versão que o abriu.
 
+Sem Incidente aberto na janela, um `resolved` há até 24 h com a mesma Integração e categoria é reaberto (histórico `reopened`) em vez de nascer outro (ticket #20).
+
 Severidade: a dica da Regra, um nível acima em produção, e crítica a partir de 20 Execuções. Ela só sobe automaticamente. Abrir põe `incident.opened` na outbox; somar Execução, `incident.updated`. Quem consome esses tópicos chega com o Diagnóstico (#24) e os alertas (v0.3); até lá o worker só confirma a entrega.
 
 Um lock por Integração e categoria evita dois Incidentes abertos para a mesma assinatura. Mensagem repetida não duplica (unique do match por versão e da Execução no Incidente). Execução fundida em outra não é avaliada: a sobrevivente é, quando fecha.

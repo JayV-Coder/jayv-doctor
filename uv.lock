@@ -11,6 +11,8 @@ members = [
     "aid-correlation",
     "aid-correlation-worker",
     "aid-db",
+    "aid-diagnosis-engine",
+    "aid-diagnosis-worker",
     "aid-ingestion",
     "aid-relay",
     "aid-security",
@@ -142,6 +144,30 @@ requires-dist = [
 ]
 
 [[package]]
+name = "aid-diagnosis-engine"
+version = "2026.10.1"
+source = { editable = "packages/diagnosis-engine" }
+
+[[package]]
+name = "aid-diagnosis-worker"
+version = "0.0.0"
+source = { editable = "workers/diagnosis" }
+dependencies = [
+    { name = "aid-db" },
+    { name = "aid-diagnosis-engine" },
+    { name = "fastapi" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aid-db", editable = "packages/db" },
+    { name = "aid-diagnosis-engine", editable = "packages/diagnosis-engine" },
+    { name = "fastapi", specifier = ">=0.162" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+]
+
+[[package]]
 name = "aid-ingestion"
 version = "0.0.0"
 source = { editable = "workers/ingestion" }
@@ -197,6 +223,7 @@ source = { editable = "workers/runtime" }
 dependencies = [
     { name = "aid-connector-worker" },
     { name = "aid-correlation-worker" },
+    { name = "aid-diagnosis-worker" },
     { name = "aid-ingestion" },
     { name = "aid-relay" },
     { name = "fastapi" },
@@ -207,6 +234,7 @@ dependencies = [
 requires-dist = [
     { name = "aid-connector-worker", editable = "workers/connectors" },
     { name = "aid-correlation-worker", editable = "workers/correlation" },
+    { name = "aid-diagnosis-worker", editable = "workers/diagnosis" },
     { name = "aid-ingestion", editable = "workers/ingestion" },
     { name = "aid-relay", editable = "workers/relay" },
     { name = "fastapi", specifier = ">=0.162" },

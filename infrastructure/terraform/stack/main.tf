@@ -19,7 +19,10 @@ locals {
     "ingestion.normalized"  = { worker = "correlation", publishers = ["relay"], ack_deadline = 300 }
     "correlation.requested" = { worker = "correlation", publishers = ["relay"], ack_deadline = 300 }
     # Execução fechada vai para as Regras (ticket #18), no worker de diagnóstico.
-    "rules.evaluate"      = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    "rules.evaluate" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    # Consumidos de verdade no #24 e nos alertas (v0.3); até lá o worker só confirma.
+    "incident.opened"     = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    "incident.updated"    = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
     "diagnosis.requested" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
     "connector.sync"      = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
   }

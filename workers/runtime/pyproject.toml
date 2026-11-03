@@ -6,6 +6,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "aid-connector-worker",
     "aid-correlation-worker",
+    "aid-diagnosis-worker",
     "aid-ingestion",
     "aid-relay",
     "fastapi>=0.162",
@@ -15,6 +16,7 @@ dependencies = [
 [tool.uv.sources]
 aid-connector-worker = { workspace = true }
 aid-correlation-worker = { workspace = true }
+aid-diagnosis-worker = { workspace = true }
 aid-ingestion = { workspace = true }
 aid-relay = { workspace = true }
 

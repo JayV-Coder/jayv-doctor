@@ -6,9 +6,11 @@
 !packages/contracts/**
 !packages/correlation/**
 !packages/db/**
+!packages/diagnosis-engine/**
 !packages/security/**
 !workers/connectors/**
 !workers/correlation/**
+!workers/diagnosis/**
 !workers/ingestion/**
 !workers/relay/**
 !workers/runtime/**

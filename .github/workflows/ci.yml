@@ -97,7 +97,8 @@ jobs:
             workers/ingestion/tests/test_ingestion_storage.py \
             workers/relay/tests/test_relay.py \
             workers/connectors/tests/test_connector_sync.py \
-            workers/correlation/tests/test_correlation_worker.py
+            workers/correlation/tests/test_correlation_worker.py \
+            workers/diagnosis/tests/test_rules_worker.py
 
   terraform:
     name: Terraform (fmt, validate, tflint, test)

@@ -33,6 +33,10 @@ class Storage:
         """Os primeiros `limit` bytes e o tamanho total, ou `None` se o objeto não existe."""
         raise NotImplementedError
 
+    async def sign_download(self, token: str, path: str, seconds: int) -> str:
+        """URL assinada de leitura, válida por `seconds`."""
+        raise NotImplementedError
+
 
 class SupabaseStorage(Storage):
     def __init__(self, url: str, key: str) -> None:
@@ -57,6 +61,23 @@ class SupabaseStorage(Storage):
         if response.status_code != 200:
             raise unavailable()
         return f"{self.base}{response.json()['url']}"
+
+    async def sign_download(self, token: str, path: str, seconds: int) -> str:
+        try:
+            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+                response = await client.post(
+                    f"{self.base}/object/sign/{self.object_path(path)}",
+                    headers=self.headers(token),
+                    json={"expiresIn": seconds},
+                )
+        except httpx.HTTPError as exc:
+            raise unavailable() from exc
+        if response.status_code in (400, 403, 404):
+            # Sem permissão no bucket ou objeto já apagado pela retenção.
+            raise ApiError(404, "not_found", "Log bruto não encontrado.")
+        if response.status_code != 200:
+            raise unavailable()
+        return f"{self.base}{response.json()['signedURL']}"
 
     async def head(self, token: str, path: str, limit: int) -> Head | None:
         try:

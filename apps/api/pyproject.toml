@@ -7,6 +7,7 @@ dependencies = [
     "aid-connectors",
     "aid-contracts",
     "aid-db",
+    "aid-security",
     "fastapi>=0.162",
     "opentelemetry-exporter-gcp-monitoring>=1.9.0a0",
     "opentelemetry-exporter-gcp-trace>=1.9",
@@ -23,6 +24,7 @@ dependencies = [
 aid-connectors = { workspace = true }
 aid-contracts = { workspace = true }
 aid-db = { workspace = true }
+aid-security = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.9.5,<0.10"]

@@ -742,8 +742,11 @@ export interface components {
       integration_id: string;
       /** Integration Name */
       integration_name: string;
-      /** Environment */
-      environment: string;
+      /**
+       * Environment
+       * @enum {string}
+       */
+      environment: "prd" | "hml" | "dev";
       /**
        * Status
        * @enum {string}
@@ -818,8 +821,11 @@ export interface components {
       integration_id: string;
       /** Integration Name */
       integration_name: string;
-      /** Environment */
-      environment: string;
+      /**
+       * Environment
+       * @enum {string}
+       */
+      environment: "prd" | "hml" | "dev";
       /**
        * Status
        * @enum {string}

@@ -21,10 +21,11 @@ const TITLES: Record<string, string> = {
   "/membros": "Membros",
   "/integracoes": "Integrações",
   "/importar": "Importar logs",
+  "/eventos": "Evento original",
 };
 
 // Telas que não são abas, mas pertencem a uma (o mockup abre Importar logs a partir de Conectores).
-const PARENTS: Record<string, string> = { "/importar": "/conectores" };
+const PARENTS: Record<string, string> = { "/importar": "/conectores", "/eventos": "/execucoes" };
 
 function within(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);

@@ -37,7 +37,7 @@ class ExecutionSummary(BaseModel):
     id: str
     integration_id: str
     integration_name: str
-    environment: str
+    environment: Environment
     status: ExecutionStatus
     low_confidence: bool
     first_event_at: datetime

@@ -2961,6 +2961,7 @@
           },
           "environment": {
             "type": "string",
+            "enum": ["prd", "hml", "dev"],
             "title": "Environment"
           },
           "status": {
@@ -3198,6 +3199,7 @@
           },
           "environment": {
             "type": "string",
+            "enum": ["prd", "hml", "dev"],
             "title": "Environment"
           },
           "status": {

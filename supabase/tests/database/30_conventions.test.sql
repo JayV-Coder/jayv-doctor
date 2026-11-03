@@ -1,7 +1,7 @@
 -- Inventário automático (ticket #27): tabela nova do schema doctor fora das convenções
 -- (supabase/CONVENTIONS.md, ADR-0004) quebra o CI. Cada exceção tem o motivo ao lado.
 begin;
-select plan(10);
+select plan(13);
 
 create temporary table tenant_tables as
 select c.oid, c.relname
@@ -24,44 +24,45 @@ insert into keyless values
   ('incident_counters', 'um contador por Organização: tenant_id é a chave'),
   ('user_active_tenant', 'uma Organização ativa por Usuário: user_id é a chave');
 
-select is(
-  (select array_agg(relname order by relname) from tenant_tables t
-   where not (select relrowsecurity from pg_class where oid = t.oid)),
-  null, 'toda tabela do schema doctor tem RLS'
-);
+-- As regras como views: as asserções e o meta-teste do fim usam exatamente as mesmas consultas.
+create temporary view without_rls as
+select relname from tenant_tables t where not (select relrowsecurity from pg_class where oid = t.oid);
 
-select is(
-  (select array_agg(relname order by relname) from tenant_tables t
-   where t.relname not in (select relname from exceptions)
-     and not exists (select 1 from pg_attribute a
-                     where a.attrelid = t.oid and a.attname = 'tenant_id' and not a.attisdropped)),
-  null, 'toda tabela de tenant tem tenant_id'
-);
+create temporary view without_tenant as
+select relname from tenant_tables t
+where t.relname not in (select relname from exceptions)
+  and not exists (select 1 from pg_attribute a
+                  where a.attrelid = t.oid and a.attname = 'tenant_id' and not a.attisdropped);
 
-select is(
-  (select array_agg(relname order by relname) from tenant_tables t
-   where t.relname not in (select relname from exceptions)
-     and t.relname not in (select relname from keyless)
-     and not exists (
-       select 1 from pg_constraint k
-       where k.conrelid = t.oid and k.contype in ('u', 'p')
-         and (select array_agg(a.attname::text order by a.attname) from pg_attribute a
-              where a.attrelid = t.oid and a.attnum = any(k.conkey)) = array['id', 'tenant_id'])),
-  null, 'toda tabela de tenant tem unique (tenant_id, id)'
-);
+create temporary view without_tenant_key as
+select relname from tenant_tables t
+where t.relname not in (select relname from exceptions)
+  and t.relname not in (select relname from keyless)
+  and not exists (
+    select 1 from pg_constraint k
+    where k.conrelid = t.oid and k.contype in ('u', 'p')
+      and (select array_agg(a.attname::text order by a.attname) from pg_attribute a
+           where a.attrelid = t.oid and a.attnum = any(k.conkey)) = array['id', 'tenant_id']);
 
-select is(
-  (select array_agg(k.conname::text order by k.conname)
-   from pg_constraint k
-   join tenant_tables t on t.oid = k.conrelid
-   join pg_class f on f.oid = k.confrelid
-   where k.contype = 'f' and f.relnamespace = 'doctor'::regnamespace and f.relname <> 'tenants'
-     and exists (select 1 from pg_attribute a where a.attrelid = f.oid and a.attname = 'tenant_id')
-     and not exists (select 1 from pg_attribute a
-                     where a.attrelid = k.conrelid and a.attname = 'tenant_id'
-                       and a.attnum = any(k.conkey))),
-  null, 'FK para tabela de tenant é sempre composta com tenant_id'
-);
+create temporary view loose_foreign_keys as
+select k.conname::text as conname, t.relname
+from pg_constraint k
+join tenant_tables t on t.oid = k.conrelid
+join pg_class f on f.oid = k.confrelid
+where k.contype = 'f' and f.relnamespace = 'doctor'::regnamespace and f.relname <> 'tenants'
+  and exists (select 1 from pg_attribute a where a.attrelid = f.oid and a.attname = 'tenant_id')
+  and not exists (select 1 from pg_attribute a
+                  where a.attrelid = k.conrelid and a.attname = 'tenant_id'
+                    and a.attnum = any(k.conkey));
+
+select is((select array_agg(relname order by relname) from without_rls), null,
+  'toda tabela do schema doctor tem RLS');
+select is((select array_agg(relname order by relname) from without_tenant), null,
+  'toda tabela de tenant tem tenant_id');
+select is((select array_agg(relname order by relname) from without_tenant_key), null,
+  'toda tabela de tenant tem unique (tenant_id, id)');
+select is((select array_agg(conname order by conname) from loose_foreign_keys), null,
+  'FK para tabela de tenant é sempre composta com tenant_id');
 
 select is(
   (select array_agg(relname order by relname) from tenant_tables t
@@ -104,17 +105,21 @@ select is(
   'anon só executa as funções da ingestão por token'
 );
 
--- O inventário pega a tabela nova fora do padrão (é o que bloqueia o merge).
-create table doctor.zz_tabela_fora_do_padrao (id uuid primary key, integration_id uuid);
-insert into tenant_tables select oid, relname from pg_class where oid = 'doctor.zz_tabela_fora_do_padrao'::regclass;
-select is(
-  (select array_agg(relname order by relname) from tenant_tables t
-   where t.relname not in (select relname from exceptions)
-     and (not (select relrowsecurity from pg_class where oid = t.oid)
-          or not exists (select 1 from pg_attribute a where a.attrelid = t.oid and a.attname = 'tenant_id'))),
-  array['zz_tabela_fora_do_padrao']::name[],
-  'tabela sem RLS e sem tenant_id é detectada'
+-- O inventário pega a tabela nova fora do padrão (é o que bloqueia o merge): as mesmas views.
+create table doctor.zz_fora_do_padrao (id uuid primary key);
+create table doctor.zz_filha_solta (
+  id uuid primary key, tenant_id uuid, parent_id uuid references doctor.incidents (id)
 );
+insert into tenant_tables select oid, relname from pg_class
+where oid in ('doctor.zz_fora_do_padrao'::regclass, 'doctor.zz_filha_solta'::regclass);
+select is((select string_agg(relname::text, ',' order by relname::text) from without_rls),
+  'zz_filha_solta,zz_fora_do_padrao', 'tabela sem RLS é detectada');
+select is((select string_agg(relname::text, ',' order by relname::text) from without_tenant),
+  'zz_fora_do_padrao', 'tabela sem tenant_id é detectada');
+select is((select string_agg(relname::text, ',' order by relname::text) from without_tenant_key),
+  'zz_filha_solta,zz_fora_do_padrao', 'tabela sem unique (tenant_id, id) é detectada');
+select is((select string_agg(relname::text, ',' order by relname::text) from loose_foreign_keys),
+  'zz_filha_solta', 'FK sem tenant_id é detectada');
 
 select * from finish();
 rollback;

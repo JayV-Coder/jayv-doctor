@@ -6,13 +6,13 @@ Meta do piloto: **0 vazamento entre Organizações**. Este relatório junta o qu
 
 | Verificação | Onde | Asserções |
 |---|---|---|
-| Inventário das convenções: RLS em toda tabela do schema `doctor`, `tenant_id`, `unique (tenant_id, id)`, FK composta para tabela de tenant, política em toda tabela legível, partições inacessíveis direto, nada para `anon`, `security definer` com `search_path` fixo e sem `execute` para `public`, `anon` só nas 2 funções da ingestão; e uma tabela fora do padrão criada no próprio teste precisa ser detectada | `supabase/tests/database/30_conventions.test.sql` | 10 |
-| Matriz de isolamento gerada por tabela: as 32 tabelas de tenant × `select`/`insert`/`update`/`delete`/mover linha de A para B × Owner, Admin, Analyst, Viewer de A contra dados de B (a fixture garante linha de B em todas) | `supabase/tests/database/31_isolation_matrix.test.sql` | 641 |
-| Storage: ler, subir e apagar na pasta de B, nos buckets `doctor-raw-logs` e `doctor-knowledge`, por Owner, Analyst e Viewer de A | `supabase/tests/database/32_storage_isolation.test.sql` | 19 |
-| API: as 31 operações com recurso no caminho, com o Owner (MFA) de A e o id de B → `404`, sem tocar no Storage nem no e-mail e sem mudar nada de B; rota nova com parâmetro fora da suíte quebra o teste | `apps/api/tests/test_api_isolation.py` | 33 |
+| Inventário das convenções: RLS em toda tabela do schema `doctor`, `tenant_id`, `unique (tenant_id, id)`, FK composta para tabela de tenant, política em toda tabela legível, partições inacessíveis direto, nada para `anon`, `security definer` com `search_path` fixo e sem `execute` para `public`, `anon` só nas 2 funções da ingestão; e duas tabelas fora do padrão, criadas no próprio teste, precisam ser pegas pelas mesmas consultas | `supabase/tests/database/30_conventions.test.sql` | 13 |
+| Matriz de isolamento gerada por tabela: as 32 tabelas de tenant × `select`/`insert`/`update`/`delete`/mover linha de A para B × Owner, Admin, Analyst, Viewer de A contra dados de B (a fixture garante linhas de A e de B em todas, então a leitura e a transferência têm o que tentar) | `supabase/tests/database/31_isolation_matrix.test.sql` | 642 |
+| Storage: ler, subir e apagar na pasta de B, nos buckets `doctor-raw-logs` e `doctor-knowledge`, por Owner, Analyst e Viewer de A, com controles positivos (A lê e sobe o que é dela; o bucket de Logs brutos não tem delete pelo cliente) | `supabase/tests/database/32_storage_isolation.test.sql` | 22 |
+| API: as 31 operações com recurso no caminho, com o Owner (MFA) de A e o id de B → `404` igual ao de um id inexistente (mesmo status e código), sem tocar no Storage nem no e-mail; ids de B no corpo (Importação, token de ingestão, responsável do Incidente) recusados; hash de todas as tabelas de B igual antes e depois; controle positivo com o Incidente da própria A; rota nova com parâmetro fora da suíte quebra o teste (sem precisar do banco) | `apps/api/tests/test_api_isolation.py` | 2 testes, 65 chamadas |
 | Isolamento por recurso já existente (RLS por tabela, RAG, Diagnóstico, worker) | testes pgTAP 02 a 22 (350 das 1.020 asserções do pgTAP), `packages/knowledge/tests/test_knowledge_db.py`, `workers/diagnosis/tests/test_diagnose.py` | 350+ |
 
-Total de asserções de isolamento no banco: **≥ 670** só nos testes 30 a 32, todas passando.
+Total de asserções de isolamento no banco: **677** só nos testes 30 a 32, todas passando.
 
 O tenant nunca vem do payload: a API lê do JWT (`doctor.current_tenant_id()`), a ingestão do hash do token, e o worker de diagnóstico lê o contexto do Incidente com a claim do tenant (`aid_db.tenant_role`), com o RLS valendo como na API.
 
@@ -48,7 +48,7 @@ Legenda: ✅ atende, com a evidência; ⚠️ atende em parte ou depende da conf
 | 4.1.2 Atributos de acesso não manipuláveis pelo cliente | ✅ | `tenant_id` só do JWT (Custom Access Token Hook) ou do token de ingestão; teste de transferência de linha na matriz |
 | 4.1.3 Menor privilégio | ✅ | `authenticated` sem `insert`/`update`/`delete` direto na maioria das tabelas (escrita por funções); `service_role` só nos workers |
 | 4.1.5 Falha segura | ✅ | Erro de banco sem mapeamento vira 500 genérico, sem detalhe; recurso de outra Organização é sempre 404 |
-| 4.2.1 IDOR | ✅ | Suíte da API com os ids de B em todas as rotas; matriz do banco |
+| 4.2.1 IDOR | ⚠️ | Ids de B em todo parâmetro de caminho e nos principais ids de corpo, mais a matriz do banco e as FKs compostas; filtros de busca (`integration_id` na query e no corpo das buscas) ainda sem caso próprio, protegidos pelo RLS |
 | 4.2.2 CSRF | ✅ | API por Bearer token (sem cookie); Server Actions do Next com verificação de origem |
 | 4.3.1 Interfaces administrativas com MFA | ✅ | `require_manager` exige `aal2`, também no banco (`doctor.require_manager`) |
 | 4.3.2 Sem listagem de diretórios / metadados | ✅ | Buckets privados, URLs assinadas de até 5 min, políticas por pasta do tenant |

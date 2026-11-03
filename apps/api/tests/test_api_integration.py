@@ -24,6 +24,16 @@ URL = os.environ.get("INTEGRATION_DB_URL")
 pytestmark = pytest.mark.skipif(URL is None, reason="sem INTEGRATION_DB_URL")
 
 
+@pytest_asyncio.fixture
+async def engine() -> AsyncIterator[AsyncEngine]:
+    assert URL is not None
+    created = create_async_engine(
+        URL.replace("postgresql://", "postgresql+asyncpg://", 1), poolclass=NullPool
+    )
+    yield created
+    await created.dispose()
+
+
 def claims_for(tenant_id: str, user_id: str, role: str = "viewer", aal: str = "aal1") -> Claims:
     raw = {
         "sub": user_id,
@@ -35,16 +45,6 @@ def claims_for(tenant_id: str, user_id: str, role: str = "viewer", aal: str = "a
     return Claims(
         sub=raw["sub"], email=None, aal=aal, tenant_id=tenant_id, tenant_role=role, raw=raw
     )
-
-
-@pytest_asyncio.fixture
-async def engine() -> AsyncIterator[AsyncEngine]:
-    assert URL is not None
-    created = create_async_engine(
-        URL.replace("postgresql://", "postgresql+asyncpg://", 1), poolclass=NullPool
-    )
-    yield created
-    await created.dispose()
 
 
 @pytest_asyncio.fixture

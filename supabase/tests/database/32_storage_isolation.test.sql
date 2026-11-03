@@ -2,7 +2,7 @@
 -- a política repete o Papel. A Organização A não lê, não sobe e não apaga arquivo da B.
 begin;
 \ir ../helpers/tenancy.psql
-select plan(19);
+select plan(22);
 
 select tests.create_user('00000000-0000-4000-8000-0000000a0001', 'owner@acme.test');
 select tests.create_user('00000000-0000-4000-8000-0000000a0003', 'analyst@acme.test');
@@ -55,17 +55,37 @@ begin
           'insert into storage.objects (bucket_id, name) values (%L, %L)', bucket,
           '00000000-0000-4000-8000-00000000be01/novo/arquivo.md')));
     end loop;
+    -- Controle positivo: Owner e Analyst leem os arquivos da própria Organização (não é nega-tudo).
+    if r.role <> 'viewer' then
+      insert into storage_results values
+        (r.role, 'lê os arquivos da própria Organização nos dois buckets', (select count(*) = 2
+          from storage.objects where name like '00000000-0000-4000-8000-00000000ac01/%'));
+    end if;
     insert into storage_results values
       (r.role, 'doctor-knowledge: apagar arquivo de B', pg_temp.blocked(
         'delete from storage.objects where bucket_id = ''doctor-knowledge'''
         || ' and name like ''00000000-0000-4000-8000-00000000be01/%''')),
-      (r.role, 'doctor-raw-logs: apagar arquivo de B', pg_temp.blocked(
+      -- O bucket de Logs brutos não tem política de delete: só a retenção (plataforma) apaga.
+      (r.role, 'doctor-raw-logs: ninguém apaga pelo cliente', pg_temp.blocked(
         'delete from storage.objects where bucket_id = ''doctor-raw-logs'''
         || ' and name like ''00000000-0000-4000-8000-00000000be01/%'''));
     perform tests.clear_authentication();
   end loop;
 end;
 $$;
+
+-- Controle positivo do upload: com o documento pendente da própria Organização, o Analyst sobe.
+insert into doctor.knowledge_documents (id, tenant_id, title, source, storage_path, content_type, size_bytes)
+values ('00000000-0000-4000-8000-0000000008a1', '00000000-0000-4000-8000-00000000ac01', 'Runbook',
+  'upload', '00000000-0000-4000-8000-00000000ac01/00000000-0000-4000-8000-0000000008a1/document.md',
+  'text/markdown', 10);
+select tests.authenticate_as('00000000-0000-4000-8000-0000000a0003', '00000000-0000-4000-8000-00000000ac01', 'analyst');
+select lives_ok(
+  $$insert into storage.objects (bucket_id, name) values ('doctor-knowledge',
+    '00000000-0000-4000-8000-00000000ac01/00000000-0000-4000-8000-0000000008a1/document.md')$$,
+  'analyst: sobe o documento pendente da própria Organização'
+);
+select tests.clear_authentication();
 
 select ok(passed, format('%s: %s', role, check_name))
 from storage_results

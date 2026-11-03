@@ -11,7 +11,6 @@ import httpx
 import pytest
 import pytest_asyncio
 from aid_api.core.auth import Claims, get_claims
-from aid_api.core.idempotency import IdempotencyStore, get_idempotency_store
 from aid_api.core.storage import Storage, get_storage
 from aid_api.main import create_app
 from aid_api.orgs.mailer import Mailer, get_mailer
@@ -20,7 +19,24 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
 
 URL = os.environ.get("INTEGRATION_DB_URL")
-pytestmark = pytest.mark.skipif(URL is None, reason="sem INTEGRATION_DB_URL")
+# O inventário das rotas roda sempre; só a chamada contra o banco precisa do Postgres.
+needs_db = pytest.mark.skipif(URL is None, reason="sem INTEGRATION_DB_URL")
+
+# Ids de B no corpo: a operação não pode ligar nada de A a B nem mudar B.
+BODY_CASES: list[tuple[str, str, dict[str, Any]]] = [
+    (
+        "POST",
+        "/api/v1/imports",
+        {
+            "integration_id": "{integration}",
+            "filename": "x.ndjson",
+            "size_bytes": 10,
+            "sha256": "f" * 64,
+        },
+    ),
+    ("POST", "/api/v1/ingestion-tokens", {"name": "Token", "integration_id": "{integration}"}),
+    ("PATCH", "/api/v1/incidents/{own_incident}", {"assignee_id": "{user_b}"}),
+]
 
 # (método, caminho, recurso de B no parâmetro, corpo)
 ROUTES: list[tuple[str, str, str, dict[str, Any] | None]] = [
@@ -69,13 +85,6 @@ def test_toda_rota_com_recurso_no_caminho_esta_na_suite() -> None:
     assert declared == {(method, path) for method, path, _, _ in ROUTES}
 
 
-class NoReplay(IdempotencyStore):
-    """Sem gravar respostas: cada chamada chega à rota (o replay tem teste próprio)."""
-
-    def __init__(self) -> None:
-        pass
-
-
 class Untouched(Storage, Mailer):
     """Storage e e-mail que nunca podem ser alcançados com recurso de outra Organização."""
 
@@ -93,10 +102,15 @@ class Untouched(Storage, Mailer):
     async def delete(self, token: str, path: str, bucket: str) -> None:
         self.calls.append(f"delete {path}")
 
+    async def head(self, token: str, path: str, limit: int) -> None:
+        self.calls.append(f"head {path}")
+
     def send_invitation(self, email: str, organization: str, url: str) -> None:
         self.calls.append(f"mail {email}")
 
 
+# Repetida de test_api_integration.py: um conftest.py aqui colidiria, no mypy, com o do worker de
+# diagnóstico (os nomes de módulo de teste são únicos no repositório).
 @pytest_asyncio.fixture
 async def engine() -> AsyncIterator[AsyncEngine]:
     assert URL is not None
@@ -127,6 +141,8 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
             "incident",
             "diagnosis",
             "document",
+            "own_integration",
+            "own_incident",
         )
     }
     statements = [
@@ -145,7 +161,12 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
         "insert into doctor.invitations (id, tenant_id, email, role, token_hash, invited_by)"
         " values (:invitation, :tenant, 'novo@b.test', 'viewer', repeat('e', 64), :user_b)",
         "insert into doctor.integrations (id, tenant_id, name, source_system, target_system,"
-        " environment) values (:integration, :tenant, 'Notas', 'sap', 'gcp', 'prd')",
+        " environment) values (:integration, :tenant, 'Notas', 'sap', 'gcp', 'prd'),"
+        " (:own_integration, :a, 'Pedidos', 'salesforce', 'sap', 'prd')",
+        "insert into doctor.incidents (id, tenant_id, integration_id, title, category, severity,"
+        " rule_code, rule_version, first_seen_at, last_seen_at, execution_count) values"
+        " (:own_incident, :a, :own_integration, 'Timeout A', 'TIMEOUT', 'high', 'INT-003',"
+        " '2026.10.1', now(), now(), 1)",
         "insert into doctor.raw_log_objects (id, tenant_id, storage_path, sha256, size_bytes,"
         " source) values (:raw_log, :tenant, :path, repeat('a', 64), 10, 'api')",
         "insert into doctor.imports (id, tenant_id, integration_id, filename, size_bytes, sha256)"
@@ -192,39 +213,49 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
 
 
 async def drop(engine: AsyncEngine, ids: dict[str, str]) -> None:
+    # Toda tabela de tenant referencia doctor.tenants com on delete cascade.
     async with engine.begin() as connection:
-        for tenant in (ids["a"], ids["tenant"]):
-            for table in (
-                "diagnoses",
-                "incidents",
-                "events",
-                "executions",
-                "imports",
-                "ingestion_tokens",
-                "connectors",
-                "raw_log_objects",
-                "knowledge_documents",
-                "integrations",
-                "invitations",
-                "audit_logs",
-                "outbox_messages",
-            ):
-                await connection.execute(
-                    text(f"delete from doctor.{table} where tenant_id = cast(:t as uuid)"),  # noqa: S608
-                    {"t": tenant},
-                )
-            await connection.execute(
-                text("delete from doctor.tenants where id = :t"), {"t": tenant}
-            )
-            await connection.execute(
-                text("delete from public.organizations where id = :t"), {"t": tenant}
-            )
+        await connection.execute(
+            text("delete from doctor.tenants where id in (:a, :b)"),
+            {"a": ids["a"], "b": ids["tenant"]},
+        )
+        await connection.execute(
+            text("delete from public.organizations where id in (:a, :b)"),
+            {"a": ids["a"], "b": ids["tenant"]},
+        )
         await connection.execute(
             text("delete from auth.users where id in (:a, :b)"),
             {"a": ids["user_a"], "b": ids["user_b"]},
         )
 
 
+async def snapshot(engine: AsyncEngine, tenant: str) -> dict[str, str]:
+    """Hash do conteúdo de cada tabela de tenant da Organização: qualquer escrita muda o hash."""
+    async with engine.begin() as connection:
+        tables = (
+            await connection.execute(
+                text(
+                    "select c.relname from pg_class c where c.relnamespace = 'doctor'::regnamespace"
+                    " and c.relkind in ('r', 'p') and not c.relispartition and exists (select 1"
+                    " from pg_attribute a where a.attrelid = c.oid and a.attname = 'tenant_id')"
+                    " order by 1"
+                )
+            )
+        ).scalars()
+        found = {}
+        for table in list(tables):
+            found[table] = await connection.scalar(
+                text(
+                    f"select md5(coalesce(string_agg(to_jsonb(t)::text, '|'"  # noqa: S608
+                    f" order by to_jsonb(t)::text), '')) from doctor.{table} t"
+                    " where tenant_id = cast(:t as uuid)"
+                ),
+                {"t": tenant},
+            )
+        return found
+
+
+@needs_db
 @pytest.mark.asyncio
 async def test_recurso_de_outra_organizacao_responde_404(
     engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
@@ -251,40 +282,64 @@ async def test_recurso_de_outra_organizacao_responde_404(
         )
         app = create_app()
         app.dependency_overrides[get_claims] = lambda: claims
-        app.dependency_overrides[get_idempotency_store] = NoReplay
         untouched = Untouched()
         app.dependency_overrides[get_storage] = lambda: untouched
         app.dependency_overrides[get_mailer] = lambda: untouched
         transport = httpx.ASGITransport(app=app)
+        before = await snapshot(engine, ids["tenant"])
         outcomes: dict[str, int] = {}
+        leaks: dict[str, tuple[Any, Any]] = {}
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://api.test",
             headers={"authorization": "Bearer jwt"},
         ) as client:
+            # Controle positivo: com o recurso da própria Organização, a mesma montagem responde.
+            own = await client.get(f"/api/v1/incidents/{ids['own_incident']}")
+            assert own.status_code == 200, own.text
+
             for method, path, resource, body in ROUTES:
-                url = path.replace("{target}", ids[resource])
-                url = url.replace("{incident}", ids[resource]).replace("{tenant_id}", ids[resource])
-                response = await client.request(method, url, json=body)
+
+                def url(value: str, template: str = path) -> str:
+                    return (
+                        template.replace("{target}", value)
+                        .replace("{incident}", value)
+                        .replace("{tenant_id}", value)
+                    )
+
+                response = await client.request(method, url(ids[resource]), json=body)
                 outcomes[f"{method} {path}"] = response.status_code
-                assert ids[resource] not in response.text or response.status_code == 404
-        assert {route: status for route, status in outcomes.items() if status != 404} == {}
-        assert untouched.calls == []
-        # Nada de B mudou.
-        async with engine.begin() as connection:
-            state = (
-                await connection.execute(
-                    text(
-                        "select (select name from doctor.integrations where id = :integration),"
-                        " (select status from doctor.incidents where id = :incident),"
-                        " (select role from doctor.memberships where id = :membership),"
-                        " (select count(*) from doctor.diagnosis_feedback"
-                        "  where diagnosis_id = :diagnosis),"
-                        " (select count(*) from doctor.knowledge_documents where id = :document)"
-                    ),
-                    ids,
+                # Igual à resposta para um id que não existe: nada revela que o de B existe.
+                unknown = await client.request(method, url(str(uuid4())), json=body)
+                answer = (response.status_code, response.json().get("code"))
+                baseline = (unknown.status_code, unknown.json().get("code"))
+                if answer != baseline:
+                    leaks[f"{method} {path}"] = (answer, baseline)
+
+            for method, path, payload in BODY_CASES:
+                body = {
+                    key: ids[value[1:-1]]
+                    if isinstance(value, str) and value.startswith("{")
+                    else value
+                    for key, value in payload.items()
+                }
+                response = await client.request(
+                    method, path.replace("{own_incident}", ids["own_incident"]), json=body
                 )
-            ).one()
-        assert tuple(state) == ("Notas", "resolved", "owner", 1, 1)
+                outcomes[f"{method} {path} (id de B no corpo)"] = response.status_code
+        assert {
+            route: status for route, status in outcomes.items() if status not in (404, 422)
+        } == {}
+        assert {r: s for r, s in outcomes.items() if "corpo" not in r and s != 404} == {}
+        assert leaks == {}
+        assert untouched.calls == []
+        # Nada de B mudou, em nenhuma tabela (inclusive outbox e auditoria).
+        assert await snapshot(engine, ids["tenant"]) == before
+        async with engine.begin() as connection:
+            assignee = await connection.scalar(
+                text("select assignee_id from doctor.incidents where id = :i"),
+                {"i": ids["own_incident"]},
+            )
+        assert assignee is None
     finally:
         await drop(engine, ids)

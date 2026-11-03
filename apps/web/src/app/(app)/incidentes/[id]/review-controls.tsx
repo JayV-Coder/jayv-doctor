@@ -15,23 +15,12 @@ const SYSTEMS = [
 
 type Props = { incidentId: string; diagnosisId: string };
 
-// Revisão humana (#26): Aceitar direto; Corrigir e Rejeitar pedem o porquê num bottom sheet.
+// Revisão humana (#26): Aceitar direto; Corrigir e Rejeitar pedem o porquê num bottom sheet. Cada
+// ação tem a própria mensagem de erro e a própria chave de idempotência; fechar o painel recomeça.
 export function ReviewControls({ incidentId, diagnosisId }: Props) {
-  const [error, setError] = useState<string | null>(null);
-  const [busy, startTransition] = useTransition();
-
-  function send(
-    body: Parameters<typeof reviewDiagnosis>[2],
-    dialog?: HTMLDialogElement | null,
-  ): void {
-    startTransition(async () => {
-      const failure = await reviewDiagnosis(incidentId, diagnosisId, body).catch(
-        () => "Sem conexão. Tente de novo.",
-      );
-      setError(failure);
-      if (failure === null) dialog?.close();
-    });
-  }
+  const accept = useReview(incidentId, diagnosisId);
+  const correct = useReview(incidentId, diagnosisId);
+  const reject = useReview(incidentId, diagnosisId);
 
   return (
     <section className="stack" aria-label="Revisão humana">
@@ -39,35 +28,61 @@ export function ReviewControls({ incidentId, diagnosisId }: Props) {
         <button
           type="button"
           className="btn primary"
-          disabled={busy}
+          disabled={accept.busy}
           onClick={() => {
-            send({ verdict: "accepted" });
+            accept.send({ verdict: "accepted" });
           }}
         >
           Aceitar
         </button>
-        <BottomSheet title="Corrigir o Diagnóstico" trigger="Corrigir">
+        <BottomSheet title="Corrigir o Diagnóstico" trigger="Corrigir" onClose={correct.reset}>
           <CorrectionForm
-            busy={busy}
+            busy={correct.busy}
             onSubmit={(body, dialog) => {
-              send({ verdict: "corrected", ...body }, dialog);
+              correct.send({ verdict: "corrected", ...body }, dialog);
             }}
           />
-          <FormMessage error={error} />
+          <FormMessage error={correct.error} />
         </BottomSheet>
-        <BottomSheet title="Rejeitar o Diagnóstico" trigger="Rejeitar">
+        <BottomSheet title="Rejeitar o Diagnóstico" trigger="Rejeitar" onClose={reject.reset}>
           <RejectForm
-            busy={busy}
+            busy={reject.busy}
             onSubmit={(comment, dialog) => {
-              send({ verdict: "rejected", comment }, dialog);
+              reject.send({ verdict: "rejected", comment }, dialog);
             }}
           />
-          <FormMessage error={error} />
+          <FormMessage error={reject.error} />
         </BottomSheet>
       </div>
-      <FormMessage error={error} />
+      <FormMessage error={accept.error} />
     </section>
   );
+}
+
+function useReview(incidentId: string, diagnosisId: string) {
+  const [error, setError] = useState<string | null>(null);
+  const [key, setKey] = useState(() => crypto.randomUUID());
+  const [busy, startTransition] = useTransition();
+  return {
+    busy,
+    error,
+    reset: () => {
+      setError(null);
+      setKey(crypto.randomUUID());
+    },
+    send: (body: Parameters<typeof reviewDiagnosis>[2], dialog?: HTMLDialogElement | null) => {
+      startTransition(async () => {
+        const failure = await reviewDiagnosis(incidentId, diagnosisId, body, key).catch(
+          () => "Sem conexão. Tente de novo.",
+        );
+        setError(failure);
+        if (failure === null) {
+          setKey(crypto.randomUUID());
+          dialog?.close();
+        }
+      });
+    },
+  };
 }
 
 function CorrectionForm({
@@ -166,6 +181,7 @@ function RejectForm({
 // Incidente resolvido com Diagnóstico aceito ou corrigido: o caso vai para a Base de conhecimento.
 export function PromoteButton({ incidentId }: { incidentId: string }) {
   const [error, setError] = useState<string | null>(null);
+  const [key] = useState(() => crypto.randomUUID());
   const [busy, startTransition] = useTransition();
   return (
     <div className="stack">
@@ -175,7 +191,9 @@ export function PromoteButton({ incidentId }: { incidentId: string }) {
         disabled={busy}
         onClick={() => {
           startTransition(async () => {
-            setError(await promoteIncident(incidentId).catch(() => "Sem conexão. Tente de novo."));
+            setError(
+              await promoteIncident(incidentId, key).catch(() => "Sem conexão. Tente de novo."),
+            );
           });
         }}
       >

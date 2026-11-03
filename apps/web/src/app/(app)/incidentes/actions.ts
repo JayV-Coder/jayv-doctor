@@ -10,6 +10,8 @@ const MESSAGES: Record<string, string> = {
   forbidden: "Seu papel não permite esta ação.",
   not_found: "Incidente não encontrado.",
   already_reviewed: "Você já revisou esta versão.",
+  superseded: "Há uma versão mais nova: revise o Diagnóstico mais recente.",
+  correction_required: "Corrigir exige a categoria (ex.: SAP_LOCK) ou a causa certa.",
   not_reviewable: "Esta versão ainda não pode ser revisada.",
   not_resolved: "Resolva o Incidente antes de promovê-lo.",
   not_reviewed: "Aceite ou corrija o Diagnóstico antes de promover.",
@@ -97,6 +99,7 @@ export async function requestDiagnosis(
   );
 }
 
+// Com chave de idempotência: repetir depois de uma resposta perdida devolve o mesmo resultado.
 export async function reviewDiagnosis(
   incidentId: string,
   diagnosisId: string,
@@ -107,19 +110,20 @@ export async function reviewDiagnosis(
     responsible_system?: string | undefined;
     comment?: string | undefined;
   },
+  key: string,
 ): Promise<string | null> {
   return send(
     `/diagnoses/${encodeURIComponent(diagnosisId)}/feedback`,
-    { method: "POST", body: JSON.stringify(body) },
+    { method: "POST", body: JSON.stringify(body), headers: { "Idempotency-Key": key } },
     `/incidentes/${incidentId}`,
     "Corrigir exige a categoria (ex.: SAP_LOCK) ou a causa certa.",
   );
 }
 
-export async function promoteIncident(incidentId: string): Promise<string | null> {
+export async function promoteIncident(incidentId: string, key: string): Promise<string | null> {
   return send(
     `/incidents/${encodeURIComponent(incidentId)}/knowledge`,
-    { method: "POST" },
+    { method: "POST", headers: { "Idempotency-Key": key } },
     `/incidentes/${incidentId}`,
     "Não foi possível promover o Incidente.",
   );

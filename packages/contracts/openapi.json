@@ -5817,6 +5817,11 @@
               }
             ],
             "title": "Knowledge Document Id"
+          },
+          "promotable": {
+            "type": "boolean",
+            "title": "Promotable",
+            "default": false
           }
         },
         "type": "object",

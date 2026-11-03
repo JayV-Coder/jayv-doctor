@@ -43,13 +43,16 @@ ERRORS = {
 FEEDBACK_ERRORS = {
     **ERRORS,
     "P0002": not_found,
-    "23505": lambda: ApiError(409, "already_reviewed", "Você já revisou esta versão."),
-    "23514": lambda: ApiError(
-        422, "validation_error", "Corrigir exige a categoria ou a causa certa."
-    ),
     "DR021": lambda: ApiError(
         409, "not_reviewable", "O Diagnóstico ainda não foi publicado ou falhou."
     ),
+    "DR024": lambda: ApiError(
+        409, "superseded", "Há uma versão mais nova: revise o Diagnóstico mais recente."
+    ),
+    "DR025": lambda: ApiError(
+        422, "correction_required", "Corrigir exige a categoria ou a causa certa."
+    ),
+    "DR026": lambda: ApiError(409, "already_reviewed", "Você já revisou esta versão."),
 }
 PROMOTE_ERRORS = {
     **ERRORS,
@@ -176,25 +179,23 @@ class DiagnosisRepository:
 
     async def review(self, claims: Claims, target: str, body: FeedbackRequest) -> Feedback:
         async with translated_tx(claims, FEEDBACK_ERRORS) as connection:
-            created = await connection.scalar(
-                text(
-                    "select doctor.submit_diagnosis_feedback(cast(:d as uuid), :v, :cat, :cause,"
-                    " :sys, :comment)::text"
-                ),
-                {
-                    "d": target,
-                    "v": body.verdict,
-                    "cat": body.correct_category,
-                    "cause": body.correct_cause,
-                    "sys": body.responsible_system,
-                    "comment": body.comment,
-                },
-            )
             row = (
                 (
                     await connection.execute(
-                        text(f"{FEEDBACK} where id = cast(:f as uuid)"),
-                        {"f": created},
+                        text(
+                            "select id::text, verdict, correct_category, correct_cause,"
+                            " responsible_system, comment, reviewer_id::text, time_to_review_s,"
+                            " created_at from doctor.submit_diagnosis_feedback(cast(:d as uuid),"
+                            " :v, :cat, :cause, :sys, :comment)"
+                        ),
+                        {
+                            "d": target,
+                            "v": body.verdict,
+                            "cat": body.correct_category,
+                            "cause": body.correct_cause,
+                            "sys": body.responsible_system,
+                            "comment": body.comment,
+                        },
                     )
                 )
                 .mappings()

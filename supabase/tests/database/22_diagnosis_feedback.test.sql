@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(15);
+select plan(17);
 
 select tests.create_user('00000000-0000-4000-8000-0000000a0001', 'ana@acme.test');
 select tests.create_user('00000000-0000-4000-8000-0000000a0002', 'vera@acme.test');
@@ -49,7 +49,7 @@ select throws_ok(
 );
 select throws_ok(
   $$select doctor.submit_diagnosis_feedback('00000000-0000-4000-8000-0000000009a1', 'corrected', null, null, null, 'só comentário')$$,
-  '23514', null, 'corrigir exige a categoria ou a causa certa'
+  'DR025', null, 'corrigir exige a categoria ou a causa certa'
 );
 select throws_ok(
   $$select doctor.promote_incident_to_knowledge('00000000-0000-4000-8000-0000000005a1')$$,
@@ -62,7 +62,7 @@ select lives_ok(
 );
 select throws_ok(
   $$select doctor.submit_diagnosis_feedback('00000000-0000-4000-8000-0000000009a1', 'accepted', null, null, null, null)$$,
-  '23505', null, 'um feedback por revisor por versão'
+  'DR026', null, 'um feedback por revisor por versão'
 );
 select tests.clear_authentication();
 
@@ -112,6 +112,25 @@ select is(
    where topic = 'knowledge.index' and payload ->> 'document_id' = (select id::text from promoted)),
   1, 'e vai para a indexação'
 );
+
+select tests.authenticate_as('00000000-0000-4000-8000-0000000a0002', '00000000-0000-4000-8000-00000000ac01', 'viewer');
+select throws_ok(
+  $$select body from doctor.knowledge_documents$$, '42501', null,
+  'o texto bruto do documento promovido não é legível pelos membros'
+);
+select tests.clear_authentication();
+
+-- Uma versão nova publicada supera a anterior: a antiga não recebe mais revisão.
+insert into doctor.diagnoses (tenant_id, incident_id, version, status, stage, requested_mode, mode,
+  processing_key, published_at)
+values ('00000000-0000-4000-8000-00000000ac01', '00000000-0000-4000-8000-0000000005a1', 3, 'published',
+  'done', 'rules_only', 'rules_only', 'k3', now());
+select tests.authenticate_as('00000000-0000-4000-8000-0000000a0003', '00000000-0000-4000-8000-00000000ac01', 'analyst');
+select throws_ok(
+  $$select doctor.submit_diagnosis_feedback('00000000-0000-4000-8000-0000000009a1', 'accepted', null, null, null, null)$$,
+  'DR024', null, 'versão superada não é revisada'
+);
+select tests.clear_authentication();
 
 select tests.authenticate_as('00000000-0000-4000-8000-0000000b0001', '00000000-0000-4000-8000-00000000be01', 'analyst');
 select is((select count(*)::int from doctor.diagnosis_feedback), 0, 'outra Organização não lê o feedback');

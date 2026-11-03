@@ -19,7 +19,7 @@ import {
   statusLabel as executionStatus,
 } from "@/lib/executions/labels";
 import { getDiagnosis, listDiagnoses } from "@/lib/diagnoses/api";
-import { active, changes, reviewable, statusText, verdictOf } from "@/lib/diagnoses/labels";
+import { active, changes, reviewable, statusText } from "@/lib/diagnoses/labels";
 import { formatDateTime } from "@/lib/format";
 import { getIncident, listComments } from "@/lib/incidents/api";
 import { incidentCode, severityLabel, severityTone, statusLabel } from "@/lib/incidents/labels";
@@ -89,18 +89,14 @@ export default async function IncidentPage({
     previous ? getDiagnosis(previous.id) : null,
   ]);
   const differences = diagnosis && before ? changes(before, diagnosis) : [];
-  // A revisão é da versão mais nova, uma por revisor; promover pede o Incidente resolvido e essa
-  // versão aceita ou corrigida.
-  const latest = chosen?.id === versions?.[0]?.id;
+  // Revisa-se a versão publicada mais nova, uma vez por revisor (o banco confere de novo).
+  const newestFinal = versions?.find((item) => reviewable(item.status));
+  const latest = chosen !== null && chosen.id === newestFinal?.id;
   const reviewedByMe = diagnosis?.feedback.some((item) => item.reviewer_id === me?.id) ?? false;
   const canReview =
     operator && diagnosis !== null && latest && reviewable(diagnosis.status) && !reviewedByMe;
-  const verdict = latest && diagnosis ? verdictOf(diagnosis.feedback) : null;
-  const canPromote =
-    operator &&
-    incident.status === "resolved" &&
-    (verdict === "accepted" || verdict === "corrected") &&
-    !incident.knowledge_document_id;
+  // A API decide pela mesma regra da promoção no banco (versão publicada mais nova).
+  const canPromote = operator && incident.promotable;
   const code = incidentCode(incident.number);
   const assignee =
     incident.assignee_id === null

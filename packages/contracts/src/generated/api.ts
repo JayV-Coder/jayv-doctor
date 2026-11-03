@@ -1567,6 +1567,11 @@ export interface components {
       history: components["schemas"]["HistoryEntry"][];
       /** Knowledge Document Id */
       knowledge_document_id?: string | null;
+      /**
+       * Promotable
+       * @default false
+       */
+      promotable: boolean;
     };
     /** IncidentExecution */
     IncidentExecution: {

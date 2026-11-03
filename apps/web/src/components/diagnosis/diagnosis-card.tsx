@@ -73,7 +73,8 @@ function Progress({ diagnosis }: Props) {
 
 function Result({ diagnosis }: Props) {
   const inconclusive = diagnosis.status === "inconclusive";
-  const correction = diagnosis.feedback.find((item) => item.verdict === "corrected");
+  // A correção mais recente, a mesma que a promoção à Base usa.
+  const correction = diagnosis.feedback.filter((item) => item.verdict === "corrected").at(-1);
   return (
     <>
       {correction && (

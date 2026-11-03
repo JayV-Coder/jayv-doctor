@@ -93,8 +93,10 @@ async def index(
         )
         await connection.execute(
             text(
+                # Incidente promovido: o texto do registro vira o sanitizado (o bruto não fica).
                 "update doctor.knowledge_documents set status = 'ready', error = null,"
-                " chunk_count = :n, embedding_model = :m, reindex_queued_at = null"
+                " chunk_count = :n, embedding_model = :m, reindex_queued_at = null,"
+                " body = coalesce(:body, body)"
                 " where tenant_id = cast(:t as uuid) and id = cast(:d as uuid)"
             ),
             {
@@ -102,6 +104,9 @@ async def index(
                 "d": document.id,
                 "n": len(indexed),
                 "m": provider.embedding_model,
+                "body": str(Sanitizer().sanitize(document.body)[0])
+                if document.body is not None
+                else None,
             },
         )
     return "ready"

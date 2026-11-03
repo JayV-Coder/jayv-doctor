@@ -875,8 +875,10 @@ async def test_revisao_auditada_e_promocao_do_incidente_resolvido(
         incident,
         IncidentChange.model_validate({"status": "resolved", "resolution_note": "VBAK liberada."}),
     )
+    assert (await IncidentRepository().detail(analyst, incident)).promotable is True
     document = await repository.promote(analyst, incident)
-    assert (await IncidentRepository().detail(analyst, incident)).knowledge_document_id == document
+    promoted = await IncidentRepository().detail(analyst, incident)
+    assert (promoted.knowledge_document_id, promoted.promotable) == (document, False)
     with pytest.raises(ApiError) as again:
         await repository.promote(analyst, incident)
     assert again.value.code == "already_promoted"

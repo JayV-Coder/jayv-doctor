@@ -377,6 +377,13 @@ async def test_caso_corrigido_e_promovido_volta_no_proximo_diagnostico(
         d=document,
     )
     assert "joana@cliente.com.br" not in chunks[0]["content"]
+    [stored] = await rows(
+        engine,
+        "select body from doctor.knowledge_documents where id = cast(:d as uuid)",
+        d=document,
+    )
+    assert "joana@cliente.com.br" not in stored["body"]
+    assert "VBAK" in stored["body"]
 
     loader = DbLoader(engine, tenant["tenant"], found["incident"], provider)
     hits = await loader.knowledge("lock tabela VBAK job noturno")

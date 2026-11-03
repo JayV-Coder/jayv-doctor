@@ -36,7 +36,7 @@ grant select on doctor.diagnosis_feedback to authenticated;
 create policy diagnosis_feedback_select on doctor.diagnosis_feedback
 for select to authenticated using (tenant_id = (select doctor.current_tenant_id()));
 
--- A versão publicada aceita, além das FKs, só sair de "Requer revisão".
+-- A versão publicada aceita, além das FKs, só sair de "Requer revisão" (ADR-0013).
 create or replace function doctor.guard_diagnosis()
 returns trigger
 language plpgsql
@@ -63,6 +63,12 @@ $$;
 alter table doctor.knowledge_documents
   add column body text check (char_length(body) <= 100000),
   add constraint knowledge_documents_incident_body check ((source = 'incident') = (body is not null));
+-- O texto bruto (antes da Sanitização, que roda no worker) não é legível pelos membros: o worker
+-- o troca pelo texto sanitizado ao indexar, e a busca só devolve Fragmentos.
+revoke select on doctor.knowledge_documents from authenticated;
+grant select (id, tenant_id, title, source, storage_path, incident_id, content_type, size_bytes,
+  status, chunk_count, embedding_model, reindex_queued_at, error, created_by, created_at, updated_at)
+  on doctor.knowledge_documents to authenticated;
 create unique index knowledge_documents_incident_idx on doctor.knowledge_documents (tenant_id, incident_id)
   where source = 'incident';
 
@@ -74,7 +80,7 @@ create function doctor.submit_diagnosis_feedback(
   responsible_system text,
   comment text
 )
-returns uuid
+returns doctor.diagnosis_feedback
 language plpgsql
 security definer
 set search_path = ''
@@ -82,7 +88,9 @@ as $$
 declare
   tenant uuid := doctor.current_tenant_id();
   current doctor.diagnoses;
-  created uuid;
+  created doctor.diagnosis_feedback;
+  category text := nullif(btrim(submit_diagnosis_feedback.correct_category), '');
+  cause text := nullif(btrim(submit_diagnosis_feedback.correct_cause), '');
 begin
   if not doctor.has_member_role('owner', 'admin', 'analyst') then
     raise insufficient_privilege using message = 'exige Analyst ou acima';
@@ -94,15 +102,28 @@ begin
   if current.status not in ('published', 'inconclusive', 'failed_llm') then
     raise exception 'Diagnóstico ainda não publicado' using errcode = 'DR021';
   end if;
-  insert into doctor.diagnosis_feedback (tenant_id, diagnosis_id, reviewer_id, verdict,
-    correct_category, correct_cause, responsible_system, comment, time_to_review_s)
-  values (tenant, target, auth.uid(), submit_diagnosis_feedback.verdict,
-    nullif(btrim(submit_diagnosis_feedback.correct_category), ''),
-    nullif(btrim(submit_diagnosis_feedback.correct_cause), ''),
-    submit_diagnosis_feedback.responsible_system,
-    nullif(btrim(submit_diagnosis_feedback.comment), ''),
-    greatest(0, extract(epoch from now() - coalesce(current.published_at, now()))::int))
-  returning id into created;
+  -- Só a versão mais nova publicada: revisar versão superada distorce as métricas do piloto.
+  if exists (
+    select 1 from doctor.diagnoses d
+    where d.tenant_id = tenant and d.incident_id = current.incident_id
+      and d.version > current.version and d.status in ('published', 'inconclusive', 'failed_llm')
+  ) then
+    raise exception 'Versão superada' using errcode = 'DR024';
+  end if;
+  if submit_diagnosis_feedback.verdict = 'corrected' and category is null and cause is null then
+    raise exception 'Corrigir exige a categoria ou a causa certa' using errcode = 'DR025';
+  end if;
+  begin
+    insert into doctor.diagnosis_feedback (tenant_id, diagnosis_id, reviewer_id, verdict,
+      correct_category, correct_cause, responsible_system, comment, time_to_review_s)
+    values (tenant, target, auth.uid(), submit_diagnosis_feedback.verdict, category, cause,
+      submit_diagnosis_feedback.responsible_system,
+      nullif(btrim(submit_diagnosis_feedback.comment), ''),
+      greatest(0, extract(epoch from now() - coalesce(current.published_at, now()))::int))
+    returning * into created;
+  exception when unique_violation then
+    raise exception 'Versão já revisada por este Usuário' using errcode = 'DR026';
+  end;
   if submit_diagnosis_feedback.verdict in ('accepted', 'corrected') then
     update doctor.diagnoses d set requires_human_review = false where d.id = target;
   end if;

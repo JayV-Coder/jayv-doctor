@@ -330,7 +330,10 @@ async def test_conector_criado_pela_api_guarda_a_credencial_so_no_vault(
     )
     assert "credencial-real" not in created.model_dump_json()
     await repository.update(
-        admin, created.id, ConnectorChange.model_validate({"credential": "trocada"})
+        admin,
+        created.id,
+        ConnectorChange.model_validate({"credential": "trocada"}),
+        lambda provider, config: None,
     )
     async with engine.begin() as connection:
         await connection.execute(text("set local role service_role"))

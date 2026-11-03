@@ -110,6 +110,16 @@ def require_aal2(claims: Annotated[Claims, Depends(get_claims)]) -> Claims:
     return require_aal2_claims(claims)
 
 
+def require_manager(*roles: str) -> Callable[[Claims], Claims]:
+    """Papel da lista e MFA (`aal2`): toda ação administrativa. O banco confere na tabela."""
+    by_role = require_role(*roles)
+
+    def dependency(claims: Annotated[Claims, Depends(by_role)]) -> Claims:
+        return require_aal2_claims(claims)
+
+    return dependency
+
+
 def require_role(*roles: str) -> Callable[[Claims], Claims]:
     def dependency(claims: Annotated[Claims, Depends(get_claims)]) -> Claims:
         if claims.tenant_id is None:

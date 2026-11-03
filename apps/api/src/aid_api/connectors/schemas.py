@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 Provider = Literal["fake", "gcp", "salesforce", "sap"]
 # SecretStr: a credencial não aparece em repr, log nem mensagem de validação.
@@ -12,8 +12,14 @@ Credential = SecretStr
 Interval = Field(default=None, ge=60, le=86400)
 
 
+def strip_name(value: str | None) -> str | None:
+    return value.strip() if value is not None else None
+
+
+# Sem `str_strip_whitespace` no modelo: ele mexeria também na credencial (a quebra de linha no
+# fim de uma chave PEM importa). Só o nome é aparado.
 class NewConnector(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="forbid")
 
     integration_id: UUID
     provider: Provider
@@ -21,19 +27,26 @@ class NewConnector(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
     credential: Credential = Field(min_length=1, max_length=16384)
 
+    _strip = field_validator("name", mode="before")(strip_name)
+
 
 class ConnectorChange(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, min_length=2, max_length=80)
     config: dict[str, Any] | None = None
     sync_interval_seconds: int | None = Interval
     credential: Credential | None = Field(default=None, min_length=1, max_length=16384)
 
+    _strip = field_validator("name", mode="before")(strip_name)
+
     @model_validator(mode="after")
-    def something(self) -> Self:
-        if not self.model_dump(exclude_unset=True):
+    def check_fields(self) -> Self:
+        sent = self.model_dump(exclude_unset=True)
+        if not sent:
             raise ValueError("nada a alterar")
+        if any(value is None for value in sent.values()):
+            raise ValueError("campo enviado não pode ser nulo")
         return self
 
 

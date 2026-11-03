@@ -35,7 +35,7 @@ async def claim(engine: AsyncEngine, connector_id: str) -> tuple[Mapping[str, An
                 await connection.execute(
                     text(
                         "select id::text, tenant_id::text, integration_id::text, provider, config,"
-                        " status, checkpoint from doctor.connectors"
+                        " status, checkpoint, config_version from doctor.connectors"
                         " where id = cast(:c as uuid) for update"
                     ),
                     {"c": connector_id},
@@ -112,10 +112,15 @@ async def store_batch(
         )
         await connection.execute(
             text(
+                # Só se a config não mudou desde o começo: config nova recomeça do zero.
                 "update doctor.connectors set checkpoint = cast(:cp as jsonb)"
-                " where id = cast(:c as uuid)"
+                " where id = cast(:c as uuid) and config_version = :v"
             ),
-            {"cp": json.dumps(batch.checkpoint), "c": connector["id"]},
+            {
+                "cp": json.dumps(batch.checkpoint),
+                "c": connector["id"],
+                "v": connector["config_version"],
+            },
         )
         await connection.execute(
             text(
@@ -179,6 +184,8 @@ async def finish(
             text(
                 "update doctor.connectors set"
                 " status = case when status = 'disabled' then status else :status end,"
+                " paused_reason = case when :status = 'paused' and status <> 'disabled'"
+                " then 'auth' else paused_reason end,"
                 " next_run_at = now() + make_interval(secs => :seconds)"
                 " where id = cast(:c as uuid)"
             ),

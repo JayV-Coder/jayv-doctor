@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(9);
+select plan(13);
 
 select tests.create_user('00000000-0000-4000-8000-0000000a0001', 'ana@acme.test');
 select tests.create_user('00000000-0000-4000-8000-0000000a0002', 'davi@acme.test');
@@ -52,6 +52,42 @@ select tests.authenticate_as(
 select throws_ok(
   format($$select doctor.request_connector_sync(%L)$$, (select id from created)),
   'P0002', null, 'outra Organização não mexe no Conector'
+);
+select tests.clear_authentication();
+
+-- Pausa manual não volta com credencial nova; pausa por autenticação volta.
+select tests.authenticate_as(
+  '00000000-0000-4000-8000-0000000a0001', '00000000-0000-4000-8000-00000000ac01', 'admin', 'aal2'
+);
+select doctor.pause_connector((select id from created));
+select doctor.put_connector_secret((select id from created), 'outra');
+select is((select status from doctor.connectors), 'paused', 'pausa manual continua depois de trocar a credencial');
+select tests.clear_authentication();
+update doctor.connectors set paused_reason = 'auth';
+select tests.authenticate_as(
+  '00000000-0000-4000-8000-0000000a0001', '00000000-0000-4000-8000-00000000ac01', 'admin', 'aal2'
+);
+select doctor.put_connector_secret((select id from created), 'corrigida');
+select is((select status from doctor.connectors), 'active', 'pausa por autenticação sai com a credencial nova');
+select tests.clear_authentication();
+
+update doctor.connectors set status = 'disabled';
+select tests.authenticate_as(
+  '00000000-0000-4000-8000-0000000a0001', '00000000-0000-4000-8000-00000000ac01', 'admin', 'aal2'
+);
+select throws_ok(
+  format($$select doctor.resume_connector(%L)$$, (select id from created)), 'DR008', null,
+  'Conector desativado não é retomado pela gestão'
+);
+select tests.clear_authentication();
+update doctor.connectors set status = 'active';
+insert into doctor.connector_syncs (tenant_id, connector_id) select '00000000-0000-4000-8000-00000000ac01', id from created;
+select tests.authenticate_as(
+  '00000000-0000-4000-8000-0000000a0001', '00000000-0000-4000-8000-00000000ac01', 'admin', 'aal2'
+);
+select throws_ok(
+  format($$select doctor.request_connector_sync(%L)$$, (select id from created)), 'DR009', null,
+  'com Sincronização em curso, o pedido é recusado'
 );
 select tests.clear_authentication();
 

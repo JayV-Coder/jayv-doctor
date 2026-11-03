@@ -17,7 +17,7 @@ from aid_api.connectors.schemas import (
     NewConnector,
     TestResult,
 )
-from aid_api.core.auth import Claims, require_aal2_claims, require_role
+from aid_api.core.auth import Claims, require_manager, require_role
 from aid_api.core.idempotency import Idempotent, IdempotentRoute
 from aid_api.core.permissions import MANAGE_CONNECTORS, VIEW
 from aid_api.core.rate_limit import rate_limit
@@ -30,14 +30,8 @@ router = APIRouter(
 )
 
 
-def require_manager(
-    claims: Annotated[Claims, Depends(require_role(*MANAGE_CONNECTORS))],
-) -> Claims:
-    return require_aal2_claims(claims)
-
-
 Viewer = Annotated[Claims, Depends(require_role(*VIEW))]
-Manager = Annotated[Claims, Depends(require_manager)]
+Manager = Annotated[Claims, Depends(require_manager(*MANAGE_CONNECTORS))]
 Repository = Annotated[ConnectorRepository, Depends(get_connector_repository)]
 
 
@@ -71,10 +65,7 @@ async def get_connector(target: UUID, claims: Viewer, repository: Repository) ->
 async def update_connector(
     target: UUID, change: ConnectorChange, claims: Manager, repository: Repository, _: Idempotent
 ) -> Connector:
-    if change.config is not None:
-        current = await repository.get(claims, str(target))
-        service.check_config(current.provider, change.config)
-    return await repository.update(claims, str(target), change)
+    return await repository.update(claims, str(target), change, service.check_config)
 
 
 @router.post("/{target}/test", response_model=TestResult)

@@ -2,6 +2,8 @@
 conferem Owner/Admin com MFA na tabela e guardam a credencial no Vault."""
 
 import json
+from collections.abc import Callable, Mapping
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
@@ -32,6 +34,8 @@ ERRORS = {
     "42501": lambda: ApiError(403, "forbidden", "Seu Papel não permite esta ação."),
     "23514": lambda: ApiError(422, "validation_error", "Os dados enviados são inválidos."),
     "DR007": lambda: ApiError(409, "connector_paused", "Retome o Conector antes de sincronizar."),
+    "DR008": lambda: ApiError(409, "connector_disabled", "Conector desativado pela plataforma."),
+    "DR009": lambda: ApiError(409, "sync_running", "Já há uma Sincronização em andamento."),
 }
 
 
@@ -80,8 +84,17 @@ class ConnectorRepository:
             )
             return await fetch(connection, str(created))
 
-    async def update(self, claims: Claims, target: str, change: ConnectorChange) -> Connector:
+    async def update(
+        self,
+        claims: Claims,
+        target: str,
+        change: ConnectorChange,
+        check_config: Callable[[str, Mapping[str, Any]], None],
+    ) -> Connector:
         async with translated_tx(claims, ERRORS) as connection:
+            if change.config is not None:
+                # Na mesma transação da alteração: o provedor lido é o que vai valer.
+                check_config((await fetch(connection, target)).provider, change.config)
             if change.name is not None or change.config is not None or change.sync_interval_seconds:
                 await connection.execute(
                     text(

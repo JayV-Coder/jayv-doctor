@@ -1,15 +1,17 @@
 """Validação e teste de conexão pelo conector do provedor, sem guardar nem logar a credencial."""
 
 import asyncio
+import logging
 from collections.abc import Mapping
 from typing import Any
 
-from aid_connectors.base import Connector, Secret
+from aid_connectors.base import Connector, ConnectorError, Secret
 from aid_connectors.registry import REGISTRY
 
 from aid_api.connectors.schemas import TestResult
 from aid_api.core.errors import ApiError
 
+logger = logging.getLogger(__name__)
 TEST_TIMEOUT = 15.0
 
 
@@ -37,4 +39,11 @@ async def test_connection(provider: str, config: Mapping[str, Any], credential: 
         )
     except TimeoutError:
         return TestResult(ok=False, message="O provedor não respondeu a tempo.")
+    except ConnectorError as exc:
+        return TestResult(ok=False, message=exc.message)
+    except Exception:
+        # Erro de rede ou do conector: falha do teste, não da API. Sem detalhe, que pode ecoar a
+        # credencial ou a resposta do provedor.
+        logger.exception("teste de conexão do provedor %s falhou", provider)
+        return TestResult(ok=False, message="Não foi possível falar com o provedor.")
     return TestResult(ok=result.ok, message=result.message)

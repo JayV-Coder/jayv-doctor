@@ -33,14 +33,14 @@ isOneToOne: false
                   ]
                 },"connectors": {
                   Row: {
-                    "checkpoint": Json | null,"config": NonNullable<Json>,"consecutive_failures": number,"created_at": string,"created_by": string | null,"id": string,"integration_id": string,"last_error": string | null,"last_sync_at": string | null,"name": string,"next_run_at": string,"provider": string,"secret_id": string | null,"status": string,"sync_interval_seconds": number,"tenant_id": string,"updated_at": string
+                    "checkpoint": Json | null,"config": NonNullable<Json>,"config_version": number,"consecutive_failures": number,"created_at": string,"created_by": string | null,"id": string,"integration_id": string,"last_error": string | null,"last_sync_at": string | null,"name": string,"next_run_at": string,"paused_reason": string | null,"provider": string,"secret_id": string | null,"status": string,"sync_interval_seconds": number,"tenant_id": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "checkpoint"?: Json | null,"config"?: NonNullable<Json>,"consecutive_failures"?: number,"created_at"?: string,"created_by"?: string | null,"id"?: string,"integration_id": string,"last_error"?: string | null,"last_sync_at"?: string | null,"name": string,"next_run_at"?: string,"provider": string,"secret_id"?: string | null,"status"?: string,"sync_interval_seconds"?: number,"tenant_id": string,"updated_at"?: string
+                    "checkpoint"?: Json | null,"config"?: NonNullable<Json>,"config_version"?: number,"consecutive_failures"?: number,"created_at"?: string,"created_by"?: string | null,"id"?: string,"integration_id": string,"last_error"?: string | null,"last_sync_at"?: string | null,"name": string,"next_run_at"?: string,"paused_reason"?: string | null,"provider": string,"secret_id"?: string | null,"status"?: string,"sync_interval_seconds"?: number,"tenant_id": string,"updated_at"?: string
                   }
                   Update: {
-                    "checkpoint"?: Json | null,"config"?: NonNullable<Json>,"consecutive_failures"?: number,"created_at"?: string,"created_by"?: string | null,"id"?: string,"integration_id"?: string,"last_error"?: string | null,"last_sync_at"?: string | null,"name"?: string,"next_run_at"?: string,"provider"?: string,"secret_id"?: string | null,"status"?: string,"sync_interval_seconds"?: number,"tenant_id"?: string,"updated_at"?: string
+                    "checkpoint"?: Json | null,"config"?: NonNullable<Json>,"config_version"?: number,"consecutive_failures"?: number,"created_at"?: string,"created_by"?: string | null,"id"?: string,"integration_id"?: string,"last_error"?: string | null,"last_sync_at"?: string | null,"name"?: string,"next_run_at"?: string,"paused_reason"?: string | null,"provider"?: string,"secret_id"?: string | null,"status"?: string,"sync_interval_seconds"?: number,"tenant_id"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -528,6 +528,7 @@ isOneToOne: false
 { Args: { "target": string }; Returns: {
               "checkpoint": Json | null,
 "config": NonNullable<Json>,
+"config_version": number,
 "consecutive_failures": number,
 "created_at": string,
 "created_by": string | null,
@@ -537,6 +538,7 @@ isOneToOne: false
 "last_sync_at": string | null,
 "name": string,
 "next_run_at": string,
+"paused_reason": string | null,
 "provider": string,
 "secret_id": string | null,
 "status": string,

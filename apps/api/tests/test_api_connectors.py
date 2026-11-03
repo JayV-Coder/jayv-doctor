@@ -51,7 +51,11 @@ class FakeRepository(ConnectorRepository):
         self.calls.append(("create", new))
         return connector(name=new.name)
 
-    async def update(self, claims: Claims, target: str, change: ConnectorChange) -> Connector:
+    async def update(
+        self, claims: Claims, target: str, change: ConnectorChange, check_config: Any
+    ) -> Connector:
+        if change.config is not None:
+            check_config("fake", change.config)
         self.calls.append(("update", change))
         return connector()
 
@@ -157,7 +161,7 @@ def test_teste_de_conector_salvo_usa_a_config_salva_e_a_credencial_do_corpo() ->
 def test_acoes(action: str) -> None:
     repository = FakeRepository()
     response = client(repository=repository).post(f"/api/v1/connectors/{CONNECTOR_ID}/{action}")
-    assert response.status_code == 202 if action == "sync" else 204
+    assert response.status_code == (202 if action == "sync" else 204)
     assert repository.calls == [(action, CONNECTOR_ID)]
 
 
@@ -175,3 +179,33 @@ def test_patch_com_credencial_troca_no_vault_e_nao_ecoa() -> None:
 def test_lista_de_sincronizacoes_para_todo_papel() -> None:
     response = client("viewer").get(f"/api/v1/connectors/{CONNECTOR_ID}/syncs")
     assert response.status_code == 200
+
+
+def test_credencial_e_guardada_como_veio_inclusive_com_quebra_de_linha() -> None:
+    repository = FakeRepository()
+    pem = "-----BEGIN KEY-----\nabc\n-----END KEY-----\n"
+    client(repository=repository).post(
+        "/api/v1/connectors", json={**NEW, "credential": pem, "name": "  Fake  "}
+    )
+    created = repository.calls[0][1]
+    assert created.credential.get_secret_value() == pem
+    assert created.name == "Fake"
+
+
+def test_patch_so_com_nulos_e_recusado() -> None:
+    response = client().patch(f"/api/v1/connectors/{CONNECTOR_ID}", json={"name": None})
+    assert response.status_code == 422
+
+
+def test_config_de_falha_malformada_e_recusada_e_nao_vira_500() -> None:
+    response = client().post(
+        "/api/v1/connectors/test",
+        json={"provider": "fake", "config": {"pages": 1, "fail": "x"}, "credential": "c"},
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "invalid_config"
+
+
+def test_patch_de_config_invalida_vira_422() -> None:
+    response = client().patch(f"/api/v1/connectors/{CONNECTOR_ID}", json={"config": {"pages": -1}})
+    assert response.status_code == 422

@@ -42,8 +42,8 @@ class PrivacyRepository:
                 row = (
                     await connection.execute(
                         text(
-                            "select doctor.effective_retention((select doctor.current_tenant_id()),"
-                            " :c) as days, b.default_days, b.min_days, b.max_days"
+                            "select doctor.my_retention(:c) as days, b.default_days,"
+                            " b.min_days, b.max_days"
                             " from doctor.retention_bounds(:c) b"
                         ),
                         {"c": data_class},

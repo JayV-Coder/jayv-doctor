@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(26);
+select plan(29);
 
 select tests.create_user('00000000-0000-4000-8000-0000000a0001', 'owner@acme.test');
 select tests.create_user('00000000-0000-4000-8000-0000000a0002', 'admin@acme.test');
@@ -20,6 +20,11 @@ select tests.authenticate_as('00000000-0000-4000-8000-0000000a0003', '00000000-0
 select throws_ok($$select doctor.set_retention_policy('raw_logs', 15)$$, '42501', null, 'Analyst não muda a retenção');
 select tests.clear_authentication();
 select tests.authenticate_as('00000000-0000-4000-8000-0000000a0002', '00000000-0000-4000-8000-00000000ac01', 'admin', 'aal2');
+select throws_ok(
+  $$select doctor.effective_retention('00000000-0000-4000-8000-00000000be01', 'audit')$$,
+  '42501', null, 'cliente não lê a retenção de outra Organização'
+);
+select is(doctor.my_retention('events'), 90, 'só a da Organização ativa');
 select throws_ok($$select doctor.set_retention_policy('audit', 90)$$, 'DR040', null, 'auditoria não fica abaixo de 365 dias');
 select throws_ok($$select doctor.set_retention_policy('raw_logs', 1000)$$, 'DR040', null, 'nem acima do limite');
 select lives_ok($$select doctor.set_retention_policy('raw_logs', 7)$$, 'Admin com MFA ajusta');
@@ -97,10 +102,20 @@ select is(to_regclass('doctor.events_2024_01'), null, 'e não existe mais');
 -- Titular: localizar e apagar pela Referência (HMAC), sem gravar a Referência na trilha.
 update doctor.events set business_reference = 'hmac:' || repeat('f', 64)
 where tenant_id = '00000000-0000-4000-8000-00000000ac01';
+insert into doctor.executions (id, tenant_id, integration_id, first_event_at, last_event_at, correlation_keys)
+values ('00000000-0000-4000-8000-0000000004a1', '00000000-0000-4000-8000-00000000ac01',
+  '00000000-0000-4000-8000-0000000001a1', now(), now(),
+  jsonb_build_object('business_reference', jsonb_build_array('hmac:' || repeat('f', 64), 'hmac:outra')));
 select tests.authenticate_as('00000000-0000-4000-8000-0000000a0002', '00000000-0000-4000-8000-00000000ac01', 'admin', 'aal2');
-select is((select events from doctor.find_subject_events('hmac:' || repeat('f', 64))), 1::bigint, 'acha os Eventos do titular');
+select is((select events from doctor.find_subject_events('hmac:' || repeat('f', 64))), 2::bigint,
+  'acha os Eventos e as Execuções do titular');
 select is(doctor.erase_subject_events('hmac:' || repeat('f', 64)), 1::bigint, 'e apaga');
 select tests.clear_authentication();
+select is(
+  (select correlation_keys -> 'business_reference' from doctor.executions
+   where id = '00000000-0000-4000-8000-0000000004a1'),
+  '["hmac:outra"]'::jsonb, 'a Referência sai também das chaves da Execução'
+);
 select is(
   (select after::text not like '%hmac%' from doctor.audit_logs
    where tenant_id = '00000000-0000-4000-8000-00000000ac01' and action = 'subject.erased'),

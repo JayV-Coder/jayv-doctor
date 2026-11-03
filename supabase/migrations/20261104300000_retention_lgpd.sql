@@ -59,8 +59,21 @@ as $$
     (select b.default_days from doctor.retention_bounds(effective_retention.data_class) b)
   )
 $$;
-revoke all on function doctor.effective_retention(uuid, text) from public, anon;
-grant execute on function doctor.effective_retention(uuid, text) to authenticated, service_role;
+revoke all on function doctor.effective_retention(uuid, text) from public, anon, authenticated;
+grant execute on function doctor.effective_retention(uuid, text) to service_role;
+
+-- Para a tela: só a da Organização ativa (o tenant sai do JWT, nunca do argumento).
+create function doctor.my_retention(data_class text)
+returns integer
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select doctor.effective_retention(doctor.current_tenant_id(), my_retention.data_class)
+$$;
+revoke all on function doctor.my_retention(text) from public, anon, service_role;
+grant execute on function doctor.my_retention(text) to authenticated;
 
 create function doctor.set_retention_policy(data_class text, days integer)
 returns void
@@ -85,6 +98,12 @@ begin
   values (tenant, set_retention_policy.data_class, days, auth.uid())
   on conflict on constraint retention_policies_tenant_id_data_class_key
   do update set days = excluded.days, updated_by = excluded.updated_by;
+  -- Os Logs brutos já aceitos passam a vencer pela política nova (o upload pendente, de 1 dia,
+  -- e o recusado não mudam).
+  if set_retention_policy.data_class = 'raw_logs' then
+    update doctor.raw_log_objects r set expires_at = r.created_at + make_interval(days => days)
+    where r.tenant_id = tenant and r.expires_at > r.created_at + interval '2 days';
+  end if;
 end;
 $$;
 revoke all on function doctor.set_retention_policy(text, integer) from public, anon, service_role;
@@ -98,6 +117,13 @@ alter table doctor.tenants
   add column deletion_requested_by uuid references auth.users (id) on delete set null,
   add column deletion_scheduled_for timestamptz,
   add constraint tenants_deletion_dates check ((deletion_requested_at is null) = (deletion_scheduled_for is null));
+
+-- A exclusão tem registros próprios (`org.deletion_requested`/`_canceled`); o trigger genérico da
+-- Organização não repete. O envio ao LLM fica no `org.updated`, com before e after.
+drop trigger tenants_audit on doctor.tenants;
+create trigger tenants_audit after update on doctor.tenants
+for each row execute function doctor.audit_change('org', 'auto_diagnose_critical',
+  'deletion_requested_at', 'deletion_requested_by', 'deletion_scheduled_for');
 
 create function doctor.set_llm_enabled(enabled boolean)
 returns void
@@ -204,8 +230,33 @@ alter table doctor.imports drop constraint imports_tenant_id_raw_log_object_id_f
   add constraint imports_tenant_id_raw_log_object_id_fkey foreign key (tenant_id, raw_log_object_id)
     references doctor.raw_log_objects (tenant_id, id) on delete set null (raw_log_object_id);
 
--- Logs brutos vencidos (pela retenção da Organização ou pelo `expires_at` do upload pendente): o
--- worker apaga o objeto no Storage e depois a linha.
+-- `expires_at` do Log bruto aceito segue a retenção da Organização: a ingestão e a Importação
+-- gravam o padrão de 30 dias, e o trigger troca pela política (o upload pendente, que vence em 1
+-- dia, e o recusado, que vence na hora, ficam como estão). O Explorador mostra os dias que faltam
+-- por essa mesma coluna.
+create function doctor.raw_log_expiry()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.expires_at > now() + interval '2 days' then
+    new.expires_at := new.created_at
+      + make_interval(days => doctor.effective_retention(new.tenant_id, 'raw_logs'));
+  end if;
+  return new;
+end;
+$$;
+revoke all on function doctor.raw_log_expiry() from public;
+
+create trigger raw_log_objects_expiry
+before insert or update of expires_at on doctor.raw_log_objects
+for each row execute function doctor.raw_log_expiry();
+
+create index raw_log_objects_due_idx on doctor.raw_log_objects (expires_at);
+
+-- Logs brutos vencidos: o worker apaga o objeto no Storage e depois a linha.
 create function doctor.expired_raw_logs(batch integer)
 returns table (id uuid, tenant_id uuid, storage_path text)
 language sql
@@ -216,8 +267,7 @@ as $$
   select r.id, r.tenant_id, r.storage_path
   from doctor.raw_log_objects r
   where r.expires_at < now()
-     or r.created_at < now() - make_interval(days => doctor.effective_retention(r.tenant_id, 'raw_logs'))
-  order by r.created_at
+  order by r.expires_at
   limit batch
 $$;
 
@@ -262,11 +312,17 @@ begin
   get diagnostics removed = row_count;
   counts := counts || jsonb_build_object('events', removed);
 
+  -- A sobrevivente leva as fundidas junto (cascade): nenhuma das duas pode estar num Incidente.
   delete from doctor.executions x
   where x.tenant_id = tenant and x.merged_into is null and x.last_event_at < events_cutoff
     and not exists (
       select 1 from doctor.incident_executions ie
       where ie.tenant_id = x.tenant_id and ie.execution_id = x.id
+    )
+    and not exists (
+      select 1 from doctor.executions m
+      join doctor.incident_executions ie on ie.tenant_id = m.tenant_id and ie.execution_id = m.id
+      where m.tenant_id = x.tenant_id and m.merged_into = x.id
     );
   get diagnostics removed = row_count;
   counts := counts || jsonb_build_object('executions', removed);
@@ -323,6 +379,20 @@ begin
 end;
 $$;
 
+-- Fim da carência: a Organização para de aceitar escrita (token de ingestão e API exigem
+-- `active`) antes de o worker listar os arquivos, para nada novo chegar no meio da exclusão.
+create function doctor.freeze_tenant(tenant uuid)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  update doctor.tenants t set status = 'deleted'
+  where t.id = tenant and t.deletion_scheduled_for <= now()
+$$;
+revoke all on function doctor.freeze_tenant(uuid) from public, anon, authenticated;
+grant execute on function doctor.freeze_tenant(uuid) to service_role;
+
 create function doctor.due_tenant_deletions()
 returns table (tenant_id uuid)
 language sql
@@ -367,6 +437,8 @@ begin
     'memberships', (select count(*) from doctor.memberships m where m.tenant_id = tenant)
   );
   delete from doctor.user_active_tenant u where u.tenant_id = tenant;
+  -- A fila do Dashboard (#21) não tem FK de propósito; sai à mão.
+  delete from doctor.execution_stats_dirty d where d.tenant_id = tenant;
   delete from doctor.tenants t where t.id = tenant;
   insert into doctor.deletion_receipts (tenant_id, requested_by, requested_at, removed)
   values (tenant, found_tenant.deletion_requested_by, found_tenant.deletion_requested_at, counts)
@@ -387,7 +459,13 @@ as $$
 begin
   perform doctor.require_manager();
   return query
-    select count(*), min(e.timestamp), max(e.timestamp) from doctor.events e
+    select count(*) + (
+        select count(*) from doctor.executions x
+        where x.tenant_id = doctor.current_tenant_id()
+          and x.correlation_keys -> 'business_reference' ? reference
+      ),
+      min(e.timestamp), max(e.timestamp)
+    from doctor.events e
     where e.tenant_id = doctor.current_tenant_id() and e.business_reference = reference;
 end;
 $$;
@@ -408,6 +486,15 @@ begin
   end if;
   delete from doctor.events e where e.tenant_id = tenant and e.business_reference = reference;
   get diagnostics removed = row_count;
+  -- A Referência também está nas chaves de correlação das Execuções e das fusões.
+  update doctor.executions x
+  set correlation_keys = jsonb_set(x.correlation_keys, '{business_reference}',
+    (x.correlation_keys -> 'business_reference') - reference)
+  where x.tenant_id = tenant and x.correlation_keys -> 'business_reference' ? reference;
+  update doctor.execution_merges m
+  set merged_keys = jsonb_set(m.merged_keys, '{business_reference}',
+    (m.merged_keys -> 'business_reference') - reference)
+  where m.tenant_id = tenant and m.merged_keys -> 'business_reference' ? reference;
   -- O registro guarda a quantidade, não a Referência (que já identifica o titular).
   perform doctor.write_audit(tenant, 'subject.erased', 'subject', null, null,
     jsonb_build_object('events', removed));

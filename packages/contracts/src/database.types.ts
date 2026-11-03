@@ -1337,6 +1337,9 @@ isOneToOne: false
 "forget_raw_logs":
 { Args: { "targets": (string)[] }; Returns: number
                            },
+"freeze_tenant":
+{ Args: { "tenant": string }; Returns: undefined
+                           },
 "get_connector_secret":
 { Args: { "target": string }; Returns: string
                            },
@@ -1429,6 +1432,9 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"my_retention":
+{ Args: { "data_class": string }; Returns: number
+                           },
 "pause_connector":
 { Args: { "target": string }; Returns: undefined
                            },

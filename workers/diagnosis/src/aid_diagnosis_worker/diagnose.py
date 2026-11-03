@@ -371,7 +371,8 @@ async def diagnose(
     try:
         provider = provider_for(diagnosis.llm_provider)
         hybrid = diagnosis.requested_mode == "hybrid"
-        allowed = hybrid and await ai_allowed(engine, diagnosis.tenant_id)
+        llm_enabled = await ai_allowed(engine, diagnosis.tenant_id)
+        allowed = hybrid and llm_enabled
         motor = DiagnosisEngine(
             GuardedLLM(provider) if allowed else None,
             scope=diagnosis.tenant_id,
@@ -380,9 +381,10 @@ async def diagnose(
                 " as Regras."
             ),
         )
-        # Sem IA, a Base também não gera o embedding da pergunta: a busca vai só pelo texto.
+        # Envio ao LLM desligado: a Base também não gera o embedding da pergunta (só o texto). No
+        # rules_only com o envio ligado, o embedding da Base continua.
         loader = DbLoader(
-            engine, diagnosis.tenant_id, diagnosis.incident_id, provider if allowed else None
+            engine, diagnosis.tenant_id, diagnosis.incident_id, provider if llm_enabled else None
         )
         draft = await motor.run(
             loader,

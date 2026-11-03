@@ -148,7 +148,9 @@ async def test_exclusao_total_vencida_nao_deixa_nada(
             {"c": connector, "t": gone, "n": f"doctor/connector/{connector}"},
         )
     try:
-        assert (await run_retention(engine, storage))["deleted_tenants"] >= 1
+        result = await run_retention(engine, storage)
+        assert result["deleted_tenants"] >= 1
+        assert result["failures"] == 0
         assert {bucket for bucket, path in storage.removed if path.startswith(gone)} == {
             RAW_LOGS,
             KNOWLEDGE,
@@ -174,3 +176,35 @@ async def test_exclusao_total_vencida_nao_deixa_nada(
         await run(engine, "delete from doctor.deletion_receipts where tenant_id = :t", t=gone)
         await run(engine, "delete from doctor.tenants where id = :t", t=gone)
         await run(engine, "delete from public.organizations where id = :t", t=gone)
+
+
+@pytest.mark.asyncio
+async def test_retencao_de_logs_brutos_acima_de_30_dias_vale(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    await run(
+        engine,
+        "insert into doctor.retention_policies (tenant_id, data_class, days)"
+        " values (:t, 'raw_logs', 90)",
+        t=tenant["tenant"],
+    )
+    ident = str(uuid4())
+    await run(
+        engine,
+        "insert into doctor.raw_log_objects (id, tenant_id, storage_path, sha256, size_bytes,"
+        " source, created_at) values (:i, :t, :p, repeat('a', 64), 10, 'api', :created)",
+        i=ident,
+        t=tenant["tenant"],
+        p=f"{tenant['tenant']}/api/{ident}.json",
+        created=datetime.now(UTC) - timedelta(days=40),
+    )
+    async with engine.begin() as connection:
+        expires = await connection.scalar(
+            text("select expires_at from doctor.raw_log_objects where id = cast(:i as uuid)"),
+            {"i": ident},
+        )
+    # Vence pela política (90 dias), não pelo padrão de 30: o de 40 dias fica.
+    assert expires > datetime.now(UTC) + timedelta(days=49)
+    await run(
+        engine, "delete from doctor.retention_policies where tenant_id = :t", t=tenant["tenant"]
+    )

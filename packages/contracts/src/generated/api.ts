@@ -1206,6 +1206,10 @@ export interface components {
       label: string;
       /** Finding */
       finding: string;
+      /** Event Id */
+      event_id: string | null;
+      /** Execution Id */
+      execution_id: string | null;
     };
     /** ExecutionDetail */
     ExecutionDetail: {

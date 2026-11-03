@@ -70,6 +70,8 @@ class FakeRepository(DiagnosisRepository):
                         "event_timestamp": None,
                         "label": "INT-003",
                         "finding": "504",
+                        "event_id": None,
+                        "execution_id": None,
                     }
                 ],
                 "recommendations": [],

@@ -1421,3 +1421,98 @@ p {
   font-size: 13px;
   overflow-wrap: anywhere;
 }
+
+/* Diagnóstico (Tela 6, #25) */
+.cause {
+  margin: 0;
+  font-weight: 600;
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--mu);
+}
+
+.steps li::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--mu);
+}
+
+.steps li[data-state="done"]::before {
+  background: var(--ac);
+  border-color: var(--ac);
+}
+
+.steps li[data-state="current"] {
+  color: inherit;
+  font-weight: 600;
+}
+
+.steps li[data-state="current"]::before {
+  border-color: var(--ac);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ac) 30%, transparent);
+}
+
+.recommendations {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 12px 12px 12px 32px;
+  font-size: 13px;
+}
+
+.notes ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.versions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.incident-split {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.incident-split > div {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .mobile-only {
+    display: none;
+  }
+}
+
+@media (min-width: 1280px) {
+  .incident-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 24px;
+  }
+}

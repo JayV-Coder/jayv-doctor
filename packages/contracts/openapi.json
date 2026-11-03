@@ -4707,10 +4707,41 @@
           "finding": {
             "type": "string",
             "title": "Finding"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "execution_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Id"
           }
         },
         "type": "object",
-        "required": ["rank", "kind", "ref_id", "event_timestamp", "label", "finding"],
+        "required": [
+          "rank",
+          "kind",
+          "ref_id",
+          "event_timestamp",
+          "label",
+          "finding",
+          "event_id",
+          "execution_id"
+        ],
         "title": "Evidence"
       },
       "ExecutionDetail": {

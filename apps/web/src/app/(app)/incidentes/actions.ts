@@ -9,6 +9,7 @@ const MESSAGES: Record<string, string> = {
   invalid_assignee: "O responsável não é membro da Organização.",
   forbidden: "Seu papel não permite esta ação.",
   not_found: "Incidente não encontrado.",
+  idempotency_key_reused: "Esse pedido já foi enviado com outros dados. Feche e peça de novo.",
 };
 const GENERIC = "Não foi possível concluir agora. Tente de novo.";
 
@@ -73,5 +74,20 @@ export async function addComment(
     { method: "POST", body: JSON.stringify({ body_md: body, mentions }) },
     `/incidentes/${id}`,
     "O comentário precisa ter texto (até 4.000 caracteres).",
+  );
+}
+
+// A chave nasce no navegador ao abrir o pedido: clique duplo ou repetição da rede devolvem o
+// mesmo Diagnóstico.
+export async function requestDiagnosis(
+  id: string,
+  body: { mode: "hybrid" | "rules_only"; include_knowledge_base: boolean },
+  key: string,
+): Promise<string | null> {
+  return send(
+    `/incidents/${encodeURIComponent(id)}/diagnoses`,
+    { method: "POST", body: JSON.stringify(body), headers: { "Idempotency-Key": key } },
+    `/incidentes/${id}`,
+    "Confira o modo do Diagnóstico.",
   );
 }

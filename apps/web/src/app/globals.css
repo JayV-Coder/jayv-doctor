@@ -1521,3 +1521,16 @@ p {
   margin: 0;
   padding-left: 18px;
 }
+
+/* Tela 17: barra de uso; amarela a partir de 80%, vermelha na Cota. */
+.usage .confidence-track i[data-tone="warning"] {
+  background: var(--ask);
+}
+
+.usage .confidence-track i[data-tone="danger"] {
+  background: var(--stop);
+}
+
+.usage-warning {
+  color: var(--stop);
+}

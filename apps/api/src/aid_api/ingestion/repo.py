@@ -1,6 +1,7 @@
 """Tokens de ingestão e lotes. O sistema externo não tem sessão: as funções do token rodam como
 `anon` (`anonymous_tx`), e o tenant sai do próprio token, no banco."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -30,10 +31,13 @@ def invalid_token() -> ApiError:
     )
 
 
-ERRORS = {
+ERRORS: dict[str, Callable[[], ApiError]] = {
     "DR006": invalid_token,
     "P0002": lambda: ApiError(404, "not_found", "Integração ou token não encontrado."),
     "42501": lambda: ApiError(403, "forbidden", "Seu Papel não permite esta ação."),
+    # Acima da Cota com a tolerância (110%): o sistema externo deve esperar o próximo mês ou o
+    # aumento do plano.
+    "DR050": lambda: ApiError(429, "quota_exceeded", "A Cota de Eventos do mês foi esgotada."),
 }
 
 

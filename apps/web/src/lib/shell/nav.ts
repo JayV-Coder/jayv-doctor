@@ -25,6 +25,7 @@ const TITLES: Record<string, string> = {
   "/conhecimento": "Conhecimento",
   "/auditoria": "Auditoria",
   "/subprocessadores": "Subprocessadores",
+  "/uso": "Uso e cotas",
   "/titular": "Direitos do titular",
   "/conectores/novo": "Conector GCP",
 };

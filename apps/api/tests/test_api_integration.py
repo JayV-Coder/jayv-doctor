@@ -984,3 +984,37 @@ async def test_retencao_envio_ao_llm_exclusao_e_titular(
     assert (await repository.find_subject(admin, reference)).events >= 1
     assert await repository.erase_subject(admin, reference) >= 1
     assert (await repository.find_subject(admin, reference)).events == 0
+
+
+@pytest.mark.asyncio
+async def test_uso_da_organizacao_com_os_limites_do_plano(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aid_api.core.db as db
+    from aid_api.usage.repo import UsageRepository
+
+    first, second = tenants
+    await add_admin(engine, first, user)
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "insert into doctor.usage_records (tenant_id, resource, period_start, quantity)"
+                " values (cast(:t as uuid), 'diagnoses_llm',"
+                " doctor.usage_period('diagnoses_llm'), 910),"
+                " (cast(:o as uuid), 'diagnoses_llm', doctor.usage_period('diagnoses_llm'), 5)"
+            ),
+            {"t": first, "o": second},
+        )
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    usage = await UsageRepository().usage(claims_for(first, user, "admin"))
+    by_resource = {item.resource: item for item in usage.resources}
+    assert usage.plan == "pilot"
+    assert (by_resource["diagnoses_llm"].used, by_resource["diagnoses_llm"].quota) == (910, 1000)
+    assert by_resource["members"].used == 1
+    assert set(by_resource) == {
+        "events_ingested",
+        "diagnoses_llm",
+        "storage_bytes",
+        "connectors_active",
+        "members",
+    }

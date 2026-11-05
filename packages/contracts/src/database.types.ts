@@ -1109,6 +1109,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"plan_limits": {
+                  Row: {
+                    "limit": number,"period": string,"plan": string,"resource": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "limit": number,"period": string,"plan": string,"resource": string
+                  }
+                  Update: {
+                    "limit"?: number,"period"?: string,"plan"?: string,"resource"?: string
+                  }
+                  Relationships: [
+
+                  ]
                 },"raw_log_objects": {
                   Row: {
                     "created_at": string,"expires_at": string,"id": string,"sha256": string,"size_bytes": number,"source": string,"storage_path": string,"tenant_id": string
@@ -1211,17 +1225,103 @@ isOneToOne: false
                   ]
                 },"tenants": {
                   Row: {
-                    "auto_diagnose_critical": boolean,"created_at": string,"deletion_requested_at": string | null,"deletion_requested_by": string | null,"deletion_scheduled_for": string | null,"dpa_accepted_at": string | null,"id": string,"llm_enabled": boolean,"llm_provider": string,"mttr_baseline_minutes": number | null,"plan": string,"segment": string | null,"status": string,"updated_at": string
+                    "auto_diagnose_critical": boolean,"created_at": string,"deletion_requested_at": string | null,"deletion_requested_by": string | null,"deletion_scheduled_for": string | null,"dpa_accepted_at": string | null,"id": string,"llm_enabled": boolean,"llm_provider": string,"mttr_baseline_minutes": number | null,"plan": string,"quota_tolerance": number,"segment": string | null,"status": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "auto_diagnose_critical"?: boolean,"created_at"?: string,"deletion_requested_at"?: string | null,"deletion_requested_by"?: string | null,"deletion_scheduled_for"?: string | null,"dpa_accepted_at"?: string | null,"id": string,"llm_enabled"?: boolean,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"segment"?: string | null,"status"?: string,"updated_at"?: string
+                    "auto_diagnose_critical"?: boolean,"created_at"?: string,"deletion_requested_at"?: string | null,"deletion_requested_by"?: string | null,"deletion_scheduled_for"?: string | null,"dpa_accepted_at"?: string | null,"id": string,"llm_enabled"?: boolean,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"quota_tolerance"?: number,"segment"?: string | null,"status"?: string,"updated_at"?: string
                   }
                   Update: {
-                    "auto_diagnose_critical"?: boolean,"created_at"?: string,"deletion_requested_at"?: string | null,"deletion_requested_by"?: string | null,"deletion_scheduled_for"?: string | null,"dpa_accepted_at"?: string | null,"id"?: string,"llm_enabled"?: boolean,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"segment"?: string | null,"status"?: string,"updated_at"?: string
+                    "auto_diagnose_critical"?: boolean,"created_at"?: string,"deletion_requested_at"?: string | null,"deletion_requested_by"?: string | null,"deletion_scheduled_for"?: string | null,"dpa_accepted_at"?: string | null,"id"?: string,"llm_enabled"?: boolean,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"quota_tolerance"?: number,"segment"?: string | null,"status"?: string,"updated_at"?: string
                   }
                   Relationships: [
 
+                  ]
+                },"usage_alerts": {
+                  Row: {
+                    "created_at": string,"id": string,"period_start": string,"resource": string,"tenant_id": string,"threshold": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"period_start": string,"resource": string,"tenant_id": string,"threshold": number,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"period_start"?: string,"resource"?: string,"tenant_id"?: string,"threshold"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "usage_alerts_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"usage_deltas": {
+                  Row: {
+                    "amount": number,"created_at": string,"id": number,"period_start": string,"resource": string,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"created_at"?: string,"id"?: never,"period_start": string,"resource": string,"tenant_id": string
+                  }
+                  Update: {
+                    "amount"?: number,"created_at"?: string,"id"?: never,"period_start"?: string,"resource"?: string,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "usage_deltas_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"usage_llm": {
+                  Row: {
+                    "cost_estimate": number | null,"created_at": string,"diagnosis_id": string | null,"id": string,"input_tokens": number,"model": string | null,"output_tokens": number,"provider": string,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "cost_estimate"?: number | null,"created_at"?: string,"diagnosis_id"?: string | null,"id"?: string,"input_tokens"?: number,"model"?: string | null,"output_tokens"?: number,"provider": string,"tenant_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "cost_estimate"?: number | null,"created_at"?: string,"diagnosis_id"?: string | null,"id"?: string,"input_tokens"?: number,"model"?: string | null,"output_tokens"?: number,"provider"?: string,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "usage_llm_tenant_id_diagnosis_id_fkey"
+      columns: ["tenant_id","diagnosis_id"]
+isOneToOne: false
+      referencedRelation: "diagnoses"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "usage_llm_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"usage_records": {
+                  Row: {
+                    "created_at": string,"id": string,"period_start": string,"quantity": number,"resource": string,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"period_start": string,"quantity"?: number,"resource": string,"tenant_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"period_start"?: string,"quantity"?: number,"resource"?: string,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "usage_records_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"user_active_tenant": {
                   Row: {
@@ -1288,6 +1388,9 @@ isOneToOne: false
                            },
 "current_tenant_role":
 { Args: Record<PropertyKey, never>; Returns: string
+                           },
+"current_usage":
+{ Args: { "resource": string,"tenant": string }; Returns: number
                            },
 "custom_access_token_hook":
 { Args: { "event": Json }; Returns: Json
@@ -1357,6 +1460,12 @@ isOneToOne: false
                            },
 "imported_before":
 { Args: { "integration": string,"sha": string,"tenant": string }; Returns: string
+                           },
+"increment_usage":
+{ Args: { "amount": number,"resource": string,"tenant": string }; Returns: number
+                           },
+"ingestion_over_quota":
+{ Args: { "pending": number,"tenant": string }; Returns: boolean
                            },
 "invite_member":
 { Args: { "email": string,"role": string,"token_hash": string }; Returns: {
@@ -1435,8 +1544,16 @@ isOneToOne: false
 "my_retention":
 { Args: { "data_class": string }; Returns: number
                            },
+"my_usage":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "period": string,"quota": number,"resource": string,"used": number
+            }[]
+                           },
 "pause_connector":
 { Args: { "target": string }; Returns: undefined
+                           },
+"plan_limit":
+{ Args: { "resource": string,"tenant": string }; Returns: number
                            },
 "promote_incident_to_knowledge":
 { Args: { "incident": string }; Returns: string
@@ -1449,6 +1566,11 @@ isOneToOne: false
                            },
 "put_connector_secret":
 { Args: { "secret": string,"target": string }; Returns: undefined
+                           },
+"quota_recipients":
+{ Args: { "tenant": string }; Returns: {
+              "email": string,"organization": string
+            }[]
                            },
 "record_audit":
 { Args: { "action": string,"target": string,"tenant": string }; Returns: undefined
@@ -1487,6 +1609,9 @@ isOneToOne: false
               "email": string,"organization": string
             }[]
                            },
+"reserve_llm_quota":
+{ Args: { "diagnosis": string,"provider": string,"tenant": string }; Returns: boolean
+                           },
 "resolve_ingestion_token":
 { Args: { "token_hash": string }; Returns: {
               "integration_id": string,"tenant_id": string,"token_id": string
@@ -1506,6 +1631,9 @@ isOneToOne: false
 "revoke_invitation":
 { Args: { "target": string }; Returns: undefined
                            },
+"rollup_usage":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
 "set_auto_diagnosis":
 { Args: { "enabled": boolean }; Returns: undefined
                            },
@@ -1514,6 +1642,9 @@ isOneToOne: false
                            },
 "set_retention_policy":
 { Args: { "data_class": string,"days": number }; Returns: undefined
+                           },
+"set_usage":
+{ Args: { "resource": string,"tenant": string,"value": number }; Returns: undefined
                            },
 "submit_diagnosis_feedback":
 { Args: { "comment": string,"correct_category": string,"correct_cause": string,"responsible_system": string,"target": string,"verdict": string }; Returns: {
@@ -1547,6 +1678,12 @@ isOneToOne: false
                            },
 "update_member_role":
 { Args: { "role": string,"target": string }; Returns: undefined
+                           },
+"usage_period":
+{ Args: { "at"?: string,"resource": string }; Returns: string
+                           },
+"usage_thresholds":
+{ Args: { "after": number,"before": number,"resource": string,"tenant": string }; Returns: undefined
                            },
 "utc_hour":
 { Args: { "moment": string }; Returns: string

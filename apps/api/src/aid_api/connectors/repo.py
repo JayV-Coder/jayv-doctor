@@ -40,6 +40,9 @@ ERRORS = {
     "DR007": lambda: ApiError(409, "connector_paused", "Retome o Conector antes de sincronizar."),
     "DR008": lambda: ApiError(409, "connector_disabled", "Conector desativado pela plataforma."),
     "DR009": lambda: ApiError(409, "sync_running", "Já há uma Sincronização em andamento."),
+    "DR051": lambda: ApiError(
+        409, "plan_limit", "O plano da Organização chegou ao limite de Conectores ativos."
+    ),
 }
 
 

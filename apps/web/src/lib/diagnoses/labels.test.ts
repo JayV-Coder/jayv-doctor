@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  withoutAiReason,
   active,
   reviewTime,
   changes,
@@ -116,5 +117,29 @@ describe("Diagnóstico", () => {
       "Confiança heurística: 0,50 → 0,74",
     ]);
     expect(changes(before, { ...before, version: 2 })).toEqual([]);
+  });
+});
+
+describe("motivo de rodar só com as Regras", () => {
+  const base = { requested_mode: "hybrid", mode: "rules_only", status: "published" };
+  it("acha a nota da Cota mesmo depois de outras notas", () => {
+    expect(
+      withoutAiReason({
+        ...base,
+        verification_notes: [
+          "Incidente sem Eventos carregados: Evidências insuficientes.",
+          "Cota de IA do mês esgotada: Diagnóstico só com as Regras.",
+        ],
+      }),
+    ).toBe("Cota de IA do mês esgotada: Diagnóstico só com as Regras.");
+  });
+  it("não aparece no pedido só de Regras nem na falha do LLM", () => {
+    const notes = ["Cota de IA do mês esgotada: Diagnóstico só com as Regras."];
+    expect(
+      withoutAiReason({ ...base, requested_mode: "rules_only", verification_notes: notes }),
+    ).toBeNull();
+    expect(
+      withoutAiReason({ ...base, status: "failed_llm", verification_notes: notes }),
+    ).toBeNull();
   });
 });

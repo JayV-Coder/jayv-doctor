@@ -22,7 +22,7 @@ run "topicos_tem_push_autenticado_e_dlq_apos_5_tentativas" {
   assert {
     condition = toset(keys(module.topics)) == toset([
       "ingestion.raw", "ingestion.normalized", "correlation.requested", "diagnosis.requested", "connector.sync",
-      "rules.evaluate", "incident.opened", "incident.updated", "knowledge.index", "diagnosis.published",
+      "rules.evaluate", "incident.opened", "incident.updated", "knowledge.index", "diagnosis.published", "usage.threshold",
     ])
     error_message = "Os cinco tópicos do ticket precisam existir."
   }
@@ -86,8 +86,8 @@ run "segredos_ficam_no_brasil_e_cada_servico_le_so_o_seu" {
     error_message = "A chave HMAC mestre vai para quem calcula a Referência: API e ingestão."
   }
   assert {
-    condition     = contains(keys(module.secrets.accessors), "smtp-url/api") && !contains(keys(module.secrets.accessors), "smtp-url/diagnosis")
-    error_message = "Só a API envia e-mail."
+    condition     = contains(keys(module.secrets.accessors), "smtp-url/api") && contains(keys(module.secrets.accessors), "smtp-url/diagnosis") && !contains(keys(module.secrets.accessors), "smtp-url/correlation")
+    error_message = "E-mail sai da API (convites) e do worker de diagnóstico (avisos de Cota, #31); dos outros, não."
   }
   assert {
     condition     = contains(keys(module.secrets.accessors), "anthropic-api-key/diagnosis")

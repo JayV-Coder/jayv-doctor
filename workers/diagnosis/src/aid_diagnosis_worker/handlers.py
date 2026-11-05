@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from aid_diagnosis_worker.diagnose import diagnose, open_automatic
 from aid_diagnosis_worker.evaluate import evaluate_execution
 from aid_diagnosis_worker.knowledge import index, reindex_stale
+from aid_diagnosis_worker.notify import mailer_from_env, notify_threshold
 from aid_diagnosis_worker.retention import SupabaseStorage, run_retention
 
 Handler = Callable[[Mapping[str, Any]], Awaitable[None]]
@@ -31,6 +32,10 @@ def store() -> KnowledgeStore:
 
 async def knowledge_index(payload: Mapping[str, Any]) -> None:
     await index(engine(), payload, store(), provider_for)
+
+
+async def usage_threshold(payload: Mapping[str, Any]) -> None:
+    await notify_threshold(engine(), payload, mailer_from_env())
 
 
 async def rules_evaluate(payload: Mapping[str, Any]) -> None:
@@ -57,6 +62,7 @@ TOPICS: dict[str, Handler] = {
     "incident.opened": incident_opened,
     "incident.updated": no_consumer_yet,
     "diagnosis.published": no_consumer_yet,
+    "usage.threshold": usage_threshold,
 }
 
 router = APIRouter()

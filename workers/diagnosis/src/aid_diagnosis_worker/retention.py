@@ -131,6 +131,25 @@ async def delete_tenants(engine: AsyncEngine, storage: Storage) -> tuple[list[st
     return receipts, failures
 
 
+async def measure_storage(engine: AsyncEngine) -> None:
+    """Armazenamento de cada Organização (Cota `storage_bytes`, #31): a soma dos arquivos das
+    pastas dela nos buckets do Doctor, gravada uma vez por dia."""
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        await connection.execute(
+            text(
+                "select doctor.set_usage(t.id, 'storage_bytes', coalesce(s.bytes, 0)::bigint)"
+                " from doctor.tenants t left join ("
+                " select split_part(o.name, '/', 1) as tenant,"
+                " sum(coalesce((o.metadata ->> 'size')::bigint, 0)) as bytes"
+                " from storage.objects o where o.bucket_id in (:raw, :knowledge)"
+                " group by 1) s on s.tenant = t.id::text"
+                " where t.status in ('active', 'suspended')"
+            ),
+            {"raw": RAW_LOGS, "knowledge": KNOWLEDGE},
+        )
+
+
 async def run_retention(engine: AsyncEngine, storage: Storage) -> dict[str, int]:
     raw_logs = await purge_raw_logs(engine, storage)
     async with engine.begin() as connection:
@@ -170,6 +189,11 @@ async def run_retention(engine: AsyncEngine, storage: Storage) -> dict[str, int]
     except Exception:
         failures += 1
         log.exception("drop das partições vencidas falhou")
+    try:
+        await measure_storage(engine)
+    except Exception:
+        failures += 1
+        log.exception("medição do armazenamento falhou")
     receipts, deletion_failures = await delete_tenants(engine, storage)
     return {
         "raw_logs": sum(raw_logs.values()),

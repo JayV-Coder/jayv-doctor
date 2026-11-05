@@ -12,6 +12,7 @@ import {
   statusChip,
   systemLabel,
   verdictLabel,
+  withoutAiReason,
 } from "@/lib/diagnoses/labels";
 import type { DiagnosisDetail } from "@/lib/diagnoses/api";
 
@@ -72,6 +73,7 @@ function Progress({ diagnosis }: Props) {
 }
 
 function Result({ diagnosis }: Props) {
+  const withoutAi = withoutAiReason(diagnosis);
   const inconclusive = diagnosis.status === "inconclusive";
   // A correção mais recente, a mesma que a promoção à Base usa.
   const correction = diagnosis.feedback.filter((item) => item.verdict === "corrected").at(-1);
@@ -83,6 +85,12 @@ function Result({ diagnosis }: Props) {
           {correction.correct_category && <p className="small">{correction.correct_category}</p>}
           {correction.correct_cause && <p className="cause">{correction.correct_cause}</p>}
         </div>
+      )}
+      {withoutAi && (
+        // Pedido híbrido que rodou só com as Regras: a tela diz por quê (Cota ou envio desligado).
+        <p className="alert" role="status">
+          {withoutAi}
+        </p>
       )}
       {diagnosis.status === "failed_llm" && (
         <p className="alert" role="status">

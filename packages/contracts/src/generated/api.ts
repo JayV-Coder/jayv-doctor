@@ -952,6 +952,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/usage": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Usage */
+    get: operations["get_usage_api_v1_usage_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2136,6 +2153,15 @@ export interface components {
       /** Enabled */
       enabled: boolean;
     };
+    /** LlmUsage */
+    LlmUsage: {
+      /** Input Tokens */
+      input_tokens: number;
+      /** Output Tokens */
+      output_tokens: number;
+      /** Cost Estimate */
+      cost_estimate: number | null;
+    };
     /** Me */
     Me: {
       /** Id */
@@ -2393,6 +2419,26 @@ export interface components {
       /** Reason */
       reason: string;
     };
+    /** ResourceUsage */
+    ResourceUsage: {
+      /**
+       * Resource
+       * @enum {string}
+       */
+      resource:
+        "events_ingested" | "diagnoses_llm" | "storage_bytes" | "connectors_active" | "members";
+      /**
+       * Period
+       * @enum {string}
+       */
+      period: "month" | "none";
+      /** Used */
+      used: number;
+      /** Quota */
+      quota: number;
+      /** Ratio */
+      ratio: number;
+    };
     /** Retention */
     Retention: {
       /**
@@ -2524,6 +2570,19 @@ export interface components {
     UploadUrl: {
       /** Upload Url */
       upload_url: string;
+    };
+    /** Usage */
+    Usage: {
+      /**
+       * Plan
+       * @enum {string}
+       */
+      plan: "pilot" | "professional" | "enterprise";
+      /** Tolerance */
+      tolerance: number;
+      /** Resources */
+      resources: components["schemas"]["ResourceUsage"][];
+      llm: components["schemas"]["LlmUsage"];
     };
     /** ValidationError */
     ValidationError: {
@@ -4787,6 +4846,37 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SubjectErased"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_usage_api_v1_usage_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Usage"];
         };
       };
       /** @description Validation Error */

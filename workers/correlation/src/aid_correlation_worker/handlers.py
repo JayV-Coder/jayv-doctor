@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from aid_correlation_worker.audit import import_auth_events
 from aid_correlation_worker.close import close_idle
 from aid_correlation_worker.correlate import correlate_integration
-from aid_correlation_worker.stats import refresh_stats
+from aid_correlation_worker.stats import refresh_stats, rollup_usage
 
 Handler = Callable[[Mapping[str, Any]], Awaitable[None]]
 
@@ -39,7 +39,9 @@ async def close() -> dict[str, int]:
 
 @router.post("/stats")
 async def stats() -> dict[str, int]:
-    return {"hours": await refresh_stats(engine())}
+    """Job de 10 min: o agregado do Dashboard (#21) e a soma dos deltas de uso (#31)."""
+    hours = await refresh_stats(engine())
+    return {"hours": hours, "usage": await rollup_usage(engine())}
 
 
 @router.post("/audit/auth-events")

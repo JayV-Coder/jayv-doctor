@@ -10,7 +10,8 @@ from typing import Any, ClassVar, Literal, Protocol
 
 Checkpoint = Mapping[str, Any]
 ConfigErrors = dict[str, str]
-ErrorKind = Literal["auth", "rate_limit", "timeout", "transient", "invalid"]
+# `quota`: a Cota de Eventos do mês da Organização acabou (#31); não é falha do Conector.
+ErrorKind = Literal["auth", "rate_limit", "timeout", "transient", "invalid", "quota"]
 
 
 class Secret:

@@ -2578,6 +2578,8 @@ export interface components {
        * @enum {string}
        */
       plan: "pilot" | "professional" | "enterprise";
+      /** Tolerance */
+      tolerance: number;
       /** Resources */
       resources: components["schemas"]["ResourceUsage"][];
       llm: components["schemas"]["LlmUsage"];

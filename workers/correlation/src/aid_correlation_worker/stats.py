@@ -24,3 +24,11 @@ async def refresh_stats(engine: AsyncEngine) -> int:
         total += done
         if done < BATCH:
             return total
+
+
+async def rollup_usage(engine: AsyncEngine) -> int:
+    """Soma os deltas de Eventos ingeridos no contador de uso (Cotas, #31)."""
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        rolled = await connection.scalar(text("select doctor.rollup_usage()"))
+    return int(rolled or 0)

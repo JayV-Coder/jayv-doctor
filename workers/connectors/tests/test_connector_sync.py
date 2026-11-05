@@ -60,6 +60,7 @@ async def tenant(engine: AsyncEngine) -> AsyncIterator[dict[str, str]]:
     )
     yield ids
     for table in (
+        "usage_records",
         "outbox_messages",
         "ingestion_batches",
         "connector_syncs",
@@ -298,3 +299,23 @@ async def test_config_nova_no_meio_da_sincronizacao_nao_herda_o_checkpoint_antig
     monkeypatch.setattr(module, "store_batch", config_changes)
     await sync(engine, connector_id)
     assert (await state(engine, connector_id))["checkpoint"] is None
+
+
+@pytest.mark.asyncio
+async def test_cota_de_eventos_esgotada_nao_conta_como_falha_do_conector(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    connector_id = await connector(engine, tenant, {"pages": 2, "page_size": 2})
+    await run(
+        engine,
+        "insert into doctor.usage_records (tenant_id, resource, period_start, quantity)"
+        " values (:t, 'events_ingested', doctor.usage_period('events_ingested'), 3300001)",
+        t=tenant["tenant"],
+    )
+    for _ in range(3):
+        assert await sync(engine, connector_id) == "failed"
+    current = await state(engine, connector_id)
+    assert (current["status"], current["consecutive_failures"]) == ("active", 0)
+    assert current["last_error"].startswith("Cota de Eventos do mês esgotada")
+    assert current["later"]
+    assert current["batches"] == 0

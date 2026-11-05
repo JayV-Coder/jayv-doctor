@@ -4,6 +4,7 @@ segundo. O contexto é lido com a claim do tenant do Incidente (RLS, como na API
 Organização entra no prompt nem vira Evidência. A publicação grava tudo numa transação só."""
 
 import json
+import logging
 import os
 from collections.abc import Callable, Mapping, Sequence
 from datetime import timedelta
@@ -42,63 +43,64 @@ DESCRIPTIONS = {rule.code: (rule.category, rule.description_pt) for rule in RULE
 ProviderFor = Callable[[str], LLMProvider]
 
 
+log = logging.getLogger(__name__)
 LLM_DISABLED = (
     "Envio de evidências ao LLM desligado pela Organização: Diagnóstico só com as Regras."
 )
 QUOTA_EXHAUSTED = "Cota de IA do mês esgotada: Diagnóstico só com as Regras."
 
 
-async def ai_gate(engine: AsyncEngine, tenant: str) -> tuple[bool, bool]:
-    """(envio ao LLM ligado pela Organização (#29), ainda há Cota de IA no mês (#31))."""
+async def llm_enabled(engine: AsyncEngine, tenant: str) -> bool:
+    """A Organização permite enviar evidências ao LLM (#29)?"""
     async with engine.begin() as connection:
         await platform_role(connection)
-        row = (
-            await connection.execute(
-                text(
-                    "select t.llm_enabled, doctor.llm_quota_available(t.id) as quota"
-                    " from doctor.tenants t where t.id = cast(:t as uuid)"
-                ),
-                {"t": tenant},
-            )
-        ).first()
-    return (bool(row.llm_enabled), bool(row.quota)) if row else (False, False)
+        enabled = await connection.scalar(
+            text("select llm_enabled from doctor.tenants where id = cast(:t as uuid)"),
+            {"t": tenant},
+        )
+    return bool(enabled)
+
+
+async def reserve_llm(engine: AsyncEngine, diagnosis: Any, provider: str) -> bool:
+    """Reserva uma unidade da Cota de IA (#31) antes de chamar o LLM, de forma atômica no banco:
+    Diagnósticos em paralelo não passam do limite, e a mesma entrega não reserva duas vezes."""
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        reserved = await connection.scalar(
+            text("select doctor.reserve_llm_quota(cast(:t as uuid), cast(:d as uuid), :p)"),
+            {"t": diagnosis.tenant_id, "d": diagnosis.id, "p": provider},
+        )
+    return bool(reserved)
+
+
+def load_prices(raw: str | None) -> dict[str, tuple[float, float]]:
+    """`AID_LLM_PRICES` (JSON por modelo, `input_per_mtok`/`output_per_mtok`), da tabela oficial
+    do provedor. Lida uma vez; entrada inválida é ignorada, e o custo daquele modelo fica em
+    aberto, sem atrapalhar o Diagnóstico."""
+    if not raw:
+        return {}
+    try:
+        table = json.loads(raw)
+    except ValueError:
+        log.warning("AID_LLM_PRICES não é JSON válido: custo estimado desligado")
+        return {}
+    prices: dict[str, tuple[float, float]] = {}
+    for model, price in table.items() if isinstance(table, dict) else []:
+        try:
+            prices[str(model)] = (float(price["input_per_mtok"]), float(price["output_per_mtok"]))
+        except (KeyError, TypeError, ValueError):
+            log.warning("AID_LLM_PRICES: preço inválido para %s", model)
+    return prices
+
+
+PRICES = load_prices(os.environ.get("AID_LLM_PRICES"))
 
 
 def estimate_cost(model: str | None, input_tokens: int, output_tokens: int) -> float | None:
-    """Pela tabela de preços (`AID_LLM_PRICES`, JSON por modelo, por milhão de tokens), copiada
-    da tabela oficial do provedor; sem ela, o custo fica em aberto."""
-    raw = os.environ.get("AID_LLM_PRICES")
-    if not raw or not model:
+    price = PRICES.get(model or "")
+    if price is None:
         return None
-    price = json.loads(raw).get(model)
-    if not price:
-        return None
-    total = input_tokens / 1e6 * float(price["input_per_mtok"]) + output_tokens / 1e6 * float(
-        price["output_per_mtok"]
-    )
-    return round(total, 6)
-
-
-async def record_llm_usage(engine: AsyncEngine, diagnosis: Any, draft: DiagnosisDraft) -> None:
-    if draft.input_tokens == 0 and draft.output_tokens == 0:
-        return
-    async with engine.begin() as connection:
-        await platform_role(connection)
-        await connection.execute(
-            text(
-                "select doctor.record_llm_usage(cast(:t as uuid), cast(:d as uuid), :p, :m,"
-                " :i, :o, :c)"
-            ),
-            {
-                "t": diagnosis.tenant_id,
-                "d": diagnosis.id,
-                "p": draft.provider or "desconhecido",
-                "m": draft.model,
-                "i": draft.input_tokens,
-                "o": draft.output_tokens,
-                "c": estimate_cost(draft.model, draft.input_tokens, draft.output_tokens),
-            },
-        )
+    return round(input_tokens / 1e6 * price[0] + output_tokens / 1e6 * price[1], 6)
 
 
 class DbLoader:
@@ -401,6 +403,24 @@ async def publish(engine: AsyncEngine, diagnosis: Any, draft: DiagnosisDraft) ->
                 "output": draft.output_tokens,
             },
         )
+        if draft.input_tokens or draft.output_tokens:
+            # Tokens na mesma transação da publicação: o uso não se perde sem o Diagnóstico.
+            await connection.execute(
+                text(
+                    "update doctor.usage_llm set provider = :p, model = :m, input_tokens = :i,"
+                    " output_tokens = :o, cost_estimate = :c"
+                    " where tenant_id = cast(:t as uuid) and diagnosis_id = cast(:d as uuid)"
+                ),
+                {
+                    "t": diagnosis.tenant_id,
+                    "d": diagnosis.id,
+                    "p": draft.provider or "desconhecido",
+                    "m": draft.model,
+                    "i": draft.input_tokens,
+                    "o": draft.output_tokens,
+                    "c": estimate_cost(draft.model, draft.input_tokens, draft.output_tokens),
+                },
+            )
         await announce(connection, diagnosis, draft.status)
     return True
 
@@ -419,17 +439,17 @@ async def diagnose(
     try:
         provider = provider_for(diagnosis.llm_provider)
         hybrid = diagnosis.requested_mode == "hybrid"
-        llm_enabled, quota = await ai_gate(engine, diagnosis.tenant_id)
-        allowed = hybrid and llm_enabled and quota
+        enabled = await llm_enabled(engine, diagnosis.tenant_id)
+        allowed = hybrid and enabled and await reserve_llm(engine, diagnosis, provider.name)
         motor = DiagnosisEngine(
             GuardedLLM(provider) if allowed else None,
             scope=diagnosis.tenant_id,
-            without_ai=LLM_DISABLED if not llm_enabled else QUOTA_EXHAUSTED,
+            without_ai=LLM_DISABLED if not enabled else QUOTA_EXHAUSTED,
         )
         # Envio ao LLM desligado: a Base também não gera o embedding da pergunta (só o texto). No
         # rules_only com o envio ligado, o embedding da Base continua.
         loader = DbLoader(
-            engine, diagnosis.tenant_id, diagnosis.incident_id, provider if llm_enabled else None
+            engine, diagnosis.tenant_id, diagnosis.incident_id, provider if enabled else None
         )
         draft = await motor.run(
             loader,
@@ -438,9 +458,6 @@ async def diagnose(
             on_stage=on_stage,
         )
         published = await publish(engine, diagnosis, draft)
-        if published:
-            # Tokens cobrados (inclusive numa falha do LLM depois de chamado) e a Cota de IA.
-            await record_llm_usage(engine, diagnosis, draft)
     except DiagnosisError as exc:
         await fail(engine, diagnosis, str(exc))
         return "failed"

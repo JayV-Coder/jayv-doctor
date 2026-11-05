@@ -16,6 +16,7 @@ from aid_connectors.base import Batch, Connector
 from aid_connectors.runtime import RetryPolicy, SyncResult, run_sync
 from aid_db import platform_role
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 logger = logging.getLogger(__name__)
@@ -153,6 +154,17 @@ async def finish(
             ),
             {"status": result.status, "error": result.error_message, "s": sync_id},
         )
+        if result.error_kind == "quota":
+            # Cota acabou: o Conector não falhou. Sem contar falha nem backoff; tenta de hora em
+            # hora (a Cota volta no mês seguinte ou com o aumento do plano).
+            await connection.execute(
+                text(
+                    "update doctor.connectors set last_error = :error,"
+                    " next_run_at = now() + interval '1 hour' where id = cast(:c as uuid)"
+                ),
+                {"error": result.error_message, "c": connector["id"]},
+            )
+            return
         if result.status == "succeeded":
             # Pausa ou desativação feitas durante a Sincronização valem: o status não volta.
             await connection.execute(
@@ -203,6 +215,9 @@ async def secret_of(engine: AsyncEngine, connector_id: str) -> str:
         )
 
 
+QUOTA_EXCEEDED = "DR050"
+
+
 async def sync_connector(
     payload: Mapping[str, Any],
     engine: AsyncEngine,
@@ -216,6 +231,18 @@ async def sync_connector(
     connector, sync_id = claimed
     try:
         result = await execute(engine, registry, policy, connector, sync_id)
+    except DBAPIError as exc:
+        if getattr(exc.orig, "sqlstate", None) != QUOTA_EXCEEDED:
+            raise
+        result = SyncResult(
+            "failed",
+            0,
+            connector["checkpoint"],
+            0,
+            "quota",
+            "Cota de Eventos do mês esgotada: a coleta volta com o próximo mês ou o aumento"
+            " do plano.",
+        )
     except Exception:
         # Bug do conector, credencial ausente ou banco: a falha fica registrada e a política de
         # falhas reagenda, em vez de a Sincronização ficar presa em `running`.

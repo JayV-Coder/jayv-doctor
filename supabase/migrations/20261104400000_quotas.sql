@@ -69,7 +69,24 @@ create table doctor.usage_llm (
 );
 comment on table doctor.usage_llm is 'Tokens de LLM por Diagnóstico.';
 create index usage_llm_tenant_time_idx on doctor.usage_llm (tenant_id, created_at desc);
-create index usage_llm_diagnosis_idx on doctor.usage_llm (tenant_id, diagnosis_id) where diagnosis_id is not null;
+-- Uma reserva por Diagnóstico: entrega repetida não consome a Cota duas vezes.
+create unique index usage_llm_diagnosis_idx on doctor.usage_llm (tenant_id, diagnosis_id) where diagnosis_id is not null;
+
+-- Eventos ingeridos chegam como deltas, só com insert (sem disputa de linha entre as
+-- transações de ingestão); o job de 10 min (`rollup_usage`) os soma em usage_records.
+create table doctor.usage_deltas (
+  id bigint generated always as identity primary key,
+  tenant_id uuid not null references doctor.tenants (id) on delete cascade,
+  resource text not null check (resource in ('events_ingested')),
+  period_start date not null,
+  amount bigint not null check (amount > 0),
+  created_at timestamptz not null default now(),
+  unique (tenant_id, id)
+);
+comment on table doctor.usage_deltas is 'Consumo ainda não somado em usage_records (só insert).';
+create index usage_deltas_tenant_idx on doctor.usage_deltas (tenant_id, resource, period_start);
+alter table doctor.usage_deltas enable row level security;
+revoke all on doctor.usage_deltas from anon, authenticated;
 
 -- Avisos de 80% e 100%: um por recurso, período e patamar.
 create table doctor.usage_alerts (
@@ -139,18 +156,55 @@ as $$
   select case resource
     when 'connectors_active' then
       (select count(*) from doctor.connectors c where c.tenant_id = tenant and c.status <> 'disabled')
+    -- Como a imposição: os convites pendentes contam como membros.
     when 'members' then
       (select count(*) from doctor.memberships m where m.tenant_id = tenant)
+      + (select count(*) from doctor.invitations i
+         where i.tenant_id = tenant and i.accepted_at is null and i.expires_at > now())
     else coalesce((
       select u.quantity from doctor.usage_records u
       where u.tenant_id = tenant and u.resource = current_usage.resource
         and u.period_start = doctor.usage_period(current_usage.resource)
+    ), 0) + coalesce((
+      select sum(d.amount) from doctor.usage_deltas d
+      where d.tenant_id = tenant and d.resource = current_usage.resource
+        and d.period_start = doctor.usage_period(current_usage.resource)
     ), 0)
   end
 $$;
 
+-- Cruzou 80% ou 100% entre `before` e `after`: o aviso sai uma vez por patamar e período.
+create function doctor.usage_thresholds(tenant uuid, resource text, before bigint, after bigint)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  quota bigint := doctor.plan_limit(tenant, resource);
+  threshold integer;
+begin
+  if quota is null then
+    return;
+  end if;
+  foreach threshold in array array[80, 100] loop
+    if after * 100 >= quota * threshold and before * 100 < quota * threshold then
+      insert into doctor.usage_alerts (tenant_id, resource, period_start, threshold)
+      values (tenant, usage_thresholds.resource, doctor.usage_period(usage_thresholds.resource), threshold)
+      on conflict do nothing;
+      if found then
+        insert into doctor.outbox_messages (tenant_id, topic, payload)
+        values (tenant, 'usage.threshold', jsonb_build_object(
+          'tenant_id', tenant, 'resource', usage_thresholds.resource, 'threshold', threshold,
+          'used', after, 'limit', quota));
+      end if;
+    end if;
+  end loop;
+end;
+$$;
+
 -- Incremento atômico (`insert … on conflict do update`): 50 workers ao mesmo tempo não perdem
--- unidade. Cruzando 80% ou 100%, sai o aviso (uma vez por patamar e período).
+-- unidade.
 create function doctor.increment_usage(tenant uuid, resource text, amount bigint)
 returns bigint
 language plpgsql
@@ -158,47 +212,69 @@ security definer
 set search_path = ''
 as $$
 declare
-  period date := doctor.usage_period(resource);
   total bigint;
-  quota bigint := doctor.plan_limit(tenant, resource);
-  threshold integer;
 begin
   if amount <= 0 then
     return doctor.current_usage(tenant, resource);
   end if;
   insert into doctor.usage_records as u (tenant_id, resource, period_start, quantity)
-  values (tenant, increment_usage.resource, period, amount)
+  values (tenant, increment_usage.resource, doctor.usage_period(increment_usage.resource), amount)
   on conflict on constraint usage_records_tenant_id_resource_period_start_key
   do update set quantity = u.quantity + excluded.quantity
   returning u.quantity into total;
-  if quota is not null then
-    foreach threshold in array array[80, 100] loop
-      if total * 100 >= quota * threshold and (total - amount) * 100 < quota * threshold then
-        insert into doctor.usage_alerts (tenant_id, resource, period_start, threshold)
-        values (tenant, increment_usage.resource, period, threshold)
-        on conflict do nothing;
-        if found then
-          insert into doctor.outbox_messages (tenant_id, topic, payload)
-          values (tenant, 'usage.threshold', jsonb_build_object(
-            'tenant_id', tenant, 'resource', increment_usage.resource, 'threshold', threshold, 'used', total, 'limit', quota));
-        end if;
-      end if;
-    end loop;
-  end if;
+  perform doctor.usage_thresholds(tenant, resource, total - amount, total);
   return total;
 end;
 $$;
 
--- Medida absoluta (armazenamento, pelo job diário).
+-- Medida absoluta (armazenamento, pelo job diário), com os mesmos avisos.
 create function doctor.set_usage(tenant uuid, resource text, value bigint)
 returns void
-language sql
+language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  before bigint := doctor.current_usage(tenant, resource);
+begin
   insert into doctor.usage_records as u (tenant_id, resource, period_start, quantity)
-  values (tenant, resource, doctor.usage_period(resource), greatest(value, 0))
-  on conflict (tenant_id, resource, period_start) do update set quantity = excluded.quantity
+  values (tenant, set_usage.resource, doctor.usage_period(set_usage.resource), greatest(value, 0))
+  on conflict on constraint usage_records_tenant_id_resource_period_start_key
+  do update set quantity = excluded.quantity;
+  perform doctor.usage_thresholds(tenant, resource, before, greatest(value, 0));
+end;
+$$;
+
+-- Soma os deltas em usage_records (job de 10 min), com os avisos. `delete … returning` numa
+-- instrução só: delta que chega no meio fica para a próxima rodada.
+create function doctor.rollup_usage()
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  item record;
+  rolled integer := 0;
+  after bigint;
+begin
+  for item in
+    with taken as (delete from doctor.usage_deltas returning tenant_id, resource, period_start, amount)
+    select tenant_id, resource, period_start, sum(amount)::bigint as amount
+    from taken group by 1, 2, 3 order by 1, 2, 3
+  loop
+    insert into doctor.usage_records as u (tenant_id, resource, period_start, quantity)
+    values (item.tenant_id, item.resource, item.period_start, item.amount)
+    on conflict on constraint usage_records_tenant_id_resource_period_start_key
+    do update set quantity = u.quantity + excluded.quantity;
+    if item.period_start = doctor.usage_period(item.resource) then
+      after := doctor.current_usage(item.tenant_id, item.resource);
+      perform doctor.usage_thresholds(item.tenant_id, item.resource, after - item.amount, after);
+    end if;
+    rolled := rolled + 1;
+  end loop;
+  return rolled;
+end;
 $$;
 
 -- Eventos gravados contam no consumo do mês: um trigger por comando, com a tabela de transição,
@@ -210,12 +286,10 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
-declare
-  row record;
 begin
-  for row in select n.tenant_id, count(*) as events from inserted n group by n.tenant_id loop
-    perform doctor.increment_usage(row.tenant_id, 'events_ingested', row.events);
-  end loop;
+  insert into doctor.usage_deltas (tenant_id, resource, period_start, amount)
+  select n.tenant_id, 'events_ingested', doctor.usage_period('events_ingested'), count(*)
+  from inserted n group by n.tenant_id;
   return null;
 end;
 $$;
@@ -283,11 +357,15 @@ as $$
 declare
   resource text := case when tg_table_name = 'connectors' then 'connectors_active' else 'members' end;
   quota bigint := doctor.plan_limit(new.tenant_id, resource);
-  used bigint := doctor.current_usage(new.tenant_id, resource);
+  used bigint;
 begin
-  if tg_table_name = 'invitations' then
-    used := used + (select count(*) from doctor.invitations i
-                    where i.tenant_id = new.tenant_id and i.accepted_at is null and i.expires_at > now());
+  if tg_table_name = 'memberships' then
+    -- No aceite, o convite ainda está pendente: conta só os Vínculos, para ele não ocupar a
+    -- vaga duas vezes.
+    used := (select count(*) from doctor.memberships m where m.tenant_id = new.tenant_id);
+  else
+    -- Conectores ativos; ou membros com os convites pendentes (como a Tela 17 mostra).
+    used := doctor.current_usage(new.tenant_id, resource);
   end if;
   if quota is not null and used >= quota then
     raise exception 'Limite do plano atingido: %', resource using errcode = 'DR051';
@@ -302,31 +380,33 @@ for each row execute function doctor.enforce_seat_quota();
 create trigger invitations_quota before insert on doctor.invitations
 for each row execute function doctor.enforce_seat_quota();
 
--- Cota de IA: o worker pergunta antes de chamar o LLM e registra depois.
-create function doctor.llm_quota_available(tenant uuid)
+-- Cota de IA: o worker reserva uma unidade antes de chamar o LLM, de forma atômica (sem
+-- conferir e depois somar), e uma vez por Diagnóstico; os tokens entram ao publicar.
+create function doctor.reserve_llm_quota(tenant uuid, diagnosis uuid, provider text)
 returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select doctor.plan_limit(tenant, 'diagnoses_llm') is null
-    or doctor.current_usage(tenant, 'diagnoses_llm') < doctor.plan_limit(tenant, 'diagnoses_llm')
-$$;
-
-create function doctor.record_llm_usage(
-  tenant uuid, diagnosis uuid, provider text, model text, input_tokens integer,
-  output_tokens integer, cost_estimate numeric
-)
-returns void
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  quota bigint := doctor.plan_limit(tenant, 'diagnoses_llm');
+  period date := doctor.usage_period('diagnoses_llm');
+  total bigint;
 begin
-  insert into doctor.usage_llm (tenant_id, diagnosis_id, provider, model, input_tokens, output_tokens, cost_estimate)
-  values (tenant, diagnosis, provider, model, input_tokens, output_tokens, cost_estimate);
-  perform doctor.increment_usage(tenant, 'diagnoses_llm', 1);
+  if exists (select 1 from doctor.usage_llm u where u.tenant_id = tenant and u.diagnosis_id = diagnosis) then
+    return true;
+  end if;
+  insert into doctor.usage_records as u (tenant_id, resource, period_start, quantity)
+  values (tenant, 'diagnoses_llm', period, 1)
+  on conflict on constraint usage_records_tenant_id_resource_period_start_key
+  do update set quantity = u.quantity + 1 where quota is null or u.quantity < quota
+  returning u.quantity into total;
+  if total is null then
+    return false;
+  end if;
+  insert into doctor.usage_llm (tenant_id, diagnosis_id, provider) values (tenant, diagnosis, provider);
+  perform doctor.usage_thresholds(tenant, 'diagnoses_llm', total - 1, total);
+  return true;
 end;
 $$;
 
@@ -353,15 +433,16 @@ revoke all on function doctor.count_ingested_events() from public;
 revoke all on function doctor.enforce_batch_quota() from public;
 revoke all on function doctor.enforce_import_quota() from public;
 revoke all on function doctor.enforce_seat_quota() from public;
-revoke all on function doctor.llm_quota_available(uuid) from public, anon, authenticated;
-revoke all on function doctor.record_llm_usage(uuid, uuid, text, text, integer, integer, numeric) from public, anon, authenticated;
+revoke all on function doctor.reserve_llm_quota(uuid, uuid, text) from public, anon, authenticated;
+revoke all on function doctor.usage_thresholds(uuid, text, bigint, bigint) from public, anon, authenticated;
+revoke all on function doctor.rollup_usage() from public, anon, authenticated;
 revoke all on function doctor.my_usage() from public, anon, service_role;
 grant execute on function doctor.plan_limit(uuid, text) to service_role;
 grant execute on function doctor.current_usage(uuid, text) to service_role;
 grant execute on function doctor.increment_usage(uuid, text, bigint) to service_role;
 grant execute on function doctor.set_usage(uuid, text, bigint) to service_role;
-grant execute on function doctor.llm_quota_available(uuid) to service_role;
-grant execute on function doctor.record_llm_usage(uuid, uuid, text, text, integer, integer, numeric) to service_role;
+grant execute on function doctor.reserve_llm_quota(uuid, uuid, text) to service_role;
+grant execute on function doctor.rollup_usage() to service_role;
 grant execute on function doctor.my_usage() to authenticated;
 
 -- Destinatários do aviso de Cota: Owner e Admin da Organização, com o nome dela (o worker não lê

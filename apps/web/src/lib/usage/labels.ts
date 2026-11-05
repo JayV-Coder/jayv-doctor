@@ -20,12 +20,14 @@ export function amountText(resource: string, value: number): string {
 }
 
 // Aviso da Tela 17: aos 80% e quando a Cota acaba, com o efeito no produto.
-export function quotaWarning(resource: string, ratio: number): string | null {
+export function quotaWarning(resource: string, ratio: number, tolerance = 1.1): string | null {
   if (ratio >= 1) {
     if (resource === "diagnoses_llm") {
       return "Cota de IA esgotada: novos Diagnósticos rodam só com as Regras";
     }
-    if (resource === "events_ingested") return "Cota esgotada: a ingestão é recusada acima de 110%";
+    if (resource === "events_ingested") {
+      return `Cota esgotada: a ingestão é recusada acima de ${String(Math.round(tolerance * 100))}%`;
+    }
     if (resource === "storage_bytes") return "Armazenamento no limite do plano";
     return "Limite do plano atingido: novos itens são bloqueados";
   }

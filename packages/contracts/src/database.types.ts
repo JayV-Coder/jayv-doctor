@@ -1257,6 +1257,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"usage_deltas": {
+                  Row: {
+                    "amount": number,"created_at": string,"id": number,"period_start": string,"resource": string,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"created_at"?: string,"id"?: never,"period_start": string,"resource": string,"tenant_id": string
+                  }
+                  Update: {
+                    "amount"?: number,"created_at"?: string,"id"?: never,"period_start"?: string,"resource"?: string,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "usage_deltas_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"usage_llm": {
                   Row: {
                     "cost_estimate": number | null,"created_at": string,"diagnosis_id": string | null,"id": string,"input_tokens": number,"model": string | null,"output_tokens": number,"provider": string,"tenant_id": string,"updated_at": string
@@ -1475,9 +1495,6 @@ isOneToOne: false
               "id": string,"name": string,"role": string,"slug": string
             }[]
                            },
-"llm_quota_available":
-{ Args: { "tenant": string }; Returns: boolean
-                           },
 "lock_audit_partition":
 { Args: { "partition_name": string }; Returns: undefined
                            },
@@ -1561,9 +1578,6 @@ isOneToOne: false
 "record_audit_export":
 { Args: { "filters": Json }; Returns: undefined
                            },
-"record_llm_usage":
-{ Args: { "cost_estimate": number,"diagnosis": string,"input_tokens": number,"model": string,"output_tokens": number,"provider": string,"tenant": string }; Returns: undefined
-                           },
 "refresh_execution_stats":
 { Args: { "batch"?: number }; Returns: number
                            },
@@ -1595,6 +1609,9 @@ isOneToOne: false
               "email": string,"organization": string
             }[]
                            },
+"reserve_llm_quota":
+{ Args: { "diagnosis": string,"provider": string,"tenant": string }; Returns: boolean
+                           },
 "resolve_ingestion_token":
 { Args: { "token_hash": string }; Returns: {
               "integration_id": string,"tenant_id": string,"token_id": string
@@ -1613,6 +1630,9 @@ isOneToOne: false
                            },
 "revoke_invitation":
 { Args: { "target": string }; Returns: undefined
+                           },
+"rollup_usage":
+{ Args: Record<PropertyKey, never>; Returns: number
                            },
 "set_auto_diagnosis":
 { Args: { "enabled": boolean }; Returns: undefined
@@ -1661,6 +1681,9 @@ isOneToOne: false
                            },
 "usage_period":
 { Args: { "at"?: string,"resource": string }; Returns: string
+                           },
+"usage_thresholds":
+{ Args: { "after": number,"before": number,"resource": string,"tenant": string }; Returns: undefined
                            },
 "utc_hour":
 { Args: { "moment": string }; Returns: string

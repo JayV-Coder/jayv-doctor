@@ -36,7 +36,7 @@ export default async function UsagePage() {
       </div>
       <ul className="list" aria-label="Uso por recurso">
         {usage.resources.map((item) => {
-          const warning = quotaWarning(item.resource, item.ratio);
+          const warning = quotaWarning(item.resource, item.ratio, usage.tolerance);
           const percent = Math.min(100, Math.round(item.ratio * 100));
           return (
             <li key={item.resource}>

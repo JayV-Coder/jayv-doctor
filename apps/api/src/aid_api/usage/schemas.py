@@ -26,5 +26,7 @@ class LlmUsage(BaseModel):
 
 class Usage(BaseModel):
     plan: Literal["pilot", "professional", "enterprise"]
+    # Tolerância da Cota de Eventos (1,10 = a ingestão é recusada acima de 110%).
+    tolerance: float
     resources: list[ResourceUsage]
     llm: LlmUsage

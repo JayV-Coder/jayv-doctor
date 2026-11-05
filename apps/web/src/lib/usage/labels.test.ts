@@ -17,6 +17,9 @@ describe("Uso e cotas", () => {
     expect(quotaWarning("events_ingested", 1.05)).toBe(
       "Cota esgotada: a ingestão é recusada acima de 110%",
     );
+    expect(quotaWarning("events_ingested", 1.2, 1.5)).toBe(
+      "Cota esgotada: a ingestão é recusada acima de 150%",
+    );
     expect(quotaWarning("members", 1)).toBe("Limite do plano atingido: novos itens são bloqueados");
     expect(quotaWarning("events_ingested", 0.5)).toBeNull();
   });

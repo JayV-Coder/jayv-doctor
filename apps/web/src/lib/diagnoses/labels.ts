@@ -166,3 +166,18 @@ export function reviewTime(seconds: number | null): string {
   if (minutes < 60) return `${String(minutes)} min após a publicação`;
   return `${String(Math.round(minutes / 60))} h após a publicação`;
 }
+
+// As notas do worker para "pedido híbrido, rodou só com as Regras" (Cota de IA esgotada ou envio
+// ao LLM desligado) terminam assim; outras notas (por exemplo, sem Eventos) podem vir antes.
+const WITHOUT_AI_SUFFIX = "Diagnóstico só com as Regras.";
+
+export function withoutAiReason(diagnosis: {
+  requested_mode: string;
+  mode: string;
+  status: string;
+  verification_notes: string[];
+}): string | null {
+  if (diagnosis.requested_mode !== "hybrid" || diagnosis.mode !== "rules_only") return null;
+  if (diagnosis.status === "failed_llm") return null;
+  return diagnosis.verification_notes.find((note) => note.endsWith(WITHOUT_AI_SUFFIX)) ?? null;
+}

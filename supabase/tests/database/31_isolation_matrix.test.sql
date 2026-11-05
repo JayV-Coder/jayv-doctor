@@ -101,6 +101,8 @@ begin
   values (t, 'diagnoses_llm', date_trunc('month', now())::date, 1)
   on conflict (tenant_id, resource, period_start) do nothing;
   insert into doctor.usage_llm (tenant_id, diagnosis_id, provider) values (t, diagnosis, 'fake');
+  insert into doctor.usage_deltas (tenant_id, resource, period_start, amount)
+  values (t, 'events_ingested', date_trunc('month', now())::date, 1);
   insert into doctor.usage_alerts (tenant_id, resource, period_start, threshold)
   values (t, 'diagnoses_llm', date_trunc('month', now())::date, 80);
 end;

@@ -8589,6 +8589,10 @@
             "enum": ["pilot", "professional", "enterprise"],
             "title": "Plan"
           },
+          "tolerance": {
+            "type": "number",
+            "title": "Tolerance"
+          },
           "resources": {
             "items": {
               "$ref": "#/components/schemas/ResourceUsage"
@@ -8601,7 +8605,7 @@
           }
         },
         "type": "object",
-        "required": ["plan", "resources", "llm"],
+        "required": ["plan", "tolerance", "resources", "llm"],
         "title": "Usage"
       },
       "ValidationError": {

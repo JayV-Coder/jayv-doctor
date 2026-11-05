@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(13);
+select plan(20);
 
 select tests.create_user('00000000-0000-4000-8000-0000000a0001', 'owner@acme.test');
 select tests.create_tenant('00000000-0000-4000-8000-00000000ac01', 'acme');
@@ -20,7 +20,18 @@ values (gen_random_uuid(), '00000000-0000-4000-8000-00000000ac01', '00000000-000
   now(), '1.0', '{}', 'BAPI', 'INFO', 'evento-1')
 on conflict do nothing;
 select is(doctor.current_usage('00000000-0000-4000-8000-00000000ac01', 'events_ingested'), 3::bigint,
-  'conta os 3 Eventos gravados (o repetido descartado não entra)');
+  'conta os 3 Eventos gravados (o repetido descartado não entra), já antes da soma');
+select is(
+  (select count(*)::int from doctor.usage_records
+   where tenant_id = '00000000-0000-4000-8000-00000000ac01' and resource = 'events_ingested'),
+  0, 'a ingestão só insere deltas (sem disputar a linha do contador)'
+);
+select ok(doctor.rollup_usage() >= 1, 'o job de 10 min soma os deltas');
+select is(
+  (select quantity from doctor.usage_records
+   where tenant_id = '00000000-0000-4000-8000-00000000ac01' and resource = 'events_ingested'),
+  3::bigint, 'e o contador fica com os 3, sem contar duas vezes'
+);
 
 -- Avisos de 80% e 100%, uma vez cada.
 select is(doctor.increment_usage('00000000-0000-4000-8000-00000000ac01', 'diagnoses_llm', 799), 799::bigint, 'incremento atômico');
@@ -32,10 +43,26 @@ select results_eq(
   $$values ('diagnoses_llm'::text, 80)$$,
   'aviso de 80% sai uma vez'
 );
-select is(doctor.llm_quota_available('00000000-0000-4000-8000-00000000ac01'), true, 'ainda há Cota de IA');
-select doctor.increment_usage('00000000-0000-4000-8000-00000000ac01', 'diagnoses_llm', 199);
-select is(doctor.llm_quota_available('00000000-0000-4000-8000-00000000ac01'), false,
+select doctor.increment_usage('00000000-0000-4000-8000-00000000ac01', 'diagnoses_llm', 198);
+insert into doctor.incidents (id, tenant_id, integration_id, title, category, severity, rule_code,
+  rule_version, first_seen_at, last_seen_at, execution_count)
+values ('00000000-0000-4000-8000-0000000005a1', '00000000-0000-4000-8000-00000000ac01',
+  '00000000-0000-4000-8000-0000000001a1', 'Timeout', 'TIMEOUT', 'high', 'INT-003', '2026.10.1', now(), now(), 1);
+insert into doctor.diagnoses (id, tenant_id, incident_id, version, requested_mode, mode, processing_key)
+values
+  ('00000000-0000-4000-8000-0000000009a1', '00000000-0000-4000-8000-00000000ac01',
+   '00000000-0000-4000-8000-0000000005a1', 1, 'hybrid', 'hybrid', 'k1'),
+  ('00000000-0000-4000-8000-0000000009a2', '00000000-0000-4000-8000-00000000ac01',
+   '00000000-0000-4000-8000-0000000005a1', 2, 'hybrid', 'hybrid', 'k2');
+select is(doctor.reserve_llm_quota('00000000-0000-4000-8000-00000000ac01',
+  '00000000-0000-4000-8000-0000000009a1', 'anthropic'), true, 'reserva a última unidade (1.000/1.000)');
+select is(doctor.reserve_llm_quota('00000000-0000-4000-8000-00000000ac01',
+  '00000000-0000-4000-8000-0000000009a1', 'anthropic'), true, 'a mesma entrega de novo não consome outra');
+select is(doctor.reserve_llm_quota('00000000-0000-4000-8000-00000000ac01',
+  '00000000-0000-4000-8000-0000000009a2', 'anthropic'), false,
   '1.000 de 1.000: o próximo Diagnóstico roda só com as Regras');
+select is(doctor.current_usage('00000000-0000-4000-8000-00000000ac01', 'diagnoses_llm'), 1000::bigint,
+  'a reserva negada não passa do limite');
 select is(
   (select count(*)::int from doctor.usage_alerts where tenant_id = '00000000-0000-4000-8000-00000000ac01'),
   2, 'avisos de 80% e 100%'
@@ -43,6 +70,12 @@ select is(
 
 -- Ingestão acima de 110%: o lote é recusado; a Importação também.
 select doctor.increment_usage('00000000-0000-4000-8000-00000000ac01', 'events_ingested', 3300000);
+select doctor.set_usage('00000000-0000-4000-8000-00000000ac01', 'storage_bytes', 45000000000);
+select is(
+  (select count(*)::int from doctor.usage_alerts
+   where tenant_id = '00000000-0000-4000-8000-00000000ac01' and resource = 'storage_bytes'),
+  1, 'a medição diária do armazenamento também avisa (80%)'
+);
 select throws_ok(
   $$insert into doctor.ingestion_batches (tenant_id, integration_id, connector_id, events, event_count)
     values ('00000000-0000-4000-8000-00000000ac01', '00000000-0000-4000-8000-0000000001a1', null, '[]', 20)$$,
@@ -81,6 +114,8 @@ select results_eq(
   $$values ('diagnoses_llm'::text, 1000::bigint, 1000::bigint), ('connectors_active'::text, 5::bigint, 5::bigint)$$,
   'uso e limite da Organização ativa'
 );
+select is((select used from doctor.my_usage() where resource = 'members'), 20::bigint,
+  'membros na tela contam os convites pendentes, como o bloqueio');
 select is((select count(*)::int from doctor.usage_records where tenant_id <> '00000000-0000-4000-8000-00000000ac01'), 0,
   'o consumo de outra Organização não aparece');
 select tests.clear_authentication();

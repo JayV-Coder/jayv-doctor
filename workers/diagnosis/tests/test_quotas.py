@@ -219,3 +219,61 @@ async def test_aviso_de_cota_vai_para_owner_e_admin(
         await run(engine, "delete from doctor.memberships where user_id = :u", u=owner)
         await run(engine, "delete from public.organization_members where user_id = :u", u=owner)
         await run(engine, "delete from auth.users where id = :u", u=owner)
+
+
+@pytest.mark.asyncio
+async def test_reserva_da_cota_de_ia_em_paralelo_nao_passa_do_limite(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    await run(engine, "select doctor.ensure_event_partition(now()::date)")
+    target = await incident(engine, tenant)
+    await run(
+        engine,
+        "insert into doctor.usage_records (tenant_id, resource, period_start, quantity) values"
+        " (:t, 'diagnoses_llm', doctor.usage_period('diagnoses_llm'), 990)",
+        t=tenant["tenant"],
+    )
+    diagnoses = [str(uuid4()) for _ in range(50)]
+    for version, diagnosis in enumerate(diagnoses, 1):
+        await run(
+            engine,
+            "insert into doctor.diagnoses (id, tenant_id, incident_id, version, requested_mode,"
+            " mode, processing_key) values (:d, :t, :i, :v, 'hybrid', 'hybrid', :k)",
+            d=diagnosis,
+            t=tenant["tenant"],
+            i=target,
+            v=version,
+            k=f"paralelo:{diagnosis}",
+        )
+
+    async def reserve(diagnosis: str) -> bool:
+        async with engine.begin() as connection:
+            await platform_role(connection)
+            return bool(
+                await connection.scalar(
+                    text(
+                        "select doctor.reserve_llm_quota(cast(:t as uuid), cast(:d as uuid),"
+                        " 'fake')"
+                    ),
+                    {"t": tenant["tenant"], "d": diagnosis},
+                )
+            )
+
+    results = await asyncio.gather(*(reserve(d) for d in diagnoses))
+    assert sum(results) == 10
+    used = await scalar(
+        engine,
+        "select doctor.current_usage(cast(:t as uuid), 'diagnoses_llm')",
+        t=tenant["tenant"],
+    )
+    assert used == 1000
+
+
+def test_tabela_de_precos_invalida_nao_atrapalha() -> None:
+    from aid_diagnosis_worker.diagnose import load_prices
+
+    assert load_prices("{nao e json") == {}
+    assert load_prices(
+        '{"modelo-a": {"input_per_mtok": 1}, "modelo-b": {"input_per_mtok": 2,'
+        ' "output_per_mtok": 4}}'
+    ) == {"modelo-b": (2.0, 4.0)}

@@ -13,11 +13,14 @@ ERRORS = {"42501": lambda: ApiError(403, "forbidden", "Seu Papel não permite es
 class UsageRepository:
     async def usage(self, claims: Claims) -> Usage:
         async with translated_tx(claims, ERRORS) as connection:
-            plan = await connection.scalar(
-                text(
-                    "select plan from doctor.tenants where id = (select doctor.current_tenant_id())"
+            tenant = (
+                await connection.execute(
+                    text(
+                        "select plan, quota_tolerance::float as tolerance from doctor.tenants"
+                        " where id = (select doctor.current_tenant_id())"
+                    )
                 )
-            )
+            ).first()
             rows = await connection.execute(
                 text("select resource, period, used, quota from doctor.my_usage()")
             )
@@ -37,12 +40,14 @@ class UsageRepository:
                         "select coalesce(sum(input_tokens), 0) as input_tokens,"
                         " coalesce(sum(output_tokens), 0) as output_tokens,"
                         " sum(cost_estimate)::float as cost_estimate from doctor.usage_llm"
-                        " where created_at >= date_trunc('month', now() at time zone 'UTC')"
+                        # Mês em UTC, como o contador (timestamptz, sem depender do fuso da sessão).
+                        " where created_at >= date_trunc('month', now(), 'UTC')"
                     )
                 )
             ).one()
         return Usage(
-            plan=plan or "pilot",
+            plan=tenant.plan if tenant else "pilot",
+            tolerance=tenant.tolerance if tenant else 1.1,
             resources=resources,
             llm=LlmUsage(
                 input_tokens=int(llm.input_tokens),

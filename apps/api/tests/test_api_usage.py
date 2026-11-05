@@ -13,6 +13,7 @@ class FakeRepository(UsageRepository):
     async def usage(self, claims: Claims) -> Usage:
         return Usage(
             plan="pilot",
+            tolerance=1.1,
             resources=[
                 ResourceUsage(
                     resource="diagnoses_llm", period="month", used=910, quota=1000, ratio=0.91

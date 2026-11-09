@@ -148,7 +148,9 @@ module "api" {
     AID_TRUSTED_PROXY_HOPS   = "2"
     SUPABASE_PUBLISHABLE_KEY = var.supabase_publishable_key
     APP_URL                  = var.app_url
-    OTEL_ENABLED             = "true"
+    # Liga os logs JSON ao trace (`logging.googleapis.com/trace`, #34).
+    GCP_PROJECT_ID = var.project_id
+    OTEL_ENABLED   = "true"
   }
   secret_env = { for secret in local.api_secrets : local.secret_env[secret] => secret }
   depends_on = [module.secrets]
@@ -176,14 +178,16 @@ module "workers" {
   region                = var.region
   name                  = "worker-${each.key}"
   service_account_email = google_service_account.worker[each.key].email
-  ingress               = "INGRESS_TRAFFIC_INTERNAL_ONLY"
-  public_invoker        = false
-  subnetwork            = module.network.subnetwork_id
-  memory                = each.value.memory
-  timeout               = each.value.timeout
-  max_instances         = var.worker_max_instances
-  concurrency           = var.worker_concurrency
-  deletion_protection   = var.environment == "prod"
+  # O relay aceita tráfego de fora da VPC para os operadores abrirem o /admin/health com
+  # `gcloud run services proxy` (#34); continua só com IAM (sem invocação pública).
+  ingress             = each.key == "relay" ? "INGRESS_TRAFFIC_ALL" : "INGRESS_TRAFFIC_INTERNAL_ONLY"
+  public_invoker      = false
+  subnetwork          = module.network.subnetwork_id
+  memory              = each.value.memory
+  timeout             = each.value.timeout
+  max_instances       = var.worker_max_instances
+  concurrency         = var.worker_concurrency
+  deletion_protection = var.environment == "prod"
   env = merge(
     {
       WORKER_NAME    = each.key

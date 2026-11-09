@@ -17,7 +17,9 @@ from datetime import UTC, datetime
 from opentelemetry import trace
 
 FIELDS = ("request_id", "tenant_id", "topic", "message_id", "worker")
-PARAMETERS = re.compile(r"^\s*\[parameters: .*$", re.MULTILINE)
+# O que o SQLAlchemy e o asyncpg anexam com valores do cliente: os parâmetros do comando e o
+# DETAIL do Postgres (`Key (email)=(ana@…) already exists`).
+SCRUB = re.compile(r"^(\s*)(\[parameters: |DETAIL: |.*\bKey \().*$", re.MULTILINE)
 _fields: ContextVar[dict[str, str] | None] = ContextVar("log_fields", default=None)
 
 
@@ -60,18 +62,20 @@ class JsonFormatter(logging.Formatter):
             )
             entry["logging.googleapis.com/spanId"] = f"{span.span_id:016x}"
         if record.exc_info:
-            entry["exception"] = PARAMETERS.sub(
-                "  [parâmetros omitidos]", self.formatException(record.exc_info)
+            entry["exception"] = SCRUB.sub(
+                r"\1[detalhe omitido]", self.formatException(record.exc_info)
             )
         return json.dumps(entry, ensure_ascii=False)
 
 
 def configure_logging(level: str | None = None) -> None:
-    """Um handler JSON na saída padrão (o Cloud Run manda para o Cloud Logging)."""
+    """Um handler JSON na saída padrão (o Cloud Run manda para o Cloud Logging). Idempotente, e
+    não tira os outros handlers (o `caplog` dos testes, por exemplo)."""
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JsonFormatter())
     root = logging.getLogger()
-    root.handlers = [handler]
+    root.handlers = [h for h in root.handlers if not isinstance(h.formatter, JsonFormatter)]
+    root.handlers.append(handler)
     root.setLevel(level or os.environ.get("LOG_LEVEL", "INFO"))
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         logging.getLogger(name).handlers = []

@@ -43,5 +43,15 @@ async def relay() -> dict[str, int]:
 async def admin_health() -> dict[str, Any]:
     async with engine().begin() as connection:
         await platform_role(connection)
-        measures = await connection.scalar(text("select doctor.platform_health()"))
+        measures = await connection.scalar(
+            text(
+                # A CPU do Supabase vem da última leitura da Metrics API (até 5 min atrás).
+                "select doctor.platform_health() || coalesce((select jsonb_strip_nulls("
+                " jsonb_build_object("
+                " 'supabase_cpu_utilization', details -> 'supabase_cpu_utilization',"
+                " 'supabase_disk_utilization', details -> 'supabase_disk_utilization'))"
+                " from doctor.platform_jobs where name = 'supabase_metrics'"
+                " and last_success_at > now() - interval '5 minutes'), '{}')"
+            )
+        )
     return evaluate(dict(measures or {}))

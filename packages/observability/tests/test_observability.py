@@ -20,7 +20,10 @@ def record(message: str, *args: object, exc: bool = False) -> logging.LogRecord:
     if exc:
         try:
             email = "ana" + "@acme.com.br"
-            raise ValueError(f"insert falhou\n[parameters: ('{email}', 'segredo')]")
+            raise ValueError(
+                f"insert falhou\nDETAIL:  Key (tenant_id, email)=(t, {email}) already exists."
+                f"\n[parameters: ('{email}', 'segredo')]"
+            )
         except ValueError:
             import sys
 
@@ -58,7 +61,23 @@ def test_log_json_com_trace_e_so_os_campos_permitidos() -> None:
 def test_traceback_perde_os_parametros_do_sql() -> None:
     entry = json.loads(JsonFormatter(project="p").format(record("falhou", exc=True)))
     assert "ana@acme.com.br" not in entry["exception"]
-    assert "parâmetros omitidos" in entry["exception"]
+    assert "detalhe omitido" in entry["exception"]
+
+
+def test_configurar_os_logs_nao_tira_os_outros_handlers() -> None:
+    from aid_observability.logs import configure_logging
+
+    other = logging.NullHandler()
+    root = logging.getLogger()
+    root.addHandler(other)
+    try:
+        configure_logging()
+        configure_logging()
+        assert other in root.handlers
+        assert sum(isinstance(h.formatter, JsonFormatter) for h in root.handlers) == 1
+    finally:
+        root.removeHandler(other)
+        root.handlers = [h for h in root.handlers if not isinstance(h.formatter, JsonFormatter)]
 
 
 @pytest.mark.asyncio

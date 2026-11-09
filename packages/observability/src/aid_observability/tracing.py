@@ -5,6 +5,7 @@ um trigger o grava em cada mensagem da outbox, o relay o publica como atributo d
 runtime dos workers abre o span da mensagem como filho dele. Um Evento injetado na API chega à
 gravação em `doctor.events` no mesmo trace."""
 
+import atexit
 import os
 from collections.abc import Mapping
 
@@ -28,6 +29,20 @@ def context_from(attributes: Mapping[str, str]) -> Context:
     return PROPAGATOR.extract({k: v for k, v in attributes.items() if k == "traceparent"})
 
 
+def flush() -> None:
+    """Envia os spans pendentes antes de a resposta sair: no Cloud Run a CPU para fora das
+    requisições, e a instância pode sumir com spans na fila do BatchSpanProcessor."""
+    force_flush = getattr(trace.get_tracer_provider(), "force_flush", None)
+    if force_flush is not None:
+        force_flush(2000)
+
+
+def shutdown() -> None:
+    stop = getattr(trace.get_tracer_provider(), "shutdown", None)
+    if stop is not None:
+        stop()
+
+
 def configure(service: str) -> bool:
     """Liga o envio ao Cloud Trace com OTEL_ENABLED=true (o exportador exige credenciais)."""
     if os.environ.get("OTEL_ENABLED") != "true":
@@ -40,4 +55,6 @@ def configure(service: str) -> bool:
     provider = TracerProvider(resource=Resource.create({"service.name": service}))
     provider.add_span_processor(BatchSpanProcessor(CloudTraceSpanExporter()))  # type: ignore[no-untyped-call]
     trace.set_tracer_provider(provider)
+    # No SIGTERM do Cloud Run o uvicorn encerra o processo: os spans da fila saem antes.
+    atexit.register(shutdown)
     return True

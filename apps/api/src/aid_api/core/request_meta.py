@@ -51,6 +51,8 @@ def install(app: FastAPI) -> None:
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         meta = describe(request)
+        # O handler de erro inesperado roda fora deste middleware: ele lê daqui o request_id.
+        request.state.request_id = meta["request_id"]
         token = _meta.set(meta)
         try:
             # O request_id em todo log da requisição (#34); o tenant entra quando o JWT é lido.

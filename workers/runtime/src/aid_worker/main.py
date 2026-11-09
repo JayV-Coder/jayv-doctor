@@ -130,7 +130,16 @@ def create_app(worker: str, handlers: Mapping[str, Handler]) -> FastAPI:
             span.set_attribute("messaging.message.id", envelope.message.message_id)
             if attributes.get("tenant_id"):
                 span.set_attribute("tenant.id", attributes["tenant_id"])
-            await handler(envelope.message)
+            try:
+                await handler(envelope.message)
+            except Exception as exc:
+                # Registrado aqui, dentro do contexto (tópico, mensagem, tenant e trace); o 500
+                # faz o Pub/Sub reentregar.
+                logger.exception("falha ao processar a mensagem")
+                span.record_exception(exc)
+                return Response(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            finally:
+                tracing.flush()
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     for router in routers_for(worker):

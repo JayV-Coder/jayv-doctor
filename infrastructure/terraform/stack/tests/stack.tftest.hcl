@@ -48,8 +48,8 @@ run "workers_sao_privados_e_a_api_so_entra_pelo_load_balancer" {
   command = plan
 
   assert {
-    condition     = alltrue([for w in module.workers : w.ingress == "INGRESS_TRAFFIC_INTERNAL_ONLY" && !w.public_invoker])
-    error_message = "Workers não aceitam chamada pública."
+    condition     = alltrue([for name, w in module.workers : (name == "relay" || w.ingress == "INGRESS_TRAFFIC_INTERNAL_ONLY") && !w.public_invoker])
+    error_message = "Workers não aceitam chamada pública (o relay aceita só com IAM, para o /admin/health)."
   }
   assert {
     condition     = module.api.ingress == "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
@@ -246,9 +246,10 @@ run "cada_alerta_tem_runbook_e_vai_para_o_plantao" {
 
   assert {
     condition = toset(keys(module.observability.alerts)) == toset([
-      "dlq", "outbox_lag", "workers_stopped", "supabase_cpu", "llm_errors", "api_errors",
+      "dlq", "workers_stopped", "api_errors", "metrics_absent", "outbox_lag_seconds", "outbox_stuck",
+      "ingestion_lag_seconds", "diagnosis_queue_seconds", "llm_error_rate_1h", "supabase_cpu_utilization",
     ])
-    error_message = "Os seis alertas do ticket: DLQ, outbox, workers, CPU do Supabase, LLM e 5xx da API."
+    error_message = "Os alertas do ticket (DLQ, outbox, workers, CPU, LLM, 5xx) mais outbox travada, filas e medidas ausentes."
   }
   assert {
     condition     = alltrue([for content in values(module.observability.alerts) : strcontains(content, "/docs/operations/runbooks/")])
@@ -264,6 +265,15 @@ run "cada_alerta_tem_runbook_e_vai_para_o_plantao" {
   }
 }
 
+run "api_liga_os_logs_ao_trace" {
+  command = plan
+
+  assert {
+    condition     = module.api.env["GCP_PROJECT_ID"] == "aid-test"
+    error_message = "Sem GCP_PROJECT_ID, o log da API não aponta para o trace."
+  }
+}
+
 run "admin_health_so_para_operadores" {
   command = plan
 
@@ -276,8 +286,8 @@ run "admin_health_so_para_operadores" {
     error_message = "Operadores invocam o relay pelo IAM; o relay segue interno."
   }
   assert {
-    condition     = module.workers["relay"].ingress == "INGRESS_TRAFFIC_INTERNAL_ONLY" && !module.workers["relay"].public_invoker
-    error_message = "O /admin/health não é público."
+    condition     = !module.workers["relay"].public_invoker
+    error_message = "O /admin/health não é público: só quem tem run.invoker."
   }
 }
 

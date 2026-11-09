@@ -99,44 +99,36 @@ locals {
 
   custom = "resource.type=\"global\" AND metric.type=\"custom.googleapis.com/aid/%s\""
 
-  # Os limites são os do `/admin/health` (aid_observability.health).
-  threshold_alerts = {
-    dlq = {
-      name     = "DLQ com mensagens"
-      filter   = "resource.type=\"pubsub_subscription\" AND metric.type=\"pubsub.googleapis.com/subscription/num_undelivered_messages\" AND resource.label.subscription_id=monitoring.regex.full_match(\".*\\\\.dlq\\\\.pull\")"
-      value    = 0
-      duration = "300s"
-      runbook  = "dlq.md"
-    }
-    outbox_lag = {
-      name     = "Lag da outbox acima de 5 min"
-      filter   = format(local.custom, "outbox_lag_seconds")
-      value    = 300
-      duration = "60s"
-      runbook  = "outbox-lag.md"
-    }
-    workers_stopped = {
-      name     = "Workers sem processar por 10 min"
-      filter   = "resource.type=\"pubsub_subscription\" AND metric.type=\"pubsub.googleapis.com/subscription/oldest_unacked_message_age\" AND resource.label.subscription_id=monitoring.regex.full_match(\".*\\\\.push\")"
-      value    = 600
-      duration = "60s"
-      runbook  = "workers-parados.md"
-    }
-    supabase_cpu = {
-      name     = "CPU do Supabase acima de 80% por 15 min"
-      filter   = format(local.custom, "supabase_cpu_utilization")
-      value    = 0.8
-      duration = "900s"
-      runbook  = "supabase-cpu.md"
-    }
-    llm_errors = {
-      name     = "Erro do LLM acima de 10%"
-      filter   = format(local.custom, "llm_error_rate_1h")
-      value    = 0.1
-      duration = "300s"
-      runbook  = "llm-erros.md"
-    }
-  }
+  # Limites numa fonte só, a mesma do `/admin/health` (aid_observability/limits.json).
+  limits = jsondecode(file("${path.module}/../../../../packages/observability/src/aid_observability/limits.json"))
+
+  threshold_alerts = merge(
+    {
+      for metric, rule in local.limits : metric => {
+        name     = rule.name
+        filter   = format(local.custom, metric)
+        value    = rule.limit
+        duration = rule.duration
+        runbook  = rule.runbook
+      }
+    },
+    {
+      dlq = {
+        name     = "DLQ com mensagens"
+        filter   = "resource.type=\"pubsub_subscription\" AND metric.type=\"pubsub.googleapis.com/subscription/num_undelivered_messages\" AND resource.label.subscription_id=monitoring.regex.full_match(\".*\\\\.dlq\\\\.pull\")"
+        value    = 0
+        duration = "300s"
+        runbook  = "dlq.md"
+      }
+      workers_stopped = {
+        name     = "Workers sem processar por 10 min"
+        filter   = "resource.type=\"pubsub_subscription\" AND metric.type=\"pubsub.googleapis.com/subscription/oldest_unacked_message_age\" AND resource.label.subscription_id=monitoring.regex.full_match(\".*\\\\.push\")"
+        value    = 600
+        duration = "60s"
+        runbook  = "workers-parados.md"
+      }
+    },
+  )
 
   channels = concat(
     [for channel in google_monitoring_notification_channel.email : channel.id],
@@ -193,6 +185,52 @@ resource "google_monitoring_alert_policy" "threshold" {
 
   documentation {
     content   = "Runbook: ${var.runbook_base_url}/docs/operations/runbooks/${each.value.runbook}"
+    mime_type = "text/markdown"
+  }
+
+  alert_strategy {
+    auto_close = "1800s"
+  }
+
+  depends_on = [google_monitoring_metric_descriptor.custom]
+}
+
+# Sem dado nenhum alerta de limite dispara: o job de métricas parado silenciaria a outbox, o LLM
+# e a CPU. Este avisa quando as medidas da plataforma deixam de chegar.
+resource "google_monitoring_alert_policy" "metrics_absent" {
+  project               = var.project_id
+  display_name          = "Medidas da plataforma sem chegar há 10 min"
+  combiner              = "OR"
+  notification_channels = local.channels
+
+  conditions {
+    display_name = "outbox_lag_seconds ausente"
+    condition_absent {
+      filter   = format(local.custom, "outbox_lag_seconds")
+      duration = "600s"
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_MAX"
+      }
+    }
+  }
+
+  conditions {
+    display_name = "Metrics API do Supabase sem responder"
+    condition_threshold {
+      filter          = format(local.custom, "supabase_metrics_up")
+      comparison      = "COMPARISON_LT"
+      threshold_value = 1
+      duration        = "900s"
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_MAX"
+      }
+    }
+  }
+
+  documentation {
+    content   = "Runbook: ${var.runbook_base_url}/docs/operations/runbooks/metricas-ausentes.md"
     mime_type = "text/markdown"
   }
 
@@ -282,6 +320,7 @@ output "alerts" {
   value = merge(
     { for key, policy in google_monitoring_alert_policy.threshold : key => policy.documentation[0].content },
     { api_errors = google_monitoring_alert_policy.api_errors.documentation[0].content },
+    { metrics_absent = google_monitoring_alert_policy.metrics_absent.documentation[0].content },
   )
 }
 

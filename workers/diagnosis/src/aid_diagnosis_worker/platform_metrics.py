@@ -78,7 +78,8 @@ async def supabase_measures(
                 " values (:n, now(), cast(:d as jsonb)) on conflict (name) do update"
                 " set last_success_at = excluded.last_success_at, details = excluded.details"
             ),
-            {"n": JOB, "d": json.dumps(counters)},
+            # Os contadores para a próxima leitura e as medidas, que o /admin/health mostra.
+            {"n": JOB, "d": json.dumps({**counters, **measures})},
         )
     return measures
 

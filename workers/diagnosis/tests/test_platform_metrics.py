@@ -38,11 +38,21 @@ def test_cpu_sai_da_diferenca_entre_duas_leituras_e_o_disco_da_pasta_do_banco() 
 
 
 def test_saude_degradada_acima_dos_limites_dos_alertas() -> None:
-    ok = evaluate({"outbox_lag_seconds": 30, "llm_error_rate_1h": 0.02, "outbox_stuck": 0})
-    assert ok["status"] == "ok"
-    bad = evaluate({"outbox_lag_seconds": 900, "llm_error_rate_1h": 0.2})
+    healthy = {
+        "outbox_lag_seconds": 30,
+        "outbox_stuck": 0,
+        "ingestion_lag_seconds": 5,
+        "diagnosis_queue_seconds": 0,
+        "llm_error_rate_1h": 0.02,
+        "supabase_cpu_utilization": 0.4,
+    }
+    assert evaluate(healthy)["status"] == "ok"
+    bad = evaluate({**healthy, "outbox_lag_seconds": 900})
     assert bad["status"] == "degraded"
     assert bad["checks"]["outbox_lag_seconds"]["runbook"].endswith("outbox-lag.md")
+    # Sem a CPU (Metrics API fora), não é "ok".
+    blind = {k: v for k, v in healthy.items() if k != "supabase_cpu_utilization"}
+    assert evaluate(blind)["checks"]["supabase_cpu_utilization"]["ok"] is False
 
 
 @pytest.mark.skipif(URL is None, reason="sem INTEGRATION_DB_URL")

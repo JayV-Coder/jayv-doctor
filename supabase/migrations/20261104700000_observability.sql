@@ -78,3 +78,16 @@ as $$
 $$;
 revoke all on function doctor.platform_health() from public, anon, authenticated;
 grant execute on function doctor.platform_health() to service_role;
+
+-- A função roda a cada minuto no banco compartilhado com o jayv-coder (ADR-0009): cada filtro
+-- dela tem um índice parcial, pequeno, em vez de varrer as tabelas.
+create index ingestion_batches_pending_age_idx on doctor.ingestion_batches (created_at)
+  where processed_at is null and failed_at is null;
+create index ingestion_batches_failed_idx on doctor.ingestion_batches (failed_at)
+  where failed_at is not null;
+create index diagnoses_queued_age_idx on doctor.diagnoses (created_at) where status = 'queued';
+create index diagnoses_updated_idx on doctor.diagnoses (updated_at);
+create index connector_syncs_finished_idx on doctor.connector_syncs (finished_at)
+  where finished_at is not null;
+create index connectors_failing_idx on doctor.connectors (id) where status = 'failing';
+create index usage_llm_created_idx on doctor.usage_llm (created_at);

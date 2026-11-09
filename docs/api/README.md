@@ -12,6 +12,7 @@ Todas as rotas ficam em `/api/v1`, com `Authorization: Bearer <JWT do Supabase>`
 | Execuções, Eventos e Logs brutos | [executions.md](executions.md) |
 | Incidentes e Dashboard | [incidents.md](incidents.md), [dashboard.md](dashboard.md) |
 | Diagnósticos e revisão | [diagnoses.md](diagnoses.md) |
+| Relatório técnico e link compartilhável | [reports.md](reports.md) |
 | Base de conhecimento | [knowledge.md](knowledge.md) |
 | Organizações, membros e sessão | [orgs.md](orgs.md), [members.md](members.md), [me.md](me.md) |
 | Trilha de auditoria, privacidade e Cotas | [audit.md](audit.md), [privacy.md](privacy.md), [usage.md](usage.md) |

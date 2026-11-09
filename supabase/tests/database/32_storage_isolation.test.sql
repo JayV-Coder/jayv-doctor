@@ -2,7 +2,7 @@
 -- a política repete o Papel. A Organização A não lê, não sobe e não apaga arquivo da B.
 begin;
 \ir ../helpers/tenancy.psql
-select plan(22);
+select plan(32);
 
 select tests.create_user('00000000-0000-4000-8000-0000000a0001', 'owner@acme.test');
 select tests.create_user('00000000-0000-4000-8000-0000000a0003', 'analyst@acme.test');
@@ -17,7 +17,9 @@ insert into storage.objects (bucket_id, name) values
   ('doctor-raw-logs', '00000000-0000-4000-8000-00000000be01/imports/x/upload.ndjson'),
   ('doctor-knowledge', '00000000-0000-4000-8000-00000000be01/y/document.md'),
   ('doctor-raw-logs', '00000000-0000-4000-8000-00000000ac01/imports/z/upload.ndjson'),
-  ('doctor-knowledge', '00000000-0000-4000-8000-00000000ac01/w/document.md');
+  ('doctor-knowledge', '00000000-0000-4000-8000-00000000ac01/w/document.md'),
+  ('doctor-reports', '00000000-0000-4000-8000-00000000be01/r.pdf'),
+  ('doctor-reports', '00000000-0000-4000-8000-00000000ac01/r.pdf');
 
 create function pg_temp.blocked(command text) returns boolean language plpgsql as $$
 declare
@@ -47,7 +49,7 @@ declare
 begin
   for r in select * from storage_roles loop
     perform tests.authenticate_as(r.user_id, '00000000-0000-4000-8000-00000000ac01', r.role, r.aal);
-    foreach bucket in array array['doctor-raw-logs', 'doctor-knowledge'] loop
+    foreach bucket in array array['doctor-raw-logs', 'doctor-knowledge', 'doctor-reports'] loop
       insert into storage_results values
         (r.role, bucket || ': ler arquivo de B', (select count(*) = 0 from storage.objects
           where bucket_id = bucket and name like '00000000-0000-4000-8000-00000000be01/%')),
@@ -56,11 +58,10 @@ begin
           '00000000-0000-4000-8000-00000000be01/novo/arquivo.md')));
     end loop;
     -- Controle positivo: Owner e Analyst leem os arquivos da própria Organização (não é nega-tudo).
-    if r.role <> 'viewer' then
-      insert into storage_results values
-        (r.role, 'lê os arquivos da própria Organização nos dois buckets', (select count(*) = 2
-          from storage.objects where name like '00000000-0000-4000-8000-00000000ac01/%'));
-    end if;
+    -- O Viewer lê só o Relatório técnico (#32).
+    insert into storage_results values
+      (r.role, 'lê os arquivos da própria Organização', (select count(*) = case when r.role = 'viewer' then 1 else 3 end
+        from storage.objects where name like '00000000-0000-4000-8000-00000000ac01/%'));
     insert into storage_results values
       (r.role, 'doctor-knowledge: apagar arquivo de B', pg_temp.blocked(
         'delete from storage.objects where bucket_id = ''doctor-knowledge'''
@@ -68,6 +69,10 @@ begin
       -- O bucket de Logs brutos não tem política de delete: só a retenção (plataforma) apaga.
       (r.role, 'doctor-raw-logs: ninguém apaga pelo cliente', pg_temp.blocked(
         'delete from storage.objects where bucket_id = ''doctor-raw-logs'''
+        || ' and name like ''00000000-0000-4000-8000-00000000be01/%''')),
+      -- Relatórios: só o worker sobe e só a retenção apaga.
+      (r.role, 'doctor-reports: ninguém apaga pelo cliente', pg_temp.blocked(
+        'delete from storage.objects where bucket_id = ''doctor-reports'''
         || ' and name like ''00000000-0000-4000-8000-00000000be01/%'''));
     perform tests.clear_authentication();
   end loop;
@@ -93,7 +98,7 @@ order by role, check_name;
 
 select is(
   (select count(*)::int from storage.objects where name like '00000000-0000-4000-8000-00000000be01/%'),
-  2, 'os arquivos de B continuam lá'
+  3, 'os arquivos de B continuam lá'
 );
 select * from finish();
 rollback;

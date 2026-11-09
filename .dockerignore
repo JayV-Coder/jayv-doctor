@@ -1,7 +1,9 @@
 **
 !pyproject.toml
 !uv.lock
+!apps/agent/**
 !apps/api/**
+!packages/evaluation/**
 !packages/connectors/**
 !packages/contracts/**
 !packages/correlation/**

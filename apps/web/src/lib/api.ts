@@ -19,6 +19,8 @@ export type ExecutionDetail = Schemas["ExecutionDetail"];
 export type EventDetail = Schemas["EventDetail"];
 export type ExecutionSearch = Schemas["ExecutionSearch"];
 export type Connector = Schemas["Connector"];
+export type Agent = Schemas["Agent"];
+export type RegistrationToken = Schemas["RegistrationToken"];
 export type ConnectorSync = Schemas["ConnectorSync"];
 type Me = Schemas["Me"];
 
@@ -105,6 +107,12 @@ export async function getEvent(
 export async function listConnectors(): Promise<Connector[] | null> {
   const response = await apiFetch("/connectors").catch(() => null);
   return response?.ok ? ((await response.json()) as Connector[]) : null;
+}
+
+// Agentes locais da Organização ativa (#39); `null` se a API não respondeu.
+export async function listAgents(): Promise<Agent[] | null> {
+  const response = await apiFetch("/agents").catch(() => null);
+  return response?.ok ? ((await response.json()) as Agent[]) : null;
 }
 
 export async function getConnector(id: string): Promise<Connector | "not_found" | null> {

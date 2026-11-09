@@ -22,6 +22,7 @@ Tudo foi validado na stack local e no CI. A configuração do GCP e do Supabase 
 - [ ] Variáveis do GitHub (`GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA`, `GCP_PROJECT_ID`) e `DEPLOY_ENABLED`.
 
 - [ ] Teste do conector GCP (ticket #15) em staging, contra um projeto de teste com logs sintéticos: comparar a contagem do Logging com os Eventos gravados, com uma Sincronização por minuto.
+- [ ] Agente local (#39): publicar a imagem `aid-agent` no registro (`ghcr.io/jayv-coder/aid-agent`) a cada release; gerar a CA de agentes e a chave de release (Ed25519) no Secret Manager (`AID_AGENT_CA_KEY`, `AID_AGENT_CA_CERT`) e definir `AID_PUBLIC_API_URL` e `AID_AGENT_RELEASE` na API; decidir se o mTLS no balanceador entra (ADR-0015). Testar com um SAP de homologação do piloto: usuário técnico com o mínimo privilégio de `docs/operations/agente.md`, a função `Z_AID_…` de SLG1/SM58 e a biblioteca RFC numa imagem derivada; rodar o agente 2 h sem rede e conferir o reenvio sem duplicar.
 - [ ] Decidir e montar a identidade de plataforma por Organização, que liga o modo sem chave (`impersonation`) do conector GCP (ver `docs/operations/conectores.md`).
 
 ## Supabase hospedado (exige aprovação na hora, ADR-0009)

@@ -85,6 +85,8 @@ files = [
     "workers/runtime/tests",
     "scripts/load_report.py",
     "scripts/db_fingerprint.py",
+    "scripts/pilot_report.py",
+    "scripts/sus_score.py",
     "tests/operations",
 ]
 

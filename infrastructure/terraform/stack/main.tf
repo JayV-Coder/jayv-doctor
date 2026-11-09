@@ -139,6 +139,8 @@ module "api" {
   public_invoker      = true
   subnetwork          = module.network.subnetwork_id
   min_instances       = var.api_min_instances
+  max_instances       = var.api_max_instances
+  concurrency         = var.api_concurrency
   deletion_protection = var.environment == "prod"
   env = {
     SUPABASE_JWT_ISSUER = var.supabase_jwt_issuer
@@ -180,12 +182,18 @@ module "workers" {
   subnetwork            = module.network.subnetwork_id
   memory                = each.value.memory
   timeout               = each.value.timeout
+  max_instances         = var.worker_max_instances
+  concurrency           = var.worker_concurrency
   deletion_protection   = var.environment == "prod"
-  env = {
-    WORKER_NAME    = each.key
-    SUPABASE_URL   = trimsuffix(var.supabase_jwt_issuer, "/auth/v1")
-    GCP_PROJECT_ID = var.project_id
-  }
+  env = merge(
+    {
+      WORKER_NAME    = each.key
+      SUPABASE_URL   = trimsuffix(var.supabase_jwt_issuer, "/auth/v1")
+      GCP_PROJECT_ID = var.project_id
+    },
+    # O backup do Storage (#33) roda no worker de diagnóstico, que tem a chave do Storage.
+    each.key == "diagnosis" ? { BACKUP_BUCKET = google_storage_bucket.storage_backup.name } : {},
+  )
   secret_env = { for secret in each.value.secrets : local.secret_env[secret] => secret }
   depends_on = [module.secrets]
 }
@@ -456,4 +464,77 @@ resource "google_cloud_scheduler_job" "outbox_relay" {
   }
 
   depends_on = [module.project]
+}
+
+# Backup dos arquivos do Storage (#33): espelho dos buckets do Doctor, no Brasil. Com
+# versionamento, o que a origem apaga (retenção, LGPD, exclusão total) sai do espelho e fica 7
+# dias como versão antiga; depois some de vez. Sem soft delete do GCS, para não estender isso.
+resource "google_storage_bucket" "storage_backup" {
+  project                     = var.project_id
+  name                        = "${var.project_id}-storage-backup"
+  location                    = var.region
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+  force_destroy               = false
+
+  versioning {
+    enabled = true
+  }
+
+  soft_delete_policy {
+    retention_duration_seconds = 0
+  }
+
+  lifecycle_rule {
+    condition {
+      days_since_noncurrent_time = 7
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
+  depends_on = [module.project]
+}
+
+# Só o worker de diagnóstico escreve; ninguém mais da stack lê.
+resource "google_storage_bucket_iam_member" "storage_backup_writer" {
+  bucket = google_storage_bucket.storage_backup.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.worker["diagnosis"].email}"
+}
+
+resource "google_cloud_scheduler_job" "storage_backup" {
+  project = var.project_id
+  region  = var.region
+  name    = "${local.name_prefix}-storage-backup"
+  # De hora em hora (RPO dos arquivos ≤ 1 h); cada rodada cabe no timeout do worker e a que
+  # não termina continua na seguinte.
+  schedule         = "20 * * * *"
+  time_zone        = "Etc/UTC"
+  attempt_deadline = "600s"
+
+  http_target {
+    http_method = "POST"
+    uri         = "${module.workers["diagnosis"].uri}/backup/storage"
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = module.workers["diagnosis"].uri
+    }
+  }
+
+  depends_on = [module.project]
+}
+
+# Conexões possíveis no pior caso (todas as instâncias cheias) cabem na fatia do Supavisor.
+check "conexoes_cabem_no_supavisor" {
+  assert {
+    condition = (
+      var.api_max_instances * var.api_concurrency
+      + length(local.workers) * var.worker_max_instances * var.worker_concurrency
+    ) <= var.supavisor_client_budget
+    error_message = "Instâncias × concorrência passam da fatia do Supavisor reservada ao Doctor."
+  }
 }

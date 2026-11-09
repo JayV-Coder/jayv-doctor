@@ -5,12 +5,14 @@ from collections.abc import Awaitable, Callable, Mapping
 from functools import lru_cache
 from typing import Any
 
+import httpx
 from aid_db import supavisor_engine
 from aid_diagnosis_engine.llm.registry import provider_for
 from aid_knowledge.storage import KnowledgeStore
 from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from aid_diagnosis_worker.backup import GcsTarget, StorageSource, backup_storage
 from aid_diagnosis_worker.diagnose import diagnose, open_automatic
 from aid_diagnosis_worker.evaluate import evaluate_execution
 from aid_diagnosis_worker.knowledge import index, reindex_stale
@@ -87,3 +89,14 @@ async def reindex() -> dict[str, int]:
 @router.post("/retention/run")
 async def retention() -> dict[str, int]:
     return await run_retention(engine(), storage())
+
+
+@router.post("/backup/storage")
+async def storage_backup() -> dict[str, int]:
+    # Um cliente HTTP para a rodada inteira (conexões reaproveitadas), fechado no fim.
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
+        source = StorageSource(
+            os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"], client
+        )
+        target = GcsTarget(os.environ["BACKUP_BUCKET"], client)
+        return await backup_storage(engine(), source, target)

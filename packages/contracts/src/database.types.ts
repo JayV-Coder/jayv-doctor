@@ -2,7 +2,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
-
+  
   "doctor": {
           Tables: {
             "audit_logs": {
@@ -37,7 +37,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"audit_logs_2026_11": {
                   Row: {
@@ -51,7 +51,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"audit_logs_2026_12": {
                   Row: {
@@ -65,7 +65,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"audit_logs_2027_01": {
                   Row: {
@@ -79,7 +79,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"audit_logs_2027_02": {
                   Row: {
@@ -93,7 +93,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"audit_logs_2027_03": {
                   Row: {
@@ -107,7 +107,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"audit_logs_2027_04": {
                   Row: {
@@ -121,7 +121,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"audit_logs_2027_05": {
                   Row: {
@@ -135,7 +135,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"audit_logs_2027_06": {
                   Row: {
@@ -149,7 +149,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"audit_logs_2027_07": {
                   Row: {
@@ -163,7 +163,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"audit_logs_2027_08": {
                   Row: {
@@ -177,7 +177,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"audit_logs_2027_09": {
                   Row: {
@@ -191,7 +191,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"audit_logs_2027_10": {
                   Row: {
@@ -205,7 +205,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"audit_logs_2027_11": {
                   Row: {
@@ -219,7 +219,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"audit_logs_2027_12": {
                   Row: {
@@ -233,7 +233,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"audit_logs_default": {
                   Row: {
@@ -247,7 +247,7 @@ isOneToOne: false
                     "action"?: string,"actor_id"?: string | null,"actor_type"?: string,"after"?: Json | null,"before"?: Json | null,"id"?: number,"ip"?: unknown,"occurred_at"?: string,"request_id"?: string | null,"resource_id"?: string | null,"resource_type"?: string | null,"tenant_id"?: string,"user_agent"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"connector_syncs": {
                   Row: {
@@ -313,7 +313,7 @@ isOneToOne: false
                     "completed_at"?: string,"id"?: string,"removed"?: NonNullable<Json>,"requested_at"?: string,"requested_by"?: string | null,"tenant_id"?: string
                   }
                   Relationships: [
-
+                    
                   ]
                 },"diagnoses": {
                   Row: {
@@ -525,7 +525,7 @@ isOneToOne: false
                     "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"events_2026_11": {
                   Row: {
@@ -539,7 +539,7 @@ isOneToOne: false
                     "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"events_2026_12": {
                   Row: {
@@ -553,7 +553,7 @@ isOneToOne: false
                     "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
                   }
                   Relationships: [
-
+                    
                   ]
                 },"execution_merges": {
                   Row: {
@@ -599,7 +599,7 @@ isOneToOne: false
                     "hour"?: string,"integration_id"?: string,"queued_at"?: string,"tenant_id"?: string
                   }
                   Relationships: [
-
+                    
                   ]
                 },"execution_stats_hourly": {
                   Row: {
@@ -691,7 +691,7 @@ isOneToOne: false
                     "chunk_count"?: number,"created_at"?: string,"id"?: string,"slug"?: string,"title"?: string,"updated_at"?: string,"version"?: string
                   }
                   Relationships: [
-
+                    
                   ]
                 },"idempotency_keys": {
                   Row: {
@@ -1121,7 +1121,21 @@ isOneToOne: false
                     "limit"?: number,"period"?: string,"plan"?: string,"resource"?: string
                   }
                   Relationships: [
-
+                    
+                  ]
+                },"platform_jobs": {
+                  Row: {
+                    "details": NonNullable<Json>,"last_success_at": string,"name": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "details"?: NonNullable<Json>,"last_success_at": string,"name": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "details"?: NonNullable<Json>,"last_success_at"?: string,"name"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
                   ]
                 },"raw_log_objects": {
                   Row: {
@@ -1233,7 +1247,7 @@ isOneToOne: false
                     "active"?: boolean,"category"?: string,"code"?: string,"created_at"?: string,"description"?: string,"severity_hint"?: string,"version"?: string
                   }
                   Relationships: [
-
+                    
                   ]
                 },"rule_matches": {
                   Row: {
@@ -1279,7 +1293,7 @@ isOneToOne: false
                     "applied_at"?: string,"version"?: string
                   }
                   Relationships: [
-
+                    
                   ]
                 },"tenants": {
                   Row: {
@@ -1293,7 +1307,7 @@ isOneToOne: false
                     "auto_diagnose_critical"?: boolean,"created_at"?: string,"deletion_requested_at"?: string | null,"deletion_requested_by"?: string | null,"deletion_scheduled_for"?: string | null,"dpa_accepted_at"?: string | null,"id"?: string,"llm_enabled"?: boolean,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"quota_tolerance"?: number,"segment"?: string | null,"status"?: string,"updated_at"?: string
                   }
                   Relationships: [
-
+                    
                   ]
                 },"usage_alerts": {
                   Row: {
@@ -1918,7 +1932,7 @@ export type CompositeTypes<
 export const Constants = {
   "doctor": {
           Enums: {
-
+            
           }
         }
 } as const

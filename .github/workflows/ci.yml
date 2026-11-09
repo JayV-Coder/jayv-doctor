@@ -109,6 +109,8 @@ jobs:
             workers/diagnosis/tests/test_retention.py \
             workers/diagnosis/tests/test_quotas.py \
             workers/diagnosis/tests/test_report.py \
+            workers/diagnosis/tests/test_backup.py \
+            tests/operations \
             packages/knowledge/tests/test_knowledge_db.py
 
   terraform:

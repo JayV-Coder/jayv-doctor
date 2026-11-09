@@ -1,0 +1,6 @@
+# Falsos positivos já no histórico, conferidos um a um (não reescrevemos branch publicada).
+# Formato: a impressão digital que o gitleaks imprime.
+
+# Teste do assistente do Salesforce (#37): só o cabeçalho "BEGIN PRIVATE KEY" seguido de "x", sem
+# chave. O teste atual monta o texto em partes.
+a6450e57a0a5b565b1b46fc51afcf12db4982208:apps/web/src/lib/connectors/salesforce.test.ts:private-key:38

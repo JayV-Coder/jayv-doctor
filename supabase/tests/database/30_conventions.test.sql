@@ -15,6 +15,7 @@ insert into exceptions values
   ('global_knowledge_chunks', 'Base global, comum a todas, só leitura'),
   ('rule_definitions', 'catálogo global das Regras versionadas'),
   ('plan_limits', 'catálogo global de limites por plano'),
+  ('platform_jobs', 'estado dos jobs de plataforma, sem dado de tenant'),
   ('schema_migrations', 'controle das migrações do Doctor (ADR-0009)');
 
 -- Sem `unique (tenant_id, id)`, com o motivo: a chave delas é outra.

@@ -189,6 +189,54 @@ run "so_o_relay_publica_e_o_scheduler_o_chama" {
   }
 }
 
+run "backup_do_storage_fica_no_brasil_e_segue_a_retencao" {
+  command = plan
+
+  assert {
+    condition     = google_storage_bucket.storage_backup.location == "southamerica-east1"
+    error_message = "O backup dos arquivos fica em southamerica-east1."
+  }
+  assert {
+    condition     = google_storage_bucket.storage_backup.public_access_prevention == "enforced" && google_storage_bucket.storage_backup.uniform_bucket_level_access
+    error_message = "O bucket de backup nunca é público."
+  }
+  assert {
+    condition     = google_storage_bucket.storage_backup.versioning[0].enabled && alltrue([for c in google_storage_bucket.storage_backup.lifecycle_rule[0].condition : c.days_since_noncurrent_time == 7])
+    error_message = "O que a origem apaga fica no máximo 7 dias como versão antiga."
+  }
+  assert {
+    condition     = google_storage_bucket.storage_backup.soft_delete_policy[0].retention_duration_seconds == 0
+    error_message = "Sem soft delete: ele estenderia a retenção do que a LGPD manda apagar."
+  }
+  assert {
+    condition     = google_storage_bucket_iam_member.storage_backup_writer.role == "roles/storage.objectAdmin"
+    error_message = "O worker de diagnóstico escreve no backup (o membro é a conta dele, em main.tf)."
+  }
+  assert {
+    condition     = module.workers["diagnosis"].env["BACKUP_BUCKET"] == google_storage_bucket.storage_backup.name && !contains(keys(module.workers["correlation"].env), "BACKUP_BUCKET")
+    error_message = "Só o worker de diagnóstico conhece o bucket de backup."
+  }
+}
+
+run "dimensionamento_cabe_no_supavisor" {
+  command = plan
+
+  assert {
+    condition     = module.api.max_instances == 4 && module.api.concurrency == 40
+    error_message = "A API sobe até 4 instâncias de 40 requisições (docs/operations/capacity.md)."
+  }
+}
+
+run "dimensionamento_acima_do_supavisor_e_barrado" {
+  command = plan
+
+  variables {
+    api_max_instances = 20
+    api_concurrency   = 80
+  }
+  expect_failures = [check.conexoes_cabem_no_supavisor]
+}
+
 run "chave_secreta_do_supabase_e_recusada" {
   command = plan
 

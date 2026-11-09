@@ -15,6 +15,8 @@ from uuid import UUID
 
 from aid_security import Sanitizer, derive_tenant_key
 
+from aid_ingestion.sap import enrich
+
 UNTOUCHED = {"schema_version", "event_id", "integration_id", "timestamp", "severity"}
 IDENTIFIERS = ("execution_id", "trace_id")
 LIMITS = {
@@ -54,6 +56,9 @@ class EventSanitizer:
 
     def __call__(self, event: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         """O Evento sanitizado e o relatório (`counts`, `truncated`) que vai para o banco."""
+        # Respostas SAP (BAPIRET2, OData, SOAP Fault) viram código e atributos antes da
+        # Sanitização, igual para Importação, API e Conectores (#38).
+        event = enrich(dict(event))
         content = {
             key: value
             for key, value in event.items()

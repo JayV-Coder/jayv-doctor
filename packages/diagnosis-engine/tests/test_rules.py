@@ -93,6 +93,79 @@ POSITIVE: dict[str, list[list[EventView]]] = {
             )
         ],
     ],
+    "INT-009": [
+        [
+            ev(
+                error={
+                    "category": "BUSINESS_REJECTION",
+                    "code": "MC 601",
+                    "message": "Objeto bloqueado",
+                }
+            )
+        ],
+        [
+            ev(
+                error={
+                    "category": "BUSINESS_REJECTION",
+                    "message": "Pedido 123 bloqueado pelo usuário JOAO",
+                },
+                attributes={"sap_message_id": "V1"},
+            )
+        ],
+        [
+            ev(
+                error={
+                    "category": "UNKNOWN",
+                    "message": "Material is currently locked by user BATCH",
+                },
+                attributes={"sap_message_id": "M3"},
+            )
+        ],
+    ],
+    "INT-010": [
+        [ev(error={"category": "UNKNOWN", "code": "IDOC 51"}, attributes={"idoc_status": "51"})],
+        [ev(error={"category": "UNKNOWN", "code": "IDOC 51"})],
+        [ev(severity="INFO", attributes={"idoc_status": "51"})],
+    ],
+    "INT-011": [
+        [ev(error={"category": "AUTH", "code": "S# 001", "message": "Sem autorização"})],
+        [
+            ev(
+                error={
+                    "category": "BUSINESS_REJECTION",
+                    "message": "No authorization for sales org 1000",
+                },
+                attributes={"sap_message_id": "V1"},
+            )
+        ],
+        [
+            ev(
+                error={
+                    "category": "UNKNOWN",
+                    "message": "Usuário não tem autorização para a transação",
+                },
+                attributes={"sap_message_id": "00"},
+            )
+        ],
+    ],
+    "INT-012": [
+        [ev(error={"category": "BUSINESS_REJECTION", "code": "M3 305"})],
+        [
+            ev(
+                error={
+                    "category": "BUSINESS_REJECTION",
+                    "message": "Material 4711 not maintained in plant 1000",
+                },
+                attributes={"sap_message_id": "M3"},
+            )
+        ],
+        [
+            ev(
+                error={"category": "UNKNOWN", "message": "Cliente 100200 não existe"},
+                attributes={"sap_message_id": "VK"},
+            )
+        ],
+    ],
 }
 
 NEGATIVE: dict[str, list[list[EventView]]] = {
@@ -147,6 +220,54 @@ NEGATIVE: dict[str, list[list[EventView]]] = {
         [ev(attributes={"reconciliation": {"source_count": 10}})],
         [ev(attributes={"reconciliation": "10 x 9"})],
     ],
+    "INT-009": [
+        # Texto de bloqueio sem mensagem SAP (um 423 de API qualquer) não é bloqueio de objeto SAP.
+        [ev(error={"category": "UNKNOWN", "message": "Account locked by administrator"})],
+        [
+            ev(
+                error={"category": "BUSINESS_REJECTION", "code": "V1 801"},
+                attributes={"sap_message_id": "V1"},
+            )
+        ],
+        [
+            ev(
+                error=None,
+                severity="INFO",
+                attributes={"sap_message_id": "MC", "sap_message": "locked by user"},
+            )
+        ],
+    ],
+    "INT-010": [
+        [ev(severity="INFO", attributes={"idoc_status": "53"})],
+        [ev(error={"category": "UNKNOWN", "code": "IDOC 56"}, attributes={"idoc_status": "56"})],
+        [ev(error={"category": "UNKNOWN", "message": "status 51"})],
+    ],
+    "INT-011": [
+        [ev(error={"category": "AUTH", "http_status": 401, "message": "no authorization header"})],
+        [
+            ev(
+                error={"category": "BUSINESS_REJECTION", "code": "V1 801"},
+                attributes={"sap_message_id": "V1"},
+            )
+        ],
+        [ev(error=None, severity="INFO", attributes={"sap_message_id": "S#"})],
+    ],
+    "INT-012": [
+        [ev(error={"category": "UNKNOWN", "message": "Endpoint does not exist"})],
+        [
+            ev(
+                error={"category": "BUSINESS_REJECTION", "code": "V1 801"},
+                attributes={"sap_message_id": "V1"},
+            )
+        ],
+        [
+            ev(
+                error=None,
+                severity="INFO",
+                attributes={"sap_message_id": "M3", "sap_message": "not maintained"},
+            )
+        ],
+    ],
 }
 
 
@@ -165,8 +286,8 @@ def test_regra_nao_dispara(code: str, events: list[EventView]) -> None:
 
 
 def test_catalogo_versionado_com_metadados() -> None:
-    assert RULESET_VERSION == "2026.10.1"
-    assert [r.code for r in RULES] == [f"INT-00{n}" for n in range(1, 9)]
+    assert RULESET_VERSION == "2026.11.1"
+    assert [r.code for r in RULES] == [f"INT-{n:03d}" for n in range(1, 13)]
     for item in RULES:
         assert item.version == RULESET_VERSION
         assert item.description_pt
@@ -193,5 +314,23 @@ def test_match_traz_versao_e_so_os_eventos_que_provam() -> None:
     found = rule("INT-003").evaluate(execution(), events)
     assert found is not None
     assert found.matched_event_ids == ("e-1", "e-3")
-    assert found.rule_version == "2026.10.1"
+    assert found.rule_version == "2026.11.1"
     assert found.category == "TIMEOUT"
+
+
+def test_bapiret2_tipo_e_v1_abre_int_005_e_os_especificos_tem_precedencia() -> None:
+    v1 = ev(
+        error={
+            "category": "BUSINESS_REJECTION",
+            "code": "V1 801",
+            "message": "Pedido bloqueado para faturamento",
+        },
+        attributes={"sap_message_type": "E", "sap_message_id": "V1"},
+    )
+    assert matches("INT-005", v1)
+    lock = ev(
+        error={"category": "BUSINESS_REJECTION", "code": "MC 601", "message": "Objeto bloqueado"},
+        attributes={"sap_message_type": "E", "sap_message_id": "MC"},
+    )
+    assert matches("INT-009", lock)
+    assert not matches("INT-005", lock)

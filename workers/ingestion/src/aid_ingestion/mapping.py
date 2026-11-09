@@ -13,6 +13,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from aid_ingestion.sap import adapt_record
+
 SCHEMA_VERSION = "1.0"
 # Data sem fuso: os clientes são brasileiros, e o SAP costuma registrar no horário local.
 LOCAL = ZoneInfo("America/Sao_Paulo")
@@ -219,6 +221,8 @@ def to_event(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     now = now or datetime.now(UTC)
+    # Exportações da SM58, SLG1 e status de IDoc entram com mapeamento pronto (#38).
+    record = adapt_record(record)
     timestamp = pick(record, TIMESTAMP_KEYS)
     if timestamp is None:
         raise RejectedLineError("linha sem data (timestamp)")

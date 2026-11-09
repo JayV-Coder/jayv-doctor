@@ -41,6 +41,10 @@ const CATEGORIES: Record<string, string> = {
   DUPLICATE: "Duplicidade",
   PENDING_CONFIRMATION: "Sem confirmação",
   DIVERGENCE: "Divergência",
+  SAP_LOCK: "Bloqueio no SAP",
+  IDOC_ERROR: "IDoc não lançado",
+  SAP_AUTHORIZATION: "Autorização SAP",
+  MASTER_DATA: "Cadastro mestre",
   UNCLASSIFIED: "Sem classificação",
 };
 

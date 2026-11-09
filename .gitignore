@@ -1,5 +1,6 @@
 # Node
-node_modules/
+# Sem a barra: cobre também o link simbólico de um worktree.
+node_modules
 .turbo/
 dist/
 coverage/

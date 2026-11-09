@@ -48,4 +48,4 @@ async def test_connection(
         # credencial ou a resposta do provedor.
         logger.exception("teste de conexão do provedor %s falhou", provider)
         return TestResult(ok=False, message="Não foi possível falar com o provedor.")
-    return TestResult(ok=result.ok, message=result.message)
+    return TestResult(ok=result.ok, message=result.message, capabilities=dict(result.capabilities))

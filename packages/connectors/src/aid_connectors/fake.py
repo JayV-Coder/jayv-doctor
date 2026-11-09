@@ -24,6 +24,7 @@ MESSAGES = {
     "rate_limit": "O provedor limitou as chamadas (429).",
     "transient": "Falha temporária no provedor (503).",
     "auth": "Credencial recusada pelo provedor (401).",
+    "api_limit": "Limite diário da API do provedor em 80%.",
 }
 
 

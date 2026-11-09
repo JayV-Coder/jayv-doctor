@@ -319,3 +319,44 @@ async def test_cota_de_eventos_esgotada_nao_conta_como_falha_do_conector(
     assert current["last_error"].startswith("Cota de Eventos do mês esgotada")
     assert current["later"]
     assert current["batches"] == 0
+
+
+@pytest.mark.asyncio
+async def test_limite_diario_do_provedor_pausa_visivel_e_volta_na_janela(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    connector_id = await connector(
+        engine, tenant, {"pages": 2, "fail": {"page": 1, "kind": "api_limit", "times": 1}}
+    )
+    assert await sync(engine, connector_id) == "failed"
+    current = await one(
+        engine,
+        "select status, paused_reason, consecutive_failures, last_error,"
+        " next_run_at > now() + interval '50 minutes' as later"
+        " from doctor.connectors where id = :c",
+        c=connector_id,
+    )
+    assert (current["status"], current["paused_reason"], current["consecutive_failures"]) == (
+        "paused",
+        "api_limit",
+        0,
+    )
+    assert current["later"]
+    # Passada a janela, o agendador retoma e a Sincronização seguinte roda.
+    await run(
+        engine,
+        "update doctor.connectors set next_run_at = now() - interval '1 minute' where id = :c",
+        c=connector_id,
+    )
+    await enqueue_due(engine)
+    resumed = await one(
+        engine, "select status, paused_reason from doctor.connectors where id = :c", c=connector_id
+    )
+    assert (resumed["status"], resumed["paused_reason"]) == ("active", None)
+    queued = await one(
+        engine,
+        "select count(*) as n from doctor.outbox_messages where topic = 'connector.sync'"
+        " and payload ->> 'connector_id' = :c",
+        c=connector_id,
+    )
+    assert queued["n"] == 1

@@ -69,6 +69,8 @@ class NewConnectionTest(ConnectionTest):
 class TestResult(BaseModel):
     ok: bool
     message: str
+    # Fontes que a conta do cliente oferece (ex.: EventLogFile só com Event Monitoring, #37).
+    capabilities: dict[str, bool] = Field(default_factory=dict)
 
 
 class Connector(BaseModel):

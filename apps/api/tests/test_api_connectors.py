@@ -136,7 +136,7 @@ def test_teste_de_conexao_antes_de_salvar_nao_guarda_nada() -> None:
         json={"provider": "fake", "config": {"pages": 1}, "credential": CREDENTIAL},
     )
     assert response.status_code == 200
-    assert response.json() == {"ok": True, "message": "Conexão estabelecida."}
+    assert response.json() == {"ok": True, "message": "Conexão estabelecida.", "capabilities": {}}
     assert repository.calls == []
 
 
@@ -247,3 +247,25 @@ def test_previa_so_no_teste_antes_de_salvar(monkeypatch: pytest.MonkeyPatch) -> 
     api.post("/api/v1/connectors/test", json={"provider": "fake", "credential": "c"})
     api.post(f"/api/v1/connectors/{CONNECTOR_ID}/test", json={"credential": "c"})
     assert spy.previews == [True, False]
+
+
+def test_teste_do_salesforce_mostra_as_fontes_da_edicao(monkeypatch: pytest.MonkeyPatch) -> None:
+    from aid_api.connectors import service
+    from aid_connectors.base import TestResult
+
+    class EditionWithoutEventMonitoring(SpyConnector):
+        async def test_connection(self, secret: Any, config: Any, *, preview: bool = False) -> Any:
+            return TestResult(
+                True,
+                "Conexão estabelecida. Fontes: ApexLog. EventLogFile indisponível nesta edição.",
+                {"apex_log": True, "event_log_file": False},
+            )
+
+    monkeypatch.setattr(service, "implementation", lambda provider: EditionWithoutEventMonitoring())
+    response = client().post(
+        "/api/v1/connectors/test",
+        json={"provider": "salesforce", "config": {"sources": ["apex_log"]}, "credential": "c"},
+    )
+    body = response.json()
+    assert body["capabilities"] == {"apex_log": True, "event_log_file": False}
+    assert "EventLogFile indisponível nesta edição" in body["message"]

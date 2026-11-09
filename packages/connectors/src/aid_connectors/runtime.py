@@ -15,7 +15,8 @@ from aid_connectors.base import Batch, Checkpoint, Connector, ConnectorError, Er
 
 Sink = Callable[[Batch], Awaitable[None]]
 # Erros em que repetir não adianta: precisa de ação humana ou de correção no conector.
-FINAL: set[ErrorKind] = {"auth", "invalid"}
+# Sem nova tentativa na mesma Sincronização; `api_limit` volta na janela seguinte (#37).
+FINAL: set[ErrorKind] = {"auth", "invalid", "api_limit"}
 BROKEN = "O Checkpoint não avançou: a paginação do provedor está quebrada."
 
 
@@ -40,6 +41,8 @@ class SyncResult:
     error_message: str | None = None
     # Parou pelo prazo com lotes a coletar: o agendador volta logo, do Checkpoint.
     more: bool = False
+    # Quando tentar de novo (ex.: o limite diário do provedor, `api_limit`).
+    retry_after: float | None = None
 
 
 DEFAULT_POLICY = RetryPolicy()
@@ -94,7 +97,15 @@ async def run_sync(
         except ConnectorError as exc:
             failures += 1
             if exc.kind in FINAL or failures >= policy.attempts:
-                return SyncResult("failed", records, current, retries, exc.kind, exc.message)
+                return SyncResult(
+                    "failed",
+                    records,
+                    current,
+                    retries,
+                    exc.kind,
+                    exc.message,
+                    retry_after=exc.retry_after,
+                )
             retries += 1
             # Retry-After do provedor vale, mas nunca além do máximo da política.
             wait = min(exc.retry_after, policy.max_seconds) if exc.retry_after else None

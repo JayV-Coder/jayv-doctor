@@ -44,7 +44,16 @@ export function lastSyncText(
 // O formato do Checkpoint é do provedor; o instante, quando há, é o que interessa a quem opera.
 export function checkpointText(checkpoint: Record<string, unknown> | null | undefined): string {
   if (!checkpoint) return "ainda não há";
-  const instant = typeof checkpoint.timestamp === "string" ? new Date(checkpoint.timestamp) : null;
+  // Salesforce (#37): um ponto por fonte; mostra o mais recente.
+  const sources = checkpoint.sources as Record<string, { at?: unknown }> | undefined;
+  const latest =
+    sources &&
+    Object.values(sources)
+      .map((mark) => (typeof mark.at === "string" ? mark.at : ""))
+      .sort()
+      .at(-1);
+  const stamp = latest || checkpoint.timestamp;
+  const instant = typeof stamp === "string" ? new Date(stamp) : null;
   if (!instant || Number.isNaN(instant.getTime())) return "gravado";
   return `${instant.toISOString().slice(0, 19).replace("T", " ")}Z`;
 }
@@ -57,9 +66,13 @@ export function nextRunText(nextRunAt: string, now: Date): string {
 }
 
 export function pauseText(reason: string | null | undefined): string {
-  return reason === "auth"
-    ? "Pausado: o provedor recusou a credencial. Envie uma credencial nova para retomar."
-    : "Pausado por um Owner ou Admin.";
+  if (reason === "auth") {
+    return "Pausado: o provedor recusou a credencial. Envie uma credencial nova para retomar.";
+  }
+  if (reason === "api_limit") {
+    return "Pausado: o limite diário da API do provedor chegou a 80%. A coleta volta sozinha na janela seguinte.";
+  }
+  return "Pausado por um Owner ou Admin.";
 }
 
 export function syncDuration(startedAt: string, finishedAt: string | null): string {

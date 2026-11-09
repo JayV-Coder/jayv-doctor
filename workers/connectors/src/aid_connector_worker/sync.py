@@ -154,6 +154,24 @@ async def finish(
             ),
             {"status": result.status, "error": result.error_message, "s": sync_id},
         )
+        if result.error_kind == "api_limit":
+            # Limite diário do provedor (#37): pausa visível até a janela, sem contar falha.
+            await connection.execute(
+                text(
+                    "update doctor.connectors set last_error = :error,"
+                    " status = case when status = 'disabled' then status else 'paused' end,"
+                    " paused_reason = case when status = 'disabled' then paused_reason"
+                    " else 'api_limit' end,"
+                    " next_run_at = now() + make_interval(secs => :seconds)"
+                    " where id = cast(:c as uuid)"
+                ),
+                {
+                    "error": result.error_message,
+                    "seconds": result.retry_after or 3600,
+                    "c": connector["id"],
+                },
+            )
+            return
         if result.error_kind == "quota":
             # Cota acabou: o Conector não falhou. Sem contar falha nem backoff; tenta de hora em
             # hora (a Cota volta no mês seguinte ou com o aumento do plano).

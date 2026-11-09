@@ -11,7 +11,8 @@ from typing import Any, ClassVar, Literal, Protocol
 Checkpoint = Mapping[str, Any]
 ConfigErrors = dict[str, str]
 # `quota`: a Cota de Eventos do mês da Organização acabou (#31); não é falha do Conector.
-ErrorKind = Literal["auth", "rate_limit", "timeout", "transient", "invalid", "quota"]
+# `api_limit`: o limite diário de API do provedor chegou a 80% (#37); pausa até a janela seguinte.
+ErrorKind = Literal["auth", "rate_limit", "timeout", "transient", "invalid", "quota", "api_limit"]
 
 
 class Secret:
@@ -40,6 +41,8 @@ class RateLimitPolicy:
 class TestResult:
     ok: bool
     message: str
+    # Fontes que a conta do cliente oferece (ex.: EventLogFile só com Event Monitoring).
+    capabilities: Mapping[str, bool] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

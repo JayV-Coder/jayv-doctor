@@ -12,10 +12,33 @@ function send(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
+function salesforce(request, response) {
+  const limit = { "sforce-limit-info": "api-usage=1500/15000" };
+  if (request.url === "/sf/services/oauth2/token") {
+    return send(response, 200, {
+      access_token: "sessao-falsa",
+      instance_url: `http://127.0.0.1:${String(PORT)}/sf`,
+    });
+  }
+  if (request.url?.endsWith("/sobjects")) {
+    response.writeHead(200, { "content-type": "application/json", ...limit });
+    return response.end(
+      JSON.stringify({ sobjects: [{ name: "Integration_Log__c" }, { name: "ApexLog" }] }),
+    );
+  }
+  if (request.url?.includes("/query?")) {
+    response.writeHead(200, { "content-type": "application/json", ...limit });
+    return response.end(JSON.stringify({ records: [] }));
+  }
+  send(response, 404, [{ errorCode: "NOT_FOUND" }]);
+}
+
 createServer((request, response) => {
   let raw = "";
   request.on("data", (chunk) => (raw += chunk));
   request.on("end", () => {
+    // Salesforce falso (#37), em /sf: org sem Event Monitoring, com 10% do limite diário usado.
+    if (request.url?.startsWith("/sf/")) return salesforce(request, response);
     if (request.method === "GET") return send(response, 200, { ok: true });
     if (request.url === "/token") {
       return send(response, 200, { access_token: "token-falso", expires_in: 3600 });

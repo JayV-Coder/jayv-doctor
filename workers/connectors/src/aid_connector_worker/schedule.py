@@ -12,6 +12,14 @@ BATCH = 200
 async def enqueue_due(engine: AsyncEngine) -> int:
     async with engine.begin() as connection:
         await platform_role(connection)
+        # Pausado pelo limite diário do provedor (#37): passada a janela, volta à fila.
+        await connection.execute(
+            text(
+                "update doctor.connectors set status = 'active', paused_reason = null"
+                " where status = 'paused' and paused_reason = 'api_limit'"
+                " and next_run_at <= now()"
+            )
+        )
         result = await connection.execute(
             text(
                 "with due as ("

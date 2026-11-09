@@ -49,6 +49,7 @@ export default defineConfig({
         HMAC_MASTER_KEY: "chave-mestre-local-do-e2e-nao-usar-em-producao",
         AID_GCP_OAUTH_URL: "http://127.0.0.1:8095/token",
         AID_GCP_LOGGING_URL: "http://127.0.0.1:8095/v2/entries:list",
+        AID_SF_LOGIN_URL: "http://127.0.0.1:8095/sf",
       },
     },
     {

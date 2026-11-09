@@ -49,3 +49,92 @@ A API não usa `service_role` aqui: as funções do token (`doctor.resolve_inges
 | 422 | `tenant_id_not_allowed` | Algum Evento traz `tenant_id` |
 | 422 | `validation_error` | Corpo que não é `{"events": [...]}` |
 | 429 | `rate_limited` | Muitas requisições do mesmo token |
+
+## Exemplos
+
+O `event_id` é um **UUIDv7 gerado uma vez por Evento, na origem**. Reenviar o mesmo Evento (depois de um timeout, por exemplo) usa o mesmo id, e a deduplicação o descarta. Agrupe até 500 Eventos por lote; respeite o `Retry-After` do `429` e tente de novo nos `5xx`, com espera crescente.
+
+### curl
+
+```bash
+curl -sS https://api.<domínio>/api/v1/ingestion/events \
+  -H "Authorization: Bearer $AID_INGESTION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "events": [{
+      "schema_version": "1.0",
+      "event_id": "0192e1c4-7b2c-7d4e-8f00-123456789abc",
+      "integration_id": "'"$AID_INTEGRATION_ID"'",
+      "execution_id": "pedido-12345-tentativa-1",
+      "timestamp": "2026-11-10T14:05:00Z",
+      "source": {"provider": "sap", "service": "PI"},
+      "operation": "BAPI_SALESORDER_CREATEFROMDAT2",
+      "severity": "ERROR",
+      "error": {"category": "TIMEOUT", "http_status": 504, "message": "UPSTREAM_TIMEOUT"}
+    }]
+  }'
+```
+
+### Python (httpx)
+
+```python
+import os
+import time
+import uuid
+
+import httpx
+
+URL = "https://api.<domínio>/api/v1/ingestion/events"
+HEADERS = {"Authorization": f"Bearer {os.environ['AID_INGESTION_TOKEN']}"}
+
+
+def uuid7() -> str:
+    ms = time.time_ns() // 1_000_000
+    value = (ms << 80) | int.from_bytes(os.urandom(10), "big")
+    value = (value & ~(0xF << 76)) | (0x7 << 76)
+    value = (value & ~(0x3 << 62)) | (0x2 << 62)
+    return str(uuid.UUID(int=value))
+
+
+def send(events: list[dict], attempts: int = 5) -> dict:
+    for attempt in range(attempts):
+        response = httpx.post(URL, json={"events": events}, headers=HEADERS, timeout=30)
+        if response.status_code == 202:
+            return response.json()  # {"accepted": n, "rejected": [{"index", "reason"}]}
+        if response.status_code == 429 or response.status_code >= 500:
+            time.sleep(float(response.headers.get("Retry-After", 2**attempt)))
+            continue
+        response.raise_for_status()  # 4xx: lote inválido, não adianta repetir
+    raise RuntimeError("ingestão indisponível")
+```
+
+Gere o `event_id` (com `uuid7()`) ao **criar** o Evento e guarde-o junto, não a cada envio.
+
+### Node (fetch, Node 20+)
+
+```js
+const URL = "https://api.<domínio>/api/v1/ingestion/events";
+
+export async function send(events, attempts = 5) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const response = await fetch(URL, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${process.env.AID_INGESTION_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ events }),
+    });
+    if (response.status === 202) return response.json(); // { accepted, rejected }
+    if (response.status === 429 || response.status >= 500) {
+      const wait = Number(response.headers.get("retry-after") ?? 2 ** attempt);
+      await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+      continue;
+    }
+    throw new Error(`lote recusado: ${response.status}`); // 4xx: não repita igual
+  }
+  throw new Error("ingestão indisponível");
+}
+```
+
+O contrato completo do Evento está em `packages/contracts/schemas/event.v1.json`, e a especificação da API, em [OpenAPI](README.md).

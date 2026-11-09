@@ -5,4 +5,5 @@
 - [Operação](operations/README.md): ambientes, deploy, segredos, observabilidade e runbooks.
 - [Segurança](security/) e [LGPD](lgpd/).
 - [Piloto](pilot/README.md): roteiro, medição e relatório.
+- [Liberação da v0.1](release/v0.1.md): o checklist do PRD §13 com a evidência de cada item.
 - [Decisões de arquitetura](adr/), [PRD](prd.md) e [backlog](backlog/README.md).

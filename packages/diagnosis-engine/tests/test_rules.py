@@ -125,7 +125,12 @@ POSITIVE: dict[str, list[list[EventView]]] = {
     "INT-010": [
         [ev(error={"category": "UNKNOWN", "code": "IDOC 51"}, attributes={"idoc_status": "51"})],
         [ev(error={"category": "UNKNOWN", "code": "IDOC 51"})],
-        [ev(severity="INFO", attributes={"idoc_status": "51"})],
+        [
+            ev(
+                error={"category": "UNKNOWN", "message": "Não lançado"},
+                attributes={"idoc_status": "51"},
+            )
+        ],
     ],
     "INT-011": [
         [ev(error={"category": "AUTH", "code": "S# 001", "message": "Sem autorização"})],
@@ -239,6 +244,8 @@ NEGATIVE: dict[str, list[list[EventView]]] = {
     ],
     "INT-010": [
         [ev(severity="INFO", attributes={"idoc_status": "53"})],
+        # Retrato de histórico, sem erro: o IDoc já foi reprocessado.
+        [ev(severity="INFO", attributes={"idoc_status": "51"})],
         [ev(error={"category": "UNKNOWN", "code": "IDOC 56"}, attributes={"idoc_status": "56"})],
         [ev(error={"category": "UNKNOWN", "message": "status 51"})],
     ],
@@ -334,3 +341,36 @@ def test_bapiret2_tipo_e_v1_abre_int_005_e_os_especificos_tem_precedencia() -> N
     )
     assert matches("INT-009", lock)
     assert not matches("INT-005", lock)
+
+
+def test_regras_sap_vencem_as_genericas_no_http_400_e_403() -> None:
+    lock = ev(
+        error={
+            "category": "VALIDATION",
+            "http_status": 400,
+            "code": "MC 601",
+            "message": "Bloqueado",
+        },
+        attributes={"sap_message_id": "MC", "sap_message_type": "E"},
+    )
+    assert matches("INT-009", lock)
+    assert not matches("INT-004", lock)
+    master = ev(
+        error={"category": "VALIDATION", "http_status": 400, "code": "M3 305"},
+        attributes={"sap_message_id": "M3"},
+    )
+    assert matches("INT-012", master)
+    assert not matches("INT-004", master)
+    denied = ev(
+        error={
+            "category": "AUTH",
+            "http_status": 403,
+            "code": "S# 001",
+            "message": "No authorization",
+        },
+        attributes={"sap_message_id": "S#"},
+    )
+    assert matches("INT-011", denied)
+    assert not matches("INT-001", denied)
+    # 403 comum continua INT-001.
+    assert matches("INT-001", ev(error={"category": "UNKNOWN", "http_status": 403}))

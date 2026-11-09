@@ -143,3 +143,36 @@ def test_erros_da_api_classificados(status: int, kind: str) -> None:
     assert not result.ok
     assert "segredo-da-service-key" not in result.message
     assert kind
+
+
+def test_loopback_na_config_so_com_a_variavel_do_e2e(monkeypatch: pytest.MonkeyPatch) -> None:
+    local = {
+        **CONFIG,
+        "api_url": "http://127.0.0.1:8080",
+        "token_url": "http://localhost:9000/oauth/token",
+    }
+    monkeypatch.delenv("AID_SAP_ALLOW_LOOPBACK", raising=False)
+    assert set(SapIntegrationSuiteConnector().validate_config(local)) == {"api_url", "token_url"}
+    monkeypatch.setenv("AID_SAP_ALLOW_LOOPBACK", "1")
+    assert SapIntegrationSuiteConnector().validate_config(local) == {}
+
+
+@pytest.mark.parametrize("body", [{"d": ["x"]}, ["x"], "texto"])
+def test_resposta_inesperada_vira_erro_classificado(body: Any) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/oauth/token":
+            return httpx.Response(200, json={"access_token": "tok"})
+        return httpx.Response(200, json=body)
+
+    sap = SapIntegrationSuiteConnector(transport=httpx.MockTransport(handler), clock=lambda: NOW)
+    result = asyncio.run(sap.test_connection(Secret(SECRET), CONFIG))
+    assert (result.ok, result.message) == (False, "Resposta inesperada do Cloud Integration.")
+
+
+def test_token_com_corpo_inesperado_vira_erro_classificado() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=["nao-e-objeto"])
+
+    sap = SapIntegrationSuiteConnector(transport=httpx.MockTransport(handler), clock=lambda: NOW)
+    result = asyncio.run(sap.test_connection(Secret(SECRET), CONFIG))
+    assert result.message == "Resposta inesperada da SAP BTP ao pedir o token."

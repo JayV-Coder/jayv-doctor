@@ -22,6 +22,10 @@ MESSAGE_CLASS = re.compile(r"^[A-Z0-9/#_]{1,20}$", re.IGNORECASE)
 NUMBER = re.compile(r"^\d{1,3}$")
 ODATA_CODE = re.compile(r"^([A-Z0-9/#_]{1,20})/(\d{1,3})$", re.IGNORECASE)
 MAX_TEXT = 200
+# Limites do contrato: o enriquecimento não pode tirar o Evento dele.
+MAX_ATTRIBUTES = 64
+MAX_XML = 64 * 1024
+UNSAFE_XML = re.compile(r"<!\s*(DOCTYPE|ENTITY)", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -87,8 +91,11 @@ def from_soap_fault(text: str) -> list[SapMessage]:
     """SOAP Fault do PI/PO. Só os elementos `code` e `text` (do SystemError do adapter) ou
     `faultcode`/`faultstring`: o código do PI não é uma mensagem SAP de classe e número, então
     entra como tipo E com a classe `PI`."""
+    # Texto de cliente: sem DTD nem entidades (nada de expansão) e com tamanho limitado.
+    if len(text) > MAX_XML or UNSAFE_XML.search(text):
+        return []
     try:
-        root = ET.fromstring(text)  # noqa: S314 - XML do próprio Evento, sem DTD
+        root = ET.fromstring(text)  # noqa: S314 - DOCTYPE/ENTITY recusados acima
     except ET.ParseError:
         return []
     values = {
@@ -145,21 +152,33 @@ def enrich(event: dict[str, Any]) -> dict[str, Any]:
     chosen = main(messages)
     if chosen is None:
         return event
-    attributes.update(
-        {
-            "sap_message_type": chosen.type,
-            "sap_message_id": chosen.id.upper(),
-            "sap_message_number": chosen.number.zfill(3),
-            "sap_message": chosen.text,
-        }
-    )
+    if chosen.id.upper() == "PI":
+        # SOAP Fault do PI/PO: falha técnica do middleware, não mensagem SAP de classe e número.
+        # Fica como atributo próprio e nunca como recusa de negócio.
+        if len(attributes) < MAX_ATTRIBUTES or "sap_pi_fault" in attributes:
+            attributes["sap_pi_fault"] = chosen.text
+        enriched = {**event, "attributes": attributes}
+        if error is None:
+            enriched["error"] = {"category": "UNKNOWN", "message": chosen.text}
+            if event.get("severity") not in ("ERROR", "CRITICAL"):
+                enriched["severity"] = "ERROR"
+        return enriched
+    extra = {
+        "sap_message_type": chosen.type,
+        "sap_message_id": chosen.id.upper(),
+        "sap_message_number": chosen.number.zfill(3),
+        "sap_message": chosen.text,
+    }
+    # Até o limite de 64 atributos do contrato, na ordem de importância.
+    for name, value in extra.items():
+        if name in attributes or len(attributes) < MAX_ATTRIBUTES:
+            attributes[name] = value
     enriched = {**event, "attributes": attributes}
     if chosen.type in ("E", "A"):
         found = dict(error or {"category": "BUSINESS_REJECTION"})
-        if chosen.id.upper() != "PI":
-            found.setdefault("code", chosen.code)
-            if found.get("category") in (None, "UNKNOWN"):
-                found["category"] = "BUSINESS_REJECTION"
+        found.setdefault("code", chosen.code)
+        if found.get("category") in (None, "UNKNOWN"):
+            found["category"] = "BUSINESS_REJECTION"
         found.setdefault("message", chosen.text)
         enriched["error"] = found
         if enriched.get("severity") not in ("ERROR", "CRITICAL"):
@@ -206,6 +225,20 @@ def adapt_record(record: Mapping[str, Any]) -> Mapping[str, Any]:
             "sap_target_system": column(row, "target system", "sistema de destino"),
             "sap_export": "SM58",
         }
+    if {"idoc number", "status"} <= keys or {"número do idoc", "status"} <= keys:
+        status = (column(row, "status") or "").lstrip("0") or "0"
+        failed = status in IDOC_ERRORS
+        return {
+            "timestamp": moment(row),
+            "operation": column(row, "message type", "tipo de mensagem") or "IDoc",
+            "execution_id": column(row, "idoc number", "número do idoc"),
+            "severity": "ERROR" if failed else "INFO",
+            "message": column(row, "status text", "texto de status"),
+            **({"error_code": f"IDOC {status}"} if failed else {}),
+            "idoc_status": status,
+            "sap_partner": column(row, "partner number", "número do parceiro"),
+            "sap_export": "IDOC",
+        }
     if {"message type", "message number"} <= keys or {
         "tipo de mensagem",
         "número da mensagem",
@@ -230,19 +263,5 @@ def adapt_record(record: Mapping[str, Any]) -> Mapping[str, Any]:
             **({"sap_message_id": klass.upper()} if klass else {}),
             **({"sap_message_number": number.zfill(3)} if number else {}),
             "sap_export": "SLG1",
-        }
-    if {"idoc number", "status"} <= keys or {"número do idoc", "status"} <= keys:
-        status = (column(row, "status") or "").lstrip("0") or "0"
-        failed = status in IDOC_ERRORS
-        return {
-            "timestamp": moment(row),
-            "operation": column(row, "message type", "tipo de mensagem") or "IDoc",
-            "execution_id": column(row, "idoc number", "número do idoc"),
-            "severity": "ERROR" if failed else "INFO",
-            "message": column(row, "status text", "texto de status"),
-            **({"error_code": f"IDOC {status}"} if failed else {}),
-            "idoc_status": status,
-            "sap_partner": column(row, "partner number", "número do parceiro"),
-            "sap_export": "IDOC",
         }
     return record

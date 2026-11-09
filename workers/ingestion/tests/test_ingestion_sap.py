@@ -92,11 +92,16 @@ def test_soap_fault_do_pi_po() -> None:
     )
     enriched = enrich(event(severity="ERROR", error={"category": "UNKNOWN", "message": fault}))
     assert (
-        enriched["attributes"]["sap_message"]
+        enriched["attributes"]["sap_pi_fault"]
         == "ADAPTER.JAVA_EXCEPTION: Receiver channel timed out"
     )
-    # O código do PI não é uma mensagem de classe e número: não vira error.code.
+    # Falha técnica do middleware: sem código de classe e número e sem virar recusa de negócio.
     assert "code" not in enriched["error"]
+    assert enriched["error"]["category"] == "UNKNOWN"
+    assert "sap_message_type" not in enriched["attributes"]
+    only_attribute = enrich(event(attributes={"response": fault}))
+    assert only_attribute["error"]["category"] == "UNKNOWN"
+    assert only_attribute["severity"] == "ERROR"
 
 
 def test_texto_comum_e_xml_com_entidade_nao_mudam_o_evento() -> None:
@@ -180,3 +185,35 @@ def test_sanitizacao_aplica_o_enriquecimento_em_todo_caminho() -> None:
     cleaned, _ = EventSanitizer(b"0" * 32, TENANT)(event(attributes={"response": body}))
     assert cleaned["error"]["code"] == "V1 801"
     validate_event(cleaned)
+
+
+def test_enriquecimento_respeita_o_limite_de_64_atributos() -> None:
+    body = json.dumps({"TYPE": "E", "ID": "V1", "NUMBER": "801", "MESSAGE": "Pedido bloqueado"})
+    full = {f"campo_{n}": "x" for n in range(62)} | {"response": body}
+    enriched = enrich(event(attributes=full))
+    assert len(enriched["attributes"]) == 64
+    assert enriched["attributes"]["sap_message_type"] == "E"
+    assert enriched["error"]["code"] == "V1 801"
+    validate_event(enriched)
+
+
+def test_exportacao_de_idoc_com_numero_de_mensagem_nao_vira_slg1() -> None:
+    record = {
+        "IDoc number": "0000000000123456",
+        "Status": "51",
+        "Status text": "Não lançado",
+        "Message Type": "ORDERS",
+        "Message number": "305",
+        "Created on": "10.11.2026",
+        "Time created": "14:05:00",
+    }
+    mapped = to_event(record, INTEGRATION, SOURCE, now=NOW)
+    assert mapped["attributes"]["sap_export"] == "IDOC"
+    assert mapped["error"]["code"] == "IDOC 51"
+
+
+def test_xml_com_doctype_ou_grande_demais_nao_e_lido() -> None:
+    fault = "<Fault><faultcode>x</faultcode><faultstring>y</faultstring></Fault>"
+    assert parse(fault)
+    assert parse('<!DOCTYPE Fault [<!ENTITY a "x">]>' + fault) == []
+    assert parse("<Fault>" + "a" * 70_000 + "</Fault>") == []

@@ -4,7 +4,7 @@
 - **Credencial:** a service key do plano `api` do Process Integration Runtime
   (`{"client_id", "client_secret"}`), trocada por token com OAuth client credentials. Token e API
   só em hosts da SAP BTP (`*.hana.ondemand.com`, `*.cloud.sap`), nunca num endereço qualquer
-  da config (SSRF); o E2E troca por loopback.
+  da config (SSRF); loopback só com `AID_SAP_ALLOW_LOOPBACK=1`, que existe só no E2E.
 - **Checkpoint:** (`LogEnd`, `MessageGuid`), com desempate pelo Guid no mesmo instante.
 - **Filtro:** por padrão só os que falharam (`FAILED`, `ESCALATED`, `RETRY`); `COMPLETED`
   entra com `include_completed`, para a Execução mostrar o sucesso também.
@@ -12,6 +12,7 @@
 
 import asyncio
 import json
+import os
 import re
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
@@ -44,9 +45,15 @@ FIELDS = (
 )
 
 
+def loopback_allowed(environ: Mapping[str, str] = os.environ) -> bool:
+    """Endereço local só no E2E, por variável de ambiente da plataforma, nunca pela config do
+    cliente (SSRF)."""
+    return environ.get("AID_SAP_ALLOW_LOOPBACK") == "1"
+
+
 def trusted(url: str, *, path: str | None = None) -> bool:
     if is_loopback(url):
-        return True
+        return loopback_allowed()
     parsed = urlparse(url)
     return (
         parsed.scheme == "https"
@@ -171,7 +178,7 @@ class SapIntegrationSuiteConnector:
                 str(body["access_token"]),
                 time.monotonic() + float(body.get("expires_in", 3600)),
             )
-        except (ValueError, KeyError) as exc:
+        except (ValueError, KeyError, TypeError, AttributeError) as exc:
             raise ConnectorError(
                 "transient", "Resposta inesperada da SAP BTP ao pedir o token."
             ) from exc
@@ -249,7 +256,10 @@ class SapIntegrationSuiteConnector:
             body = response.json()
         except ValueError as exc:
             raise ConnectorError("transient", "Resposta inesperada do Cloud Integration.") from exc
-        found = (body.get("d") or {}).get("results", []) if isinstance(body, dict) else []
+        data = body.get("d") if isinstance(body, dict) else None
+        found = data.get("results") if isinstance(data, dict) else None
+        if not isinstance(found, list):
+            raise ConnectorError("transient", "Resposta inesperada do Cloud Integration.")
         return [item for item in found if isinstance(item, Mapping) and item.get("MessageGuid")]
 
     async def test_connection(
@@ -268,9 +278,12 @@ class SapIntegrationSuiteConnector:
                 True, "Conexão estabelecida: a service key lê os logs do Cloud Integration."
             )
         amount = f"{'100 ou mais' if len(found) >= 100 else len(found)}"
-        return TestResult(
-            True, f"Conexão estabelecida. {amount} mensagens com falha nas últimas 24 h."
+        kind = (
+            "mensagens (com falha ou concluídas)"
+            if config.get("include_completed")
+            else "mensagens com falha"
         )
+        return TestResult(True, f"Conexão estabelecida. {amount} {kind} nas últimas 24 h.")
 
     async def collect(
         self, secret: Secret, config: Mapping[str, Any], checkpoint: Checkpoint | None

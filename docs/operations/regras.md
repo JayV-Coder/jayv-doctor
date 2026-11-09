@@ -52,7 +52,7 @@ As oito Regras acima na versão nova e quatro Regras SAP. A ingestão reconhece 
 | INT-011 | código `S#…` ou texto de falta de autorização SAP | SAP_AUTHORIZATION | alta |
 | INT-012 | `M3 305` ou texto de cadastro faltante ("not maintained", "não existe") | MASTER_DATA | média |
 
-Quando um sintoma SAP tem Regra própria (bloqueio, IDoc 51, autorização, cadastro mestre), a INT-005 não o disputa: o Incidente nasce com a categoria específica.
+Quando um sintoma SAP tem Regra própria (bloqueio, IDoc 51, autorização, cadastro mestre), as genéricas INT-001 (403), INT-004 (400) e INT-005 não o disputam: o Incidente nasce com a categoria específica, mesmo quando o SAP Gateway devolve o erro como HTTP 400 ou 403. A INT-010, como as outras Regras de erro, só olha Eventos com `error`. O SOAP Fault do PI/PO é falha técnica do middleware: vira o atributo `sap_pi_fault`, sem código de classe e número e sem recusa de negócio.
 
 ### Exportações SAP na Importação
 

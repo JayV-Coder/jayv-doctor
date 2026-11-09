@@ -69,7 +69,7 @@ Lê os Message Processing Logs do Cloud Integration (`/api/v1/MessageProcessingL
 }
 ```
 
-- **Credencial:** a service key do plano `api` do Process Integration Runtime, `{"client_id", "client_secret"}` no Vault, trocada por token com OAuth client credentials. Token e API só em hosts da SAP BTP (`*.hana.ondemand.com`, `*.cloud.sap`), com HTTPS e sem usuário na URL (SSRF).
+- **Credencial:** a service key do plano `api` do Process Integration Runtime, `{"client_id", "client_secret"}` no Vault, trocada por token com OAuth client credentials. Token e API só em hosts da SAP BTP (`*.hana.ondemand.com`, `*.cloud.sap`), com HTTPS e sem usuário na URL (SSRF); endereço local só com `AID_SAP_ALLOW_LOOPBACK=1`, que existe só no E2E. Resposta fora do formato esperado vira erro temporário classificado.
 - **Eventos:** `FAILED`, `ESCALATED` e `RETRY` (e `COMPLETED` com `include_completed`), um por mensagem.
   - `execution_id` = `CorrelationId`: a Execução junta os passos do iFlow e o que veio antes e depois dele;
   - `operation` e `source.resource` = o iFlow;

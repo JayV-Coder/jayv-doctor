@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any
 
 from aid_connectors.base import stable_uuid7
+from aid_connectors.common import STATUS_CATEGORIES
 
 SEVERITIES = {
     "DEFAULT": "INFO",
@@ -19,18 +20,6 @@ SEVERITIES = {
     "CRITICAL": "CRITICAL",
     "ALERT": "CRITICAL",
     "EMERGENCY": "CRITICAL",
-}
-STATUS_CATEGORIES = {
-    401: "AUTH",
-    403: "AUTH",
-    408: "TIMEOUT",
-    504: "TIMEOUT",
-    429: "RATE_LIMIT",
-    409: "DUPLICATE",
-    400: "VALIDATION",
-    422: "VALIDATION",
-    502: "CONNECTIVITY",
-    503: "CONNECTIVITY",
 }
 MESSAGE_CATEGORIES = [
     ("TIMEOUT", re.compile(r"(?i)time[d ]?\s?out|deadline exceeded")),

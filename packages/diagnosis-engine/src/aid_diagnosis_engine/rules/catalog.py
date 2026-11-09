@@ -48,7 +48,12 @@ def failed(event: EventView) -> bool:
 
 
 def auth(event: EventView) -> bool:
-    return failed(event) and (event.category == "AUTH" or event.http_status in (401, 403))
+    # Falta de autorização SAP tem Regra própria (INT-011), mesmo vinda num HTTP 403.
+    return (
+        failed(event)
+        and (event.category == "AUTH" or event.http_status in (401, 403))
+        and not sap_specific(event)
+    )
 
 
 def rate_limit(event: EventView) -> bool:
@@ -64,7 +69,12 @@ def timeout(event: EventView) -> bool:
 
 
 def validation(event: EventView) -> bool:
-    return failed(event) and (event.category == "VALIDATION" or event.http_status in (400, 422))
+    # O SAP Gateway devolve bloqueio e cadastro faltante como HTTP 400: as Regras SAP vencem.
+    return (
+        failed(event)
+        and (event.category == "VALIDATION" or event.http_status in (400, 422))
+        and not sap_specific(event)
+    )
 
 
 def bapi_rejected(attributes: Mapping[str, Any]) -> bool:
@@ -89,7 +99,9 @@ def object_locked(event: EventView) -> bool:
 
 
 def idoc_failed(event: EventView) -> bool:
-    return str(event.attributes.get("idoc_status", "")) == "51" or event.code.upper() == "IDOC 51"
+    return failed(event) and (
+        str(event.attributes.get("idoc_status", "")) == "51" or event.code.upper() == "IDOC 51"
+    )
 
 
 def sap_authorization(event: EventView) -> bool:

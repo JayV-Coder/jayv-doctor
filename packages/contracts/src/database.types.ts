@@ -1091,14 +1091,14 @@ isOneToOne: false
                   ]
                 },"outbox_messages": {
                   Row: {
-                    "attempts": number,"created_at": string,"id": number,"payload": NonNullable<Json>,"published_at": string | null,"tenant_id": string,"topic": string
+                    "attempts": number,"created_at": string,"id": number,"payload": NonNullable<Json>,"published_at": string | null,"tenant_id": string,"topic": string,"traceparent": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "attempts"?: number,"created_at"?: string,"id"?: never,"payload": NonNullable<Json>,"published_at"?: string | null,"tenant_id": string,"topic": string
+                    "attempts"?: number,"created_at"?: string,"id"?: never,"payload": NonNullable<Json>,"published_at"?: string | null,"tenant_id": string,"topic": string,"traceparent"?: string | null
                   }
                   Update: {
-                    "attempts"?: number,"created_at"?: string,"id"?: never,"payload"?: NonNullable<Json>,"published_at"?: string | null,"tenant_id"?: string,"topic"?: string
+                    "attempts"?: number,"created_at"?: string,"id"?: never,"payload"?: NonNullable<Json>,"published_at"?: string | null,"tenant_id"?: string,"topic"?: string,"traceparent"?: string | null
                   }
                   Relationships: [
                     {
@@ -1661,6 +1661,9 @@ isOneToOne: false
                            },
 "plan_limit":
 { Args: { "resource": string,"tenant": string }; Returns: number
+                           },
+"platform_health":
+{ Args: Record<PropertyKey, never>; Returns: Json
                            },
 "promote_incident_to_knowledge":
 { Args: { "incident": string }; Returns: string

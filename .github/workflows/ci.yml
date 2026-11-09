@@ -110,6 +110,9 @@ jobs:
             workers/diagnosis/tests/test_quotas.py \
             workers/diagnosis/tests/test_report.py \
             workers/diagnosis/tests/test_backup.py \
+            workers/diagnosis/tests/test_platform_metrics.py \
+            workers/relay/tests/test_admin_health.py \
+            workers/runtime/tests/test_trace_end_to_end.py \
             tests/operations \
             packages/knowledge/tests/test_knowledge_db.py
 

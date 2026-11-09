@@ -149,7 +149,9 @@ module "api" {
     AID_TRUSTED_PROXY_HOPS   = "2"
     SUPABASE_PUBLISHABLE_KEY = var.supabase_publishable_key
     APP_URL                  = var.app_url
-    OTEL_ENABLED             = "true"
+    # Liga os logs JSON ao trace (`logging.googleapis.com/trace`, #34).
+    GCP_PROJECT_ID = var.project_id
+    OTEL_ENABLED   = "true"
   }
   secret_env = { for secret in local.api_secrets : local.secret_env[secret] => secret }
   depends_on = [module.secrets]
@@ -177,19 +179,22 @@ module "workers" {
   region                = var.region
   name                  = "worker-${each.key}"
   service_account_email = google_service_account.worker[each.key].email
-  ingress               = "INGRESS_TRAFFIC_INTERNAL_ONLY"
-  public_invoker        = false
-  subnetwork            = module.network.subnetwork_id
-  memory                = each.value.memory
-  timeout               = each.value.timeout
-  max_instances         = var.worker_max_instances
-  concurrency           = var.worker_concurrency
-  deletion_protection   = var.environment == "prod"
+  # O relay aceita tráfego de fora da VPC para os operadores abrirem o /admin/health com
+  # `gcloud run services proxy` (#34); continua só com IAM (sem invocação pública).
+  ingress             = each.key == "relay" ? "INGRESS_TRAFFIC_ALL" : "INGRESS_TRAFFIC_INTERNAL_ONLY"
+  public_invoker      = false
+  subnetwork          = module.network.subnetwork_id
+  memory              = each.value.memory
+  timeout             = each.value.timeout
+  max_instances       = var.worker_max_instances
+  concurrency         = var.worker_concurrency
+  deletion_protection = var.environment == "prod"
   env = merge(
     {
       WORKER_NAME    = each.key
       SUPABASE_URL   = trimsuffix(var.supabase_jwt_issuer, "/auth/v1")
       GCP_PROJECT_ID = var.project_id
+      OTEL_ENABLED   = "true"
     },
     # O backup do Storage (#33) roda no worker de diagnóstico, que tem a chave do Storage.
     each.key == "diagnosis" ? { BACKUP_BUCKET = google_storage_bucket.storage_backup.name } : {},
@@ -265,11 +270,55 @@ module "deploy" {
 }
 
 module "observability" {
-  source     = "../modules/observability"
-  project_id = var.project_id
-  region     = var.region
-  api_domain = var.api_domain
+  source             = "../modules/observability"
+  project_id         = var.project_id
+  region             = var.region
+  api_domain         = var.api_domain
+  alert_emails       = var.alert_emails
+  oncall_webhook_url = var.oncall_webhook_url
+  runbook_base_url   = "https://github.com/${var.github_repository}/blob/main"
+  depends_on         = [module.project]
+}
+
+# Traces e métricas dos workers (#34): o mesmo da API.
+resource "google_project_iam_member" "worker_telemetry" {
+  for_each = { for pair in setproduct(keys(local.workers), ["roles/cloudtrace.agent", "roles/monitoring.metricWriter"]) : "${pair[0]}/${pair[1]}" => pair }
+  project  = var.project_id
+  role     = each.value[1]
+  member   = "serviceAccount:${google_service_account.worker[each.value[0]].email}"
+}
+
+# Medidas da plataforma no Cloud Monitoring a cada minuto, pelo worker de diagnóstico, que tem a
+# chave da Metrics API do Supabase.
+resource "google_cloud_scheduler_job" "platform_metrics" {
+  project          = var.project_id
+  region           = var.region
+  name             = "${local.name_prefix}-platform-metrics"
+  schedule         = "* * * * *"
+  time_zone        = "Etc/UTC"
+  attempt_deadline = "60s"
+
+  http_target {
+    http_method = "POST"
+    uri         = "${module.workers["diagnosis"].uri}/platform/metrics"
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = module.workers["diagnosis"].uri
+    }
+  }
+
   depends_on = [module.project]
+}
+
+# `/admin/health` dos operadores: no relay, interno e só com o IAM; tenant nenhum chega lá.
+resource "google_cloud_run_v2_service_iam_member" "operators" {
+  for_each = toset(var.platform_operators)
+  project  = var.project_id
+  location = var.region
+  name     = module.workers["relay"].name
+  role     = "roles/run.invoker"
+  member   = each.value
 }
 
 # A outbox é drenada a cada minuto: o lag máximo de uma mensagem é ~1 min mais a rodada.

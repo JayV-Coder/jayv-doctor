@@ -3,6 +3,7 @@
 import json
 from uuid import uuid4
 
+from aid_observability.tracing import traceparent
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -22,9 +23,19 @@ def supavisor_engine(url: str) -> AsyncEngine:
     )
 
 
+async def propagate_trace(connection: AsyncConnection) -> None:
+    """O trace atual vai para a sessão: o trigger da outbox o grava em cada mensagem (#34)."""
+    current = traceparent()
+    if current:
+        await connection.execute(
+            text("select set_config('doctor.traceparent', :t, true)"), {"t": current}
+        )
+
+
 async def platform_role(connection: AsyncConnection) -> None:
     """Jobs de plataforma (workers) agem como service_role, nunca a API (ADR-0004)."""
     await connection.execute(text("set local role service_role"))
+    await propagate_trace(connection)
 
 
 async def tenant_role(connection: AsyncConnection, tenant_id: str) -> None:
@@ -35,3 +46,4 @@ async def tenant_role(connection: AsyncConnection, tenant_id: str) -> None:
         text("select set_config('request.jwt.claims', :claims, true)"),
         {"claims": json.dumps({"role": "authenticated", "tenant_id": tenant_id})},
     )
+    await propagate_trace(connection)

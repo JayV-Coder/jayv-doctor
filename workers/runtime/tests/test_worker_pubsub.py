@@ -1,5 +1,7 @@
+import logging
 from typing import Any
 
+import pytest
 from aid_worker.main import PubSubMessage, create_app
 from fastapi.testclient import TestClient
 
@@ -90,3 +92,21 @@ def test_worker_de_conectores_registra_o_topico_e_o_agendador() -> None:
 
     assert set(handlers_for("connectors")) == {"connector.sync"}
     assert TestClient(create_app("ingestion", {})).post("/schedule").status_code == 404
+
+
+def test_falha_do_handler_e_registrada_com_o_contexto_e_reentregue(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    async def handler(message: PubSubMessage) -> None:
+        raise RuntimeError("banco fora")
+
+    caplog.set_level(logging.ERROR)
+    envelope = {
+        "message": {"data": "e30=", "messageId": "1", "attributes": {"tenant_id": "t1"}},
+        "subscription": "projects/aid/subscriptions/ingestion.raw.push",
+    }
+    response = TestClient(create_app("ingestion", {"ingestion.raw": handler})).post(
+        "/pubsub", json=envelope
+    )
+    assert response.status_code == 500
+    assert "falha ao processar a mensagem" in caplog.text

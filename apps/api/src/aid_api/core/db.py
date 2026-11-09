@@ -8,6 +8,7 @@ from contextvars import ContextVar
 from functools import lru_cache
 
 from aid_db import supavisor_engine
+from aid_observability.tracing import traceparent
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
@@ -41,9 +42,15 @@ async def tenant_tx(
         await connection.execute(
             text(
                 "select set_config('request.jwt.claims', :claims, true),"
-                " set_config('doctor.request', :meta, true)"
+                " set_config('doctor.request', :meta, true),"
+                " set_config('doctor.traceparent', :trace, true)"
             ),
-            {"claims": json.dumps(claims.raw), "meta": request_meta.current() or ""},
+            {
+                "claims": json.dumps(claims.raw),
+                "meta": request_meta.current() or "",
+                # O trace da requisição segue pela outbox até os workers (#34).
+                "trace": traceparent() or "",
+            },
         )
         yield connection
 
@@ -90,10 +97,13 @@ async def anonymous_tx(
     try:
         async with (engine or get_engine()).begin() as connection:
             await connection.execute(text("set local role anon"))
-            # IP e request_id na trilha também sem Usuário (abertura do link do Relatório, #32).
+            # IP, request_id e o trace também sem Usuário (#32, #34).
             await connection.execute(
-                text("select set_config('doctor.request', :meta, true)"),
-                {"meta": request_meta.current() or ""},
+                text(
+                    "select set_config('doctor.request', :meta, true),"
+                    " set_config('doctor.traceparent', :trace, true)"
+                ),
+                {"meta": request_meta.current() or "", "trace": traceparent() or ""},
             )
             yield connection
     except DBAPIError as exc:

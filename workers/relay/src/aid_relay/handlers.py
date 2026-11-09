@@ -2,9 +2,12 @@
 
 import os
 from functools import lru_cache
+from typing import Any
 
-from aid_db import supavisor_engine
+from aid_db import platform_role, supavisor_engine
+from aid_observability.health import evaluate
 from fastapi import APIRouter
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aid_relay.publisher import PubSubPublisher
@@ -31,3 +34,24 @@ router = APIRouter()
 async def relay() -> dict[str, int]:
     stats = await drain(engine(), publisher())
     return {"published": stats.published, "failed": stats.failed}
+
+
+# Status interno para os operadores da plataforma (#34), fora da API dos tenants: o relay só
+# aceita chamada com o IAM (`run.invoker`), dado no Terraform ao grupo de operadores. Só números
+# de todas as Organizações juntas; os limites são os dos alertas.
+@router.get("/admin/health")
+async def admin_health() -> dict[str, Any]:
+    async with engine().begin() as connection:
+        await platform_role(connection)
+        measures = await connection.scalar(
+            text(
+                # A CPU do Supabase vem da última leitura da Metrics API (até 5 min atrás).
+                "select doctor.platform_health() || coalesce((select jsonb_strip_nulls("
+                " jsonb_build_object("
+                " 'supabase_cpu_utilization', details -> 'supabase_cpu_utilization',"
+                " 'supabase_disk_utilization', details -> 'supabase_disk_utilization'))"
+                " from doctor.platform_jobs where name = 'supabase_metrics'"
+                " and last_success_at > now() - interval '5 minutes'), '{}')"
+            )
+        )
+    return evaluate(dict(measures or {}))

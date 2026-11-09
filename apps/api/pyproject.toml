@@ -4,6 +4,7 @@ version = "0.0.0"
 description = "API FastAPI do Integration AI Doctor"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "aid-observability",
     "aid-knowledge",
     "aid-connectors",
     "aid-contracts",
@@ -22,6 +23,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
+aid-observability = { workspace = true }
 aid-knowledge = { workspace = true }
 aid-connectors = { workspace = true }
 aid-contracts = { workspace = true }

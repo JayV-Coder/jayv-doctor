@@ -48,8 +48,8 @@ run "workers_sao_privados_e_a_api_so_entra_pelo_load_balancer" {
   command = plan
 
   assert {
-    condition     = alltrue([for w in module.workers : w.ingress == "INGRESS_TRAFFIC_INTERNAL_ONLY" && !w.public_invoker])
-    error_message = "Workers não aceitam chamada pública."
+    condition     = alltrue([for name, w in module.workers : (name == "relay" || w.ingress == "INGRESS_TRAFFIC_INTERNAL_ONLY") && !w.public_invoker])
+    error_message = "Workers não aceitam chamada pública (o relay aceita só com IAM, para o /admin/health)."
   }
   assert {
     condition     = module.api.ingress == "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
@@ -235,6 +235,60 @@ run "dimensionamento_acima_do_supavisor_e_barrado" {
     api_concurrency   = 80
   }
   expect_failures = [check.conexoes_cabem_no_supavisor]
+}
+
+run "cada_alerta_tem_runbook_e_vai_para_o_plantao" {
+  command = plan
+
+  variables {
+    alert_emails = ["plantao@exemplo.test"]
+  }
+
+  assert {
+    condition = toset(keys(module.observability.alerts)) == toset([
+      "dlq", "workers_stopped", "api_errors", "metrics_absent", "outbox_lag_seconds", "outbox_stuck",
+      "ingestion_lag_seconds", "diagnosis_queue_seconds", "llm_error_rate_1h", "supabase_cpu_utilization",
+    ])
+    error_message = "Os alertas do ticket (DLQ, outbox, workers, CPU, LLM, 5xx) mais outbox travada, filas e medidas ausentes."
+  }
+  assert {
+    condition     = alltrue([for content in values(module.observability.alerts) : strcontains(content, "/docs/operations/runbooks/")])
+    error_message = "Cada alerta aponta para o runbook dele."
+  }
+  assert {
+    condition     = google_cloud_scheduler_job.platform_metrics.schedule == "* * * * *"
+    error_message = "As medidas da plataforma vão para o Cloud Monitoring a cada minuto."
+  }
+  assert {
+    condition     = alltrue([for name in keys(local.workers) : module.workers[name].env["OTEL_ENABLED"] == "true"])
+    error_message = "Os workers mandam traces (o trace vai da API até a gravação em events)."
+  }
+}
+
+run "api_liga_os_logs_ao_trace" {
+  command = plan
+
+  assert {
+    condition     = module.api.env["GCP_PROJECT_ID"] == "aid-test"
+    error_message = "Sem GCP_PROJECT_ID, o log da API não aponta para o trace."
+  }
+}
+
+run "admin_health_so_para_operadores" {
+  command = plan
+
+  variables {
+    platform_operators = ["group:operacao@exemplo.test"]
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service_iam_member.operators["group:operacao@exemplo.test"].role == "roles/run.invoker"
+    error_message = "Operadores invocam o relay pelo IAM; o relay segue interno."
+  }
+  assert {
+    condition     = !module.workers["relay"].public_invoker
+    error_message = "O /admin/health não é público: só quem tem run.invoker."
+  }
 }
 
 run "chave_secreta_do_supabase_e_recusada" {

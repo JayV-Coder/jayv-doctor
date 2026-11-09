@@ -89,3 +89,23 @@ variable "supavisor_client_budget" {
   type        = number
   default     = 300
 }
+
+# Observabilidade (#34).
+variable "alert_emails" {
+  description = "E-mails do plantão que recebem os alertas da plataforma."
+  type        = list(string)
+  default     = []
+}
+
+variable "oncall_webhook_url" {
+  description = "Webhook do canal de plantão (vazio: só e-mail)."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "platform_operators" {
+  description = "Quem abre o /admin/health do relay (ex.: group:operacao@empresa.com)."
+  type        = list(string)
+  default     = []
+}

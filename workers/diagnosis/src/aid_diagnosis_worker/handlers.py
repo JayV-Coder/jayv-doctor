@@ -9,6 +9,7 @@ import httpx
 from aid_db import supavisor_engine
 from aid_diagnosis_engine.llm.registry import provider_for
 from aid_knowledge.storage import KnowledgeStore
+from aid_observability.metrics import MonitoringWriter
 from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -17,6 +18,7 @@ from aid_diagnosis_worker.diagnose import diagnose, open_automatic
 from aid_diagnosis_worker.evaluate import evaluate_execution
 from aid_diagnosis_worker.knowledge import index, reindex_stale
 from aid_diagnosis_worker.notify import mailer_from_env, notify_threshold
+from aid_diagnosis_worker.platform_metrics import push_metrics
 from aid_diagnosis_worker.report import generate_report
 from aid_diagnosis_worker.retention import SupabaseStorage, run_retention
 
@@ -100,3 +102,16 @@ async def storage_backup() -> dict[str, int]:
         )
         target = GcsTarget(os.environ["BACKUP_BUCKET"], client)
         return await backup_storage(engine(), source, target)
+
+
+@router.post("/platform/metrics")
+async def platform_metrics() -> dict[str, float]:
+    """A cada minuto (Cloud Scheduler): medidas da plataforma no Cloud Monitoring (#34)."""
+    async with httpx.AsyncClient(timeout=httpx.Timeout(20.0)) as client:
+        return await push_metrics(
+            engine(),
+            MonitoringWriter(os.environ["GCP_PROJECT_ID"], client),
+            client,
+            os.environ["SUPABASE_URL"],
+            os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+        )

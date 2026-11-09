@@ -62,7 +62,12 @@ async def publish_batch(
         messages: list[Message] = [
             (
                 json.dumps(row.payload).encode(),
-                {"tenant_id": row.tenant_id, "outbox_id": str(row.id)},
+                {
+                    "tenant_id": row.tenant_id,
+                    "outbox_id": str(row.id),
+                    # O trace de quem gravou a mensagem continua no worker (#34).
+                    **({"traceparent": row.traceparent} if row.traceparent else {}),
+                },
             )
             for row in items
         ]
@@ -100,7 +105,7 @@ async def drain(
                 rows = (
                     await connection.execute(
                         text(
-                            "select id, tenant_id::text, topic, payload"
+                            "select id, tenant_id::text, topic, payload, traceparent"
                             " from doctor.outbox_messages"
                             " where published_at is null and attempts < :max"
                             " order by id limit :batch for update skip locked"

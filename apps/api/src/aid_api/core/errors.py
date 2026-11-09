@@ -2,6 +2,7 @@
 
 import logging
 
+from aid_observability import logs
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -42,7 +43,9 @@ async def validation_handler(_: Request, __: Exception) -> JSONResponse:
 
 
 async def unexpected_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.error("erro inesperado: %s %s", request.method, request.url.path, exc_info=exc)
+    # Fora do middleware que abre o contexto do log: o request_id volta por aqui.
+    with logs.bind(request_id=getattr(request.state, "request_id", None)):
+        logger.error("erro inesperado: %s %s", request.method, request.url.path, exc_info=exc)
     return problem(500, "internal_error", "Erro inesperado. Tente de novo.")
 
 

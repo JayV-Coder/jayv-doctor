@@ -19,6 +19,7 @@ from aid_diagnosis_worker.evaluate import evaluate_execution
 from aid_diagnosis_worker.knowledge import index, reindex_stale
 from aid_diagnosis_worker.notify import mailer_from_env, notify_threshold
 from aid_diagnosis_worker.platform_metrics import push_metrics
+from aid_diagnosis_worker.report import generate_report
 from aid_diagnosis_worker.retention import SupabaseStorage, run_retention
 
 Handler = Callable[[Mapping[str, Any]], Awaitable[None]]
@@ -36,6 +37,15 @@ def store() -> KnowledgeStore:
 
 async def knowledge_index(payload: Mapping[str, Any]) -> None:
     await index(engine(), payload, store(), provider_for)
+
+
+@lru_cache
+def storage() -> SupabaseStorage:
+    return SupabaseStorage(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
+
+
+async def report_requested(payload: Mapping[str, Any]) -> None:
+    await generate_report(engine(), payload, storage())
 
 
 async def usage_threshold(payload: Mapping[str, Any]) -> None:
@@ -67,6 +77,7 @@ TOPICS: dict[str, Handler] = {
     "incident.updated": no_consumer_yet,
     "diagnosis.published": no_consumer_yet,
     "usage.threshold": usage_threshold,
+    "report.requested": report_requested,
 }
 
 router = APIRouter()
@@ -79,8 +90,7 @@ async def reindex() -> dict[str, int]:
 
 @router.post("/retention/run")
 async def retention() -> dict[str, int]:
-    storage = SupabaseStorage(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
-    return await run_retention(engine(), storage)
+    return await run_retention(engine(), storage())
 
 
 @router.post("/backup/storage")

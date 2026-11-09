@@ -11,7 +11,13 @@ describe("decideRedirect", () => {
   });
 
   it("deixa as telas públicas abertas sem sessão", () => {
-    for (const path of ["/login", "/esqueci-senha", "/privacidade", "/auth/callback"]) {
+    for (const path of [
+      "/login",
+      "/esqueci-senha",
+      "/privacidade",
+      "/auth/callback",
+      "/compartilhado",
+    ]) {
       expect(decideRedirect(path, anonymous)).toBeNull();
     }
   });

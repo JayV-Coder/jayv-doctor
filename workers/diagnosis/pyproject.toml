@@ -10,6 +10,7 @@ dependencies = [
     "aid-diagnosis-engine",
     "fastapi>=0.162",
     "sqlalchemy[asyncio]>=2.0",
+    "weasyprint>=66",
 ]
 
 [tool.uv.sources]

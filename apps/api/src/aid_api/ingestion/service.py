@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from aid_contracts.events import EventValidationError, validate_event
+from fastapi import Request
 
 from aid_api.core.errors import ApiError
 from aid_api.ingestion.schemas import RejectedEvent
@@ -86,3 +87,16 @@ def split(
             continue
         accepted.append(item)
     return accepted, rejected
+
+
+async def read_limited(request: Request, limit: int = MAX_BYTES) -> bytes:
+    """O corpo sem passar do limite na memória: recusa pelo Content-Length ou durante a leitura."""
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > limit:
+        raise too_large()
+    body = bytearray()
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > limit:
+            raise too_large()
+    return bytes(body)

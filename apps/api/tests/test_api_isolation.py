@@ -76,6 +76,9 @@ ROUTES: list[tuple[str, str, str, dict[str, Any] | None]] = [
     ("GET", "/api/v1/reports/{target}", "report", None),
     ("POST", "/api/v1/reports/{target}/shares", "report", None),
     ("DELETE", "/api/v1/reports/{target}/shares/{share}", "report", None),
+    ("PATCH", "/api/v1/agents/{target}", "agent", {"config": {"collections": []}}),
+    ("POST", "/api/v1/agents/{target}/revoke", "agent", None),
+    ("POST", "/api/v1/agents/{target}/rotate", "agent", None),
 ]
 
 
@@ -149,6 +152,7 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
             "diagnosis",
             "report",
             "share",
+            "agent",
             "document",
             "own_integration",
             "own_incident",
@@ -202,6 +206,9 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
         " :incident, 1, 'published', 'done', 'hybrid', 'hybrid', 'k', now())",
         "insert into doctor.diagnosis_feedback (tenant_id, diagnosis_id, reviewer_id, verdict)"
         " values (:tenant, :diagnosis, :user_b, 'accepted')",
+        "insert into doctor.agents (id, tenant_id, integration_id, name, registration_token_hash,"
+        " registration_expires_at) values (:agent, :tenant, :integration, 'Agente',"
+        " repeat('a', 64), now() + interval '1 day')",
         "insert into doctor.reports (id, tenant_id, incident_id, diagnosis_id, format, status,"
         " storage_path, content_sha256, processing_key) values (:report, :tenant, :incident,"
         " :diagnosis, 'pdf', 'ready', :report_path, repeat('c', 64), 'r')",

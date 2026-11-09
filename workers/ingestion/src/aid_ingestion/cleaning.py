@@ -47,8 +47,11 @@ def fit_contract(event: dict[str, Any]) -> dict[str, Any]:
 
 
 class EventSanitizer:
-    def __init__(self, master_key: bytes, tenant_id: str) -> None:
-        key = derive_tenant_key(master_key, UUID(tenant_id))
+    """Sem chave (`EventSanitizer()`), sanitiza igual, só sem a chave das Referências: é o que o
+    agente local (#39) roda na rede do cliente antes de enviar."""
+
+    def __init__(self, master_key: bytes | None = None, tenant_id: str | None = None) -> None:
+        key = derive_tenant_key(master_key, UUID(tenant_id)) if master_key and tenant_id else None
         self.content = Sanitizer(reference_key=key)
         self.identifiers = Sanitizer(reference_key=key, exclude_kinds=("cartao",))
 

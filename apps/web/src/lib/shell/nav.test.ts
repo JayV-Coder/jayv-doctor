@@ -35,6 +35,9 @@ describe("activeTab", () => {
     expect(pageTitle("/execucoes/abc")).toBe("Execuções");
     expect(pageTitle("/conectores/novo")).toBe("Conector GCP");
     expect(activeTab("/conectores/novo")).toBe("/conectores");
+    expect(pageTitle("/conectores/agentes")).toBe("Agentes locais");
+    expect(pageTitle("/conectores/agentes/novo")).toBe("Novo agente");
+    expect(activeTab("/conectores/agentes")).toBe("/conectores");
     expect(pageTitle("/conectores/abc")).toBe("Conectores");
   });
 

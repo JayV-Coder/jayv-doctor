@@ -45,6 +45,10 @@ _Avoid_: Stage, tier
 Configuração autenticada que coleta registros de um provedor (GCP, Salesforce, SAP) para uma Organização.
 _Avoid_: Integração (é outra coisa), fonte, plugin
 
+**Agente local**:
+Programa instalado na rede do cliente (SAP on-premises) que coleta o que a Organização autorizou, sanitiza ali mesmo e envia à plataforma só por conexões de saída.
+_Avoid_: Conector (o Conector roda na plataforma), proxy, gateway
+
 **Sincronização**:
 Uma rodada de coleta de um Conector, delimitada por um Checkpoint inicial e final.
 _Avoid_: Sync job, pull

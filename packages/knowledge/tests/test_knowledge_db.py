@@ -107,13 +107,16 @@ QUESTIONS = [
     ("roles/logging.viewer PERMISSION_DENIED ao ler logs", "gcp-cloud-run-logging"),
     ("partida a frio Cloud Run instâncias mínimas", "gcp-cloud-run-logging"),
     ("memória excedida instância encerrada", "gcp-cloud-run-logging"),
+    ("IDoc com status 51 documento de aplicação não lançado", "sap-mm-fi-idoc"),
+    ("material não mantido no centro M3 305", "sap-mm-fi-idoc"),
+    ("chamadas tRFC pendentes na SM58", "sap-mm-fi-idoc"),
 ]
 
 
 @pytest.mark.asyncio
 async def test_recall_at_5_da_base_global(engine: AsyncEngine) -> None:
     await sync(engine)
-    assert len(documents()) == 4
+    assert len(documents()) == 5
     tenant, _ = await tenant_with_document(engine, "# Nada\n\nsem relação", "Outro")
     try:
         found = 0

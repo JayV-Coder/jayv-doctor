@@ -37,6 +37,10 @@ LABELS = {
     "DUPLICATE": "Registro duplicado",
     "PENDING_CONFIRMATION": "Envio sem confirmação",
     "DIVERGENCE": "Divergência entre origem e destino",
+    "SAP_LOCK": "Objeto bloqueado no SAP",
+    "IDOC_ERROR": "IDoc não lançado",
+    "SAP_AUTHORIZATION": "Sem autorização no SAP",
+    "MASTER_DATA": "Cadastro mestre faltante",
 }
 
 

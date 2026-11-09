@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 from aid_correlation_worker.close import close_idle
 from aid_correlation_worker.correlate import correlate_integration
-from aid_diagnosis_engine.rules import RULES
+from aid_diagnosis_engine.rules import RULES, RULESET_VERSION
 from aid_diagnosis_engine.rules import catalog as catalog_module
 from aid_diagnosis_worker.evaluate import evaluate_execution
 from sqlalchemy import text
@@ -157,7 +157,7 @@ async def test_versao_nova_da_regra_nao_mexe_nos_matches_antigos(
             t=tenant["tenant"],
         )
         assert {(f["x"], f["rule_version"]) for f in found} == {
-            (old, "2026.10.1"),
+            (old, RULESET_VERSION),
             (new, "2099.1.0"),
         }
     finally:
@@ -178,7 +178,8 @@ async def test_catalogo_do_banco_e_o_do_codigo(engine: AsyncEngine) -> None:
     stored = await rows(
         engine,
         "select code, version, category, severity_hint, description"
-        " from doctor.rule_definitions where version = '2026.10.1' order by code",
+        " from doctor.rule_definitions where version = :v order by code",
+        v=RULESET_VERSION,
     )
     assert [tuple(row.values()) for row in stored] == [
         (r.code, r.version, r.category, r.severity_hint, r.description_pt) for r in RULES
@@ -499,3 +500,76 @@ async def test_falha_definitiva_marca_o_documento_e_passageira_reentrega(
     )
     assert found[0]["status"] == status
     assert (found[0]["error"] is None) == (status == "indexing")
+
+
+@pytest.mark.asyncio
+async def test_bapiret2_v1_abre_incidente_por_int_005_com_a_mensagem_sap(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    """Critério do #38: o Evento passa pela ingestão de verdade (EventSanitizer), que reconhece o
+    RETURN da BAPI, e a Regra classifica com o Evento como Evidência."""
+    from aid_ingestion.cleaning import EventSanitizer
+
+    body = json.dumps(
+        {
+            "RETURN": [
+                {
+                    "TYPE": "E",
+                    "ID": "V1",
+                    "NUMBER": "801",
+                    "MESSAGE": "Pedido bloqueado para faturamento",
+                }
+            ]
+        }
+    )
+    cleaned, _ = EventSanitizer(b"k" * 32, tenant["tenant"])(
+        {
+            "schema_version": "1.0",
+            "event_id": str(uuid4()),
+            "integration_id": tenant["integration"],
+            "timestamp": T0.isoformat(),
+            "source": {"provider": "sap", "service": "ECC"},
+            "operation": "BAPI_SALESORDER_CREATEFROMDAT2",
+            "severity": "INFO",
+            "attributes": {"response": body},
+        }
+    )
+    execution, event = str(uuid4()), str(uuid4())
+    await run(
+        engine,
+        "insert into doctor.executions (id, tenant_id, integration_id, status, first_event_at,"
+        " last_event_at, event_count, closed_at) values (:x, :t, :i, 'failed', :at, :at, 1, now())",
+        x=execution,
+        t=tenant["tenant"],
+        i=tenant["integration"],
+        at=T0,
+    )
+    await run(
+        engine,
+        "insert into doctor.events (id, tenant_id, integration_id, timestamp, schema_version,"
+        " source, operation, severity, dedup_key, error, attributes, execution_ref, correlated_by)"
+        " values (:id, :t, :i, :at, '1.0', cast(:src as jsonb), :op, :sev, :d, cast(:e as jsonb),"
+        " cast(:a as jsonb), :x, 'execution_id')",
+        id=event,
+        t=tenant["tenant"],
+        i=tenant["integration"],
+        at=T0,
+        src=json.dumps(cleaned["source"]),
+        op=cleaned["operation"],
+        sev=cleaned["severity"],
+        d=str(uuid4()),
+        e=json.dumps(cleaned["error"]),
+        a=json.dumps(cleaned["attributes"]),
+        x=execution,
+    )
+    await evaluate_execution(engine, {"execution_id": execution})
+    opened = await incidents(engine, tenant)
+    assert [(i["rule_code"], i["category"]) for i in opened] == [("INT-005", "BUSINESS_REJECTION")]
+    match = await rows(
+        engine,
+        "select matched_event_ids::text[] as ids from doctor.rule_matches where execution_id = :x"
+        " and rule_code = 'INT-005'",
+        x=execution,
+    )
+    assert match[0]["ids"] == [event]
+    assert cleaned["error"]["code"] == "V1 801"

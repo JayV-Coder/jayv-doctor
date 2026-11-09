@@ -1,5 +1,6 @@
-"""Regras iniciais (PRD §6), versão `2026.10.1`. Regra nova ou alterada ganha versão nova do
-pacote; os matches antigos continuam apontando para a versão que os gerou.
+"""Regras do PRD §6, versão `2026.11.1` (a `2026.10.1` mais as Regras SAP do ticket #38). Regra
+nova ou alterada ganha versão nova do pacote; os matches antigos continuam apontando para a
+versão que os gerou.
 
 Só Eventos com `error` contam para as Regras de erro (INT-001 a INT-006): um texto qualquer num
 Evento INFO não abre Incidente. INT-007 e INT-008 leem convenções de `attributes`, descritas em
@@ -13,7 +14,7 @@ from typing import Any
 
 from aid_diagnosis_engine.rules.base import EventView, ExecutionView, Rule
 
-RULESET_VERSION = "2026.10.1"
+RULESET_VERSION = "2026.11.1"
 # Prazo para a confirmação do destino chegar (INT-007).
 CONFIRMATION_DEADLINE = timedelta(minutes=5)
 
@@ -22,6 +23,24 @@ DUPLICATE_TEXT = re.compile(r"duplicat|already exists|j[áa] existe", re.IGNOREC
 # Classes de mensagem do SAP SD/LE que indicam recusa de negócio (V1 vendas, VL remessas), com ou
 # sem espaço antes do número ("VL 150", "VL150").
 SAP_REJECTION = re.compile(r"^(V1|VL)(?![A-Z])", re.IGNORECASE)
+# Mensagens SAP (atributos `sap_*`, preenchidos pela ingestão, #38). Códigos só os conhecidos com
+# certeza; o resto pelo texto, em inglês e português.
+LOCK_CODES = {"MC 601"}
+LOCK_TEXT = re.compile(
+    r"locked by|currently locked|being processed by (another )?user|bloquead[oa] (pelo|por)"
+    r"|sendo processad[oa] (pelo|por)",
+    re.IGNORECASE,
+)
+AUTHORIZATION_TEXT = re.compile(
+    r"no authori[sz]ation|not authori[sz]ed|sem autoriza|n[ãa]o (tem|possui) autoriza",
+    re.IGNORECASE,
+)
+MASTER_DATA_CODES = {"M3 305"}
+MASTER_DATA_TEXT = re.compile(
+    r"not maintained|does not exist|is not defined|n[ãa]o (est[áa] )?mantid|n[ãa]o existe"
+    r"|n[ãa]o (est[áa] )?definid",
+    re.IGNORECASE,
+)
 
 
 def failed(event: EventView) -> bool:
@@ -29,7 +48,12 @@ def failed(event: EventView) -> bool:
 
 
 def auth(event: EventView) -> bool:
-    return failed(event) and (event.category == "AUTH" or event.http_status in (401, 403))
+    # Falta de autorização SAP tem Regra própria (INT-011), mesmo vinda num HTTP 403.
+    return (
+        failed(event)
+        and (event.category == "AUTH" or event.http_status in (401, 403))
+        and not sap_specific(event)
+    )
 
 
 def rate_limit(event: EventView) -> bool:
@@ -45,7 +69,12 @@ def timeout(event: EventView) -> bool:
 
 
 def validation(event: EventView) -> bool:
-    return failed(event) and (event.category == "VALIDATION" or event.http_status in (400, 422))
+    # O SAP Gateway devolve bloqueio e cadastro faltante como HTTP 400: as Regras SAP vencem.
+    return (
+        failed(event)
+        and (event.category == "VALIDATION" or event.http_status in (400, 422))
+        and not sap_specific(event)
+    )
 
 
 def bapi_rejected(attributes: Mapping[str, Any]) -> bool:
@@ -58,8 +87,55 @@ def bapi_rejected(attributes: Mapping[str, Any]) -> bool:
     return False
 
 
+def sap(event: EventView) -> bool:
+    """Evento com mensagem SAP reconhecida pela ingestão (BAPIRET2, OData, SLG1…)."""
+    return bool(event.attributes.get("sap_message_id"))
+
+
+def object_locked(event: EventView) -> bool:
+    return failed(event) and (
+        event.code.upper() in LOCK_CODES or (sap(event) and bool(LOCK_TEXT.search(event.message)))
+    )
+
+
+def idoc_failed(event: EventView) -> bool:
+    return failed(event) and (
+        str(event.attributes.get("idoc_status", "")) == "51" or event.code.upper() == "IDOC 51"
+    )
+
+
+def sap_authorization(event: EventView) -> bool:
+    return failed(event) and (
+        event.code.upper().startswith("S#")
+        or str(event.attributes.get("sap_message_id", "")).upper().startswith("S#")
+        or (sap(event) and bool(AUTHORIZATION_TEXT.search(event.message)))
+    )
+
+
+def master_data_missing(event: EventView) -> bool:
+    return failed(event) and (
+        event.code.upper() in MASTER_DATA_CODES
+        or (sap(event) and bool(MASTER_DATA_TEXT.search(event.message)))
+    )
+
+
+def sap_specific(event: EventView) -> bool:
+    """Sintomas SAP com Regra própria: a recusa genérica (INT-005) não os disputa."""
+    return (
+        object_locked(event)
+        or idoc_failed(event)
+        or sap_authorization(event)
+        or master_data_missing(event)
+    )
+
+
 def business_rejection(event: EventView) -> bool:
-    # A BAPI responde sem erro de transporte e a recusa vem só no RETURN: o BAPIRET2 basta.
+    if sap_specific(event):
+        return False
+    # A BAPI responde sem erro de transporte e a recusa vem só no RETURN: o BAPIRET2 basta, e
+    # também a mensagem SAP tipo E/A que a ingestão reconheceu (#38).
+    if str(event.attributes.get("sap_message_type", "")).upper() in ("E", "A") and failed(event):
+        return True
     return bapi_rejected(event.attributes) or (
         failed(event)
         and (event.category == "BUSINESS_REJECTION" or bool(SAP_REJECTION.match(event.code)))
@@ -171,5 +247,39 @@ RULES: tuple[Rule, ...] = (
         "high",
         "Origem e destino divergem em contagem ou status.",
         divergent,
+    ),
+    Rule(
+        "INT-009",
+        RULESET_VERSION,
+        "SAP_LOCK",
+        "medium",
+        "O objeto estava bloqueado por outro usuário no SAP (ex.: MC 601); tende a passar numa"
+        " nova tentativa.",
+        object_locked,
+    ),
+    Rule(
+        "INT-010",
+        RULESET_VERSION,
+        "IDOC_ERROR",
+        "high",
+        "IDoc com status 51: o documento de aplicação não foi lançado no SAP.",
+        idoc_failed,
+    ),
+    Rule(
+        "INT-011",
+        RULESET_VERSION,
+        "SAP_AUTHORIZATION",
+        "high",
+        "O usuário técnico não tem autorização no SAP para a operação.",
+        sap_authorization,
+    ),
+    Rule(
+        "INT-012",
+        RULESET_VERSION,
+        "MASTER_DATA",
+        "medium",
+        "Cadastro mestre faltante ou incompleto no SAP (ex.: material não mantido no centro,"
+        " M3 305).",
+        master_data_missing,
     ),
 )

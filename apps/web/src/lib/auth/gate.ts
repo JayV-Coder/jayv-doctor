@@ -9,7 +9,8 @@ export interface SessionState {
 
 const PUBLIC_PATHS = ["/login", "/esqueci-senha"];
 // Sem dado de tenant: a tela offline fica no cache do PWA e abre mesmo depois do logout.
-const OPEN_PATHS = ["/privacidade", "/offline"];
+// O link compartilhável do Relatório técnico (#32) abre sem conta: o token é a credencial.
+const OPEN_PATHS = ["/privacidade", "/offline", "/compartilhado", "/compartilhado/arquivo"];
 const ENTRY_PATHS = ["/login", "/esqueci-senha", "/mfa", "/mfa/cadastro"];
 const ACCEPT_INVITATION_PATH = "/convites/aceitar";
 

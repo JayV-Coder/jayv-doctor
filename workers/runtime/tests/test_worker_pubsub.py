@@ -44,6 +44,7 @@ def test_worker_de_ingestao_registra_o_topico_ingestion_raw() -> None:
         "diagnosis.requested",
         "diagnosis.published",
         "usage.threshold",
+        "report.requested",
         "incident.opened",
         "incident.updated",
     }

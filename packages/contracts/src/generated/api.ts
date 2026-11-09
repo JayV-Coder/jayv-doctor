@@ -969,6 +969,95 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/incidents/{incident}/reports": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Reports */
+    get: operations["list_reports_api_v1_incidents__incident__reports_get"];
+    put?: never;
+    /** Request Report */
+    post: operations["request_report_api_v1_incidents__incident__reports_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/reports/{target}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Report */
+    get: operations["get_report_api_v1_reports__target__get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/reports/{target}/shares": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Share Report */
+    post: operations["share_report_api_v1_reports__target__shares_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/reports/{target}/shares/{share}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Revoke Share */
+    delete: operations["revoke_share_api_v1_reports__target__shares__share__delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/shared-reports": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Open Shared Report
+     * @description O token vem no corpo (fora da URL e dos logs). Link inválido, vencido ou revogado: 404.
+     */
+    post: operations["open_shared_report_api_v1_shared_reports_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2419,6 +2508,152 @@ export interface components {
       /** Reason */
       reason: string;
     };
+    /** Report */
+    Report: {
+      /** Id */
+      id: string;
+      /** Incident Id */
+      incident_id: string;
+      /** Diagnosis Id */
+      diagnosis_id: string | null;
+      /** Diagnosis Version */
+      diagnosis_version: number | null;
+      /**
+       * Format
+       * @enum {string}
+       */
+      format: "pdf" | "md";
+      /** Include Timeline */
+      include_timeline: boolean;
+      /** Include Event Excerpts */
+      include_event_excerpts: boolean;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "queued" | "running" | "ready" | "failed";
+      /** Size Bytes */
+      size_bytes: number | null;
+      /** Content Sha256 */
+      content_sha256: string | null;
+      /** Error */
+      error: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Completed At */
+      completed_at: string | null;
+      /** Shares */
+      shares: components["schemas"]["ReportShare"][];
+      /** Download Url */
+      download_url: string | null;
+      /** Expires In */
+      expires_in: number | null;
+    };
+    /** ReportQueued */
+    ReportQueued: {
+      /** Report Id */
+      report_id: string;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "queued" | "running" | "ready" | "failed";
+    };
+    /** ReportRequest */
+    ReportRequest: {
+      /**
+       * Format
+       * @default pdf
+       * @enum {string}
+       */
+      format: "pdf" | "md";
+      /**
+       * Include Timeline
+       * @default false
+       */
+      include_timeline: boolean;
+      /**
+       * Include Event Excerpts
+       * @default false
+       */
+      include_event_excerpts: boolean;
+    };
+    /** ReportShare */
+    ReportShare: {
+      /** Id */
+      id: string;
+      /**
+       * Expires At
+       * Format: date-time
+       */
+      expires_at: string;
+      /** Revoked At */
+      revoked_at: string | null;
+      /** Access Count */
+      access_count: number;
+      /** Last Accessed At */
+      last_accessed_at: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+    };
+    /** ReportShareCreated */
+    ReportShareCreated: {
+      /** Id */
+      id: string;
+      /** Url */
+      url: string;
+      /**
+       * Expires At
+       * Format: date-time
+       */
+      expires_at: string;
+    };
+    /** ReportSummary */
+    ReportSummary: {
+      /** Id */
+      id: string;
+      /** Incident Id */
+      incident_id: string;
+      /** Diagnosis Id */
+      diagnosis_id: string | null;
+      /** Diagnosis Version */
+      diagnosis_version: number | null;
+      /**
+       * Format
+       * @enum {string}
+       */
+      format: "pdf" | "md";
+      /** Include Timeline */
+      include_timeline: boolean;
+      /** Include Event Excerpts */
+      include_event_excerpts: boolean;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "queued" | "running" | "ready" | "failed";
+      /** Size Bytes */
+      size_bytes: number | null;
+      /** Content Sha256 */
+      content_sha256: string | null;
+      /** Error */
+      error: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Completed At */
+      completed_at: string | null;
+      /** Shares */
+      shares: components["schemas"]["ReportShare"][];
+    };
     /** ResourceUsage */
     ResourceUsage: {
       /**
@@ -2503,6 +2738,11 @@ export interface components {
       description: string;
       /** Matched Event Ids */
       matched_event_ids: string[];
+    };
+    /** SharedReportRequest */
+    SharedReportRequest: {
+      /** Token */
+      token: string;
     };
     /** SubjectErased */
     SubjectErased: {
@@ -4877,6 +5117,209 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Usage"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_reports_api_v1_incidents__incident__reports_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        incident: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReportSummary"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  request_report_api_v1_incidents__incident__reports_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        "idempotency-key"?: string | null;
+        authorization?: string | null;
+      };
+      path: {
+        incident: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ReportRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReportQueued"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_report_api_v1_reports__target__get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Report"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  share_report_api_v1_reports__target__shares_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ReportShareCreated"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  revoke_share_api_v1_reports__target__shares__share__delete: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+        share: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  open_shared_report_api_v1_shared_reports_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SharedReportRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/pdf": unknown;
+          "text/markdown": unknown;
         };
       };
       /** @description Validation Error */

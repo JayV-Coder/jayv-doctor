@@ -1,0 +1,14 @@
+[project]
+name = "aid-observability"
+version = "0.1.0"
+description = "Traces (W3C), logs JSON sem PII e métricas da plataforma no Cloud Monitoring"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "httpx>=0.28",
+    "opentelemetry-api>=1.30",
+    "opentelemetry-sdk>=1.30",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.5,<0.10"]
+build-backend = "uv_build"

@@ -22,7 +22,7 @@ run "topicos_tem_push_autenticado_e_dlq_apos_5_tentativas" {
   assert {
     condition = toset(keys(module.topics)) == toset([
       "ingestion.raw", "ingestion.normalized", "correlation.requested", "diagnosis.requested", "connector.sync",
-      "rules.evaluate", "incident.opened", "incident.updated", "knowledge.index", "diagnosis.published", "usage.threshold",
+      "rules.evaluate", "incident.opened", "incident.updated", "knowledge.index", "diagnosis.published", "usage.threshold", "report.requested",
     ])
     error_message = "Os cinco tópicos do ticket precisam existir."
   }
@@ -48,8 +48,8 @@ run "workers_sao_privados_e_a_api_so_entra_pelo_load_balancer" {
   command = plan
 
   assert {
-    condition     = alltrue([for w in module.workers : w.ingress == "INGRESS_TRAFFIC_INTERNAL_ONLY" && !w.public_invoker])
-    error_message = "Workers não aceitam chamada pública."
+    condition     = alltrue([for name, w in module.workers : (name == "relay" || w.ingress == "INGRESS_TRAFFIC_INTERNAL_ONLY") && !w.public_invoker])
+    error_message = "Workers não aceitam chamada pública (o relay aceita só com IAM, para o /admin/health)."
   }
   assert {
     condition     = module.api.ingress == "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
@@ -186,6 +186,108 @@ run "so_o_relay_publica_e_o_scheduler_o_chama" {
   assert {
     condition     = google_cloud_scheduler_job.dashboard_stats.schedule == "*/10 * * * *"
     error_message = "O agregado do Dashboard recalcula a cada 10 min (atraso bem abaixo de 1 h)."
+  }
+}
+
+run "backup_do_storage_fica_no_brasil_e_segue_a_retencao" {
+  command = plan
+
+  assert {
+    condition     = google_storage_bucket.storage_backup.location == "southamerica-east1"
+    error_message = "O backup dos arquivos fica em southamerica-east1."
+  }
+  assert {
+    condition     = google_storage_bucket.storage_backup.public_access_prevention == "enforced" && google_storage_bucket.storage_backup.uniform_bucket_level_access
+    error_message = "O bucket de backup nunca é público."
+  }
+  assert {
+    condition     = google_storage_bucket.storage_backup.versioning[0].enabled && alltrue([for c in google_storage_bucket.storage_backup.lifecycle_rule[0].condition : c.days_since_noncurrent_time == 7])
+    error_message = "O que a origem apaga fica no máximo 7 dias como versão antiga."
+  }
+  assert {
+    condition     = google_storage_bucket.storage_backup.soft_delete_policy[0].retention_duration_seconds == 0
+    error_message = "Sem soft delete: ele estenderia a retenção do que a LGPD manda apagar."
+  }
+  assert {
+    condition     = google_storage_bucket_iam_member.storage_backup_writer.role == "roles/storage.objectAdmin"
+    error_message = "O worker de diagnóstico escreve no backup (o membro é a conta dele, em main.tf)."
+  }
+  assert {
+    condition     = module.workers["diagnosis"].env["BACKUP_BUCKET"] == google_storage_bucket.storage_backup.name && !contains(keys(module.workers["correlation"].env), "BACKUP_BUCKET")
+    error_message = "Só o worker de diagnóstico conhece o bucket de backup."
+  }
+}
+
+run "dimensionamento_cabe_no_supavisor" {
+  command = plan
+
+  assert {
+    condition     = module.api.max_instances == 4 && module.api.concurrency == 40
+    error_message = "A API sobe até 4 instâncias de 40 requisições (docs/operations/capacity.md)."
+  }
+}
+
+run "dimensionamento_acima_do_supavisor_e_barrado" {
+  command = plan
+
+  variables {
+    api_max_instances = 20
+    api_concurrency   = 80
+  }
+  expect_failures = [check.conexoes_cabem_no_supavisor]
+}
+
+run "cada_alerta_tem_runbook_e_vai_para_o_plantao" {
+  command = plan
+
+  variables {
+    alert_emails = ["plantao@exemplo.test"]
+  }
+
+  assert {
+    condition = toset(keys(module.observability.alerts)) == toset([
+      "dlq", "workers_stopped", "api_errors", "metrics_absent", "outbox_lag_seconds", "outbox_stuck",
+      "ingestion_lag_seconds", "diagnosis_queue_seconds", "llm_error_rate_1h", "supabase_cpu_utilization",
+    ])
+    error_message = "Os alertas do ticket (DLQ, outbox, workers, CPU, LLM, 5xx) mais outbox travada, filas e medidas ausentes."
+  }
+  assert {
+    condition     = alltrue([for content in values(module.observability.alerts) : strcontains(content, "/docs/operations/runbooks/")])
+    error_message = "Cada alerta aponta para o runbook dele."
+  }
+  assert {
+    condition     = google_cloud_scheduler_job.platform_metrics.schedule == "* * * * *"
+    error_message = "As medidas da plataforma vão para o Cloud Monitoring a cada minuto."
+  }
+  assert {
+    condition     = alltrue([for name in keys(local.workers) : module.workers[name].env["OTEL_ENABLED"] == "true"])
+    error_message = "Os workers mandam traces (o trace vai da API até a gravação em events)."
+  }
+}
+
+run "api_liga_os_logs_ao_trace" {
+  command = plan
+
+  assert {
+    condition     = module.api.env["GCP_PROJECT_ID"] == "aid-test"
+    error_message = "Sem GCP_PROJECT_ID, o log da API não aponta para o trace."
+  }
+}
+
+run "admin_health_so_para_operadores" {
+  command = plan
+
+  variables {
+    platform_operators = ["group:operacao@exemplo.test"]
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service_iam_member.operators["group:operacao@exemplo.test"].role == "roles/run.invoker"
+    error_message = "Operadores invocam o relay pelo IAM; o relay segue interno."
+  }
+  assert {
+    condition     = !module.workers["relay"].public_invoker
+    error_message = "O /admin/health não é público: só quem tem run.invoker."
   }
 }
 

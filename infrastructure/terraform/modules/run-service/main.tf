@@ -48,6 +48,12 @@ variable "max_instances" {
   default = 10
 }
 
+variable "concurrency" {
+  description = "Requisições simultâneas por instância. Cada uma pode abrir uma conexão no Supavisor (NullPool)."
+  type        = number
+  default     = 80
+}
+
 variable "memory" {
   type    = string
   default = "512Mi"
@@ -71,8 +77,9 @@ resource "google_cloud_run_v2_service" "this" {
   deletion_protection  = var.deletion_protection
 
   template {
-    service_account = var.service_account_email
-    timeout         = var.timeout
+    service_account                  = var.service_account_email
+    timeout                          = var.timeout
+    max_instance_request_concurrency = var.concurrency
 
     scaling {
       min_instance_count = var.min_instances
@@ -146,4 +153,12 @@ output "env" {
 
 output "public_invoker" {
   value = google_cloud_run_v2_service.this.invoker_iam_disabled
+}
+
+output "max_instances" {
+  value = google_cloud_run_v2_service.this.template[0].scaling[0].max_instance_count
+}
+
+output "concurrency" {
+  value = google_cloud_run_v2_service.this.template[0].max_instance_request_concurrency
 }

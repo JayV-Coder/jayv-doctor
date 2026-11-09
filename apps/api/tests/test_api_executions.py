@@ -33,7 +33,9 @@ class FakeRepository(ExecutionRepository):
 
 
 class FakeStorage(Storage):
-    async def sign_download(self, token: str, path: str, seconds: int) -> str:
+    async def sign_download(
+        self, token: str, path: str, seconds: int, bucket: str = "doctor-raw-logs"
+    ) -> str:
         return f"https://storage.test/{path}?expira={seconds}"
 
 

@@ -9,7 +9,7 @@ requires-python = ">=3.12,<3.13"
 package = false
 
 [tool.uv.workspace]
-members = ["apps/api", "packages/connectors", "packages/contracts", "packages/correlation", "packages/db", "packages/diagnosis-engine", "packages/evaluation", "packages/knowledge", "packages/security", "workers/connectors", "workers/correlation", "workers/diagnosis", "workers/ingestion", "workers/relay", "workers/runtime"]
+members = ["apps/api", "packages/connectors", "packages/contracts", "packages/correlation", "packages/db", "packages/diagnosis-engine", "packages/evaluation", "packages/knowledge", "packages/observability", "packages/security", "workers/connectors", "workers/correlation", "workers/diagnosis", "workers/ingestion", "workers/relay", "workers/runtime"]
 
 [dependency-groups]
 dev = [
@@ -71,6 +71,8 @@ files = [
     "workers/diagnosis/src",
     "workers/diagnosis/tests",
     "packages/db/src",
+    "packages/observability/src",
+    "packages/observability/tests",
     "packages/security/src",
     "packages/security/tests",
     "workers/connectors/src",
@@ -81,6 +83,11 @@ files = [
     "workers/relay/tests",
     "workers/runtime/src",
     "workers/runtime/tests",
+    "scripts/load_report.py",
+    "scripts/db_fingerprint.py",
+    "scripts/pilot_report.py",
+    "scripts/sus_score.py",
+    "tests/operations",
 ]
 
 # Cada módulo da API só depende de `core`, nunca de outro módulo (ADR-0002).
@@ -90,7 +97,7 @@ root_package = "aid_api"
 [[tool.importlinter.contracts]]
 name = "Módulos independentes sobre o core"
 type = "layers"
-layers = ["aid_api.main", "aid_api.health | aid_api.orgs | aid_api.integrations | aid_api.imports | aid_api.ingestion | aid_api.connectors | aid_api.executions | aid_api.incidents | aid_api.dashboard | aid_api.knowledge | aid_api.diagnoses | aid_api.audit | aid_api.privacy | aid_api.usage", "aid_api.core"]
+layers = ["aid_api.main", "aid_api.health | aid_api.orgs | aid_api.integrations | aid_api.imports | aid_api.ingestion | aid_api.connectors | aid_api.executions | aid_api.incidents | aid_api.dashboard | aid_api.knowledge | aid_api.diagnoses | aid_api.audit | aid_api.privacy | aid_api.usage | aid_api.reports", "aid_api.core"]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib --strict-markers"

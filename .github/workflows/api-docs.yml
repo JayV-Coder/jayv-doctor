@@ -1,0 +1,54 @@
+name: Documentação da API
+
+# A especificação OpenAPI publicada no GitHub Pages a cada merge na main (ticket #35).
+on:
+  push:
+    branches: [main]
+    paths: [packages/contracts/openapi.json, .github/workflows/api-docs.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Montar a página
+        run: |
+          mkdir -p site
+          cp packages/contracts/openapi.json site/openapi.json
+          cat > site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="pt-BR">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>API · Integration AI Doctor</title>
+          </head>
+          <body>
+            <redoc spec-url="openapi.json"></redoc>
+            <script src="https://cdn.jsdelivr.net/npm/redoc@2.5.0/bundles/redoc.standalone.js"></script>
+          </body>
+          </html>
+          HTML
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

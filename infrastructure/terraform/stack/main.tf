@@ -29,8 +29,9 @@ locals {
     # Diagnóstico publicado (#24): quem consome chega com os alertas (v0.3).
     "diagnosis.published" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
     # Avisos de Cota aos 80% e 100% (#31): e-mail para Owner e Admin.
-    "usage.threshold" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
-    "connector.sync"  = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
+    "usage.threshold"  = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    "report.requested" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    "connector.sync"   = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
   }
 
   # voyage-api-key: a busca da Base de conhecimento gera o embedding da pergunta (#23).
@@ -138,6 +139,8 @@ module "api" {
   public_invoker      = true
   subnetwork          = module.network.subnetwork_id
   min_instances       = var.api_min_instances
+  max_instances       = var.api_max_instances
+  concurrency         = var.api_concurrency
   deletion_protection = var.environment == "prod"
   env = {
     SUPABASE_JWT_ISSUER = var.supabase_jwt_issuer
@@ -146,7 +149,9 @@ module "api" {
     AID_TRUSTED_PROXY_HOPS   = "2"
     SUPABASE_PUBLISHABLE_KEY = var.supabase_publishable_key
     APP_URL                  = var.app_url
-    OTEL_ENABLED             = "true"
+    # Liga os logs JSON ao trace (`logging.googleapis.com/trace`, #34).
+    GCP_PROJECT_ID = var.project_id
+    OTEL_ENABLED   = "true"
   }
   secret_env = { for secret in local.api_secrets : local.secret_env[secret] => secret }
   depends_on = [module.secrets]
@@ -174,17 +179,26 @@ module "workers" {
   region                = var.region
   name                  = "worker-${each.key}"
   service_account_email = google_service_account.worker[each.key].email
-  ingress               = "INGRESS_TRAFFIC_INTERNAL_ONLY"
-  public_invoker        = false
-  subnetwork            = module.network.subnetwork_id
-  memory                = each.value.memory
-  timeout               = each.value.timeout
-  deletion_protection   = var.environment == "prod"
-  env = {
-    WORKER_NAME    = each.key
-    SUPABASE_URL   = trimsuffix(var.supabase_jwt_issuer, "/auth/v1")
-    GCP_PROJECT_ID = var.project_id
-  }
+  # O relay aceita tráfego de fora da VPC para os operadores abrirem o /admin/health com
+  # `gcloud run services proxy` (#34); continua só com IAM (sem invocação pública).
+  ingress             = each.key == "relay" ? "INGRESS_TRAFFIC_ALL" : "INGRESS_TRAFFIC_INTERNAL_ONLY"
+  public_invoker      = false
+  subnetwork          = module.network.subnetwork_id
+  memory              = each.value.memory
+  timeout             = each.value.timeout
+  max_instances       = var.worker_max_instances
+  concurrency         = var.worker_concurrency
+  deletion_protection = var.environment == "prod"
+  env = merge(
+    {
+      WORKER_NAME    = each.key
+      SUPABASE_URL   = trimsuffix(var.supabase_jwt_issuer, "/auth/v1")
+      GCP_PROJECT_ID = var.project_id
+      OTEL_ENABLED   = "true"
+    },
+    # O backup do Storage (#33) roda no worker de diagnóstico, que tem a chave do Storage.
+    each.key == "diagnosis" ? { BACKUP_BUCKET = google_storage_bucket.storage_backup.name } : {},
+  )
   secret_env = { for secret in each.value.secrets : local.secret_env[secret] => secret }
   depends_on = [module.secrets]
 }
@@ -256,11 +270,55 @@ module "deploy" {
 }
 
 module "observability" {
-  source     = "../modules/observability"
-  project_id = var.project_id
-  region     = var.region
-  api_domain = var.api_domain
+  source             = "../modules/observability"
+  project_id         = var.project_id
+  region             = var.region
+  api_domain         = var.api_domain
+  alert_emails       = var.alert_emails
+  oncall_webhook_url = var.oncall_webhook_url
+  runbook_base_url   = "https://github.com/${var.github_repository}/blob/main"
+  depends_on         = [module.project]
+}
+
+# Traces e métricas dos workers (#34): o mesmo da API.
+resource "google_project_iam_member" "worker_telemetry" {
+  for_each = { for pair in setproduct(keys(local.workers), ["roles/cloudtrace.agent", "roles/monitoring.metricWriter"]) : "${pair[0]}/${pair[1]}" => pair }
+  project  = var.project_id
+  role     = each.value[1]
+  member   = "serviceAccount:${google_service_account.worker[each.value[0]].email}"
+}
+
+# Medidas da plataforma no Cloud Monitoring a cada minuto, pelo worker de diagnóstico, que tem a
+# chave da Metrics API do Supabase.
+resource "google_cloud_scheduler_job" "platform_metrics" {
+  project          = var.project_id
+  region           = var.region
+  name             = "${local.name_prefix}-platform-metrics"
+  schedule         = "* * * * *"
+  time_zone        = "Etc/UTC"
+  attempt_deadline = "60s"
+
+  http_target {
+    http_method = "POST"
+    uri         = "${module.workers["diagnosis"].uri}/platform/metrics"
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = module.workers["diagnosis"].uri
+    }
+  }
+
   depends_on = [module.project]
+}
+
+# `/admin/health` dos operadores: no relay, interno e só com o IAM; tenant nenhum chega lá.
+resource "google_cloud_run_v2_service_iam_member" "operators" {
+  for_each = toset(var.platform_operators)
+  project  = var.project_id
+  location = var.region
+  name     = module.workers["relay"].name
+  role     = "roles/run.invoker"
+  member   = each.value
 }
 
 # A outbox é drenada a cada minuto: o lag máximo de uma mensagem é ~1 min mais a rodada.
@@ -455,4 +513,77 @@ resource "google_cloud_scheduler_job" "outbox_relay" {
   }
 
   depends_on = [module.project]
+}
+
+# Backup dos arquivos do Storage (#33): espelho dos buckets do Doctor, no Brasil. Com
+# versionamento, o que a origem apaga (retenção, LGPD, exclusão total) sai do espelho e fica 7
+# dias como versão antiga; depois some de vez. Sem soft delete do GCS, para não estender isso.
+resource "google_storage_bucket" "storage_backup" {
+  project                     = var.project_id
+  name                        = "${var.project_id}-storage-backup"
+  location                    = var.region
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+  force_destroy               = false
+
+  versioning {
+    enabled = true
+  }
+
+  soft_delete_policy {
+    retention_duration_seconds = 0
+  }
+
+  lifecycle_rule {
+    condition {
+      days_since_noncurrent_time = 7
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
+  depends_on = [module.project]
+}
+
+# Só o worker de diagnóstico escreve; ninguém mais da stack lê.
+resource "google_storage_bucket_iam_member" "storage_backup_writer" {
+  bucket = google_storage_bucket.storage_backup.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.worker["diagnosis"].email}"
+}
+
+resource "google_cloud_scheduler_job" "storage_backup" {
+  project = var.project_id
+  region  = var.region
+  name    = "${local.name_prefix}-storage-backup"
+  # De hora em hora (RPO dos arquivos ≤ 1 h); cada rodada cabe no timeout do worker e a que
+  # não termina continua na seguinte.
+  schedule         = "20 * * * *"
+  time_zone        = "Etc/UTC"
+  attempt_deadline = "600s"
+
+  http_target {
+    http_method = "POST"
+    uri         = "${module.workers["diagnosis"].uri}/backup/storage"
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = module.workers["diagnosis"].uri
+    }
+  }
+
+  depends_on = [module.project]
+}
+
+# Conexões possíveis no pior caso (todas as instâncias cheias) cabem na fatia do Supavisor.
+check "conexoes_cabem_no_supavisor" {
+  assert {
+    condition = (
+      var.api_max_instances * var.api_concurrency
+      + length(local.workers) * var.worker_max_instances * var.worker_concurrency
+    ) <= var.supavisor_client_budget
+    error_message = "Instâncias × concorrência passam da fatia do Supavisor reservada ao Doctor."
+  }
 }

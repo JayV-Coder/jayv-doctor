@@ -1,0 +1,38 @@
+{
+  "outbox_lag_seconds": {
+    "limit": 300,
+    "duration": "60s",
+    "name": "Lag da outbox acima de 5 min",
+    "runbook": "outbox-lag.md"
+  },
+  "outbox_stuck": {
+    "limit": 0,
+    "duration": "60s",
+    "name": "Mensagens da outbox recusadas 10 vezes",
+    "runbook": "outbox-lag.md"
+  },
+  "ingestion_lag_seconds": {
+    "limit": 600,
+    "duration": "60s",
+    "name": "Fila da ingestão parada há 10 min",
+    "runbook": "workers-parados.md"
+  },
+  "diagnosis_queue_seconds": {
+    "limit": 600,
+    "duration": "60s",
+    "name": "Fila de Diagnósticos parada há 10 min",
+    "runbook": "workers-parados.md"
+  },
+  "llm_error_rate_1h": {
+    "limit": 0.1,
+    "duration": "300s",
+    "name": "Erro do LLM acima de 10%",
+    "runbook": "llm-erros.md"
+  },
+  "supabase_cpu_utilization": {
+    "limit": 0.8,
+    "duration": "900s",
+    "name": "CPU do Supabase acima de 80% por 15 min",
+    "runbook": "supabase-cpu.md"
+  }
+}

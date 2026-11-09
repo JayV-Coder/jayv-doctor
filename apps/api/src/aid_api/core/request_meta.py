@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from uuid import uuid4
 
+from aid_observability import logs
 from fastapi import FastAPI, Request, Response
 
 _meta: ContextVar[dict[str, str] | None] = ContextVar("request_meta", default=None)
@@ -49,8 +50,13 @@ def install(app: FastAPI) -> None:
     async def remember(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        token = _meta.set(describe(request))
+        meta = describe(request)
+        # O handler de erro inesperado roda fora deste middleware: ele lê daqui o request_id.
+        request.state.request_id = meta["request_id"]
+        token = _meta.set(meta)
         try:
-            return await call_next(request)
+            # O request_id em todo log da requisição (#34); o tenant entra quando o JWT é lido.
+            with logs.bind(request_id=meta["request_id"]):
+                return await call_next(request)
         finally:
             _meta.reset(token)

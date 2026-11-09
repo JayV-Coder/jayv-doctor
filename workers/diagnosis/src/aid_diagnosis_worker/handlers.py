@@ -5,16 +5,21 @@ from collections.abc import Awaitable, Callable, Mapping
 from functools import lru_cache
 from typing import Any
 
+import httpx
 from aid_db import supavisor_engine
 from aid_diagnosis_engine.llm.registry import provider_for
 from aid_knowledge.storage import KnowledgeStore
+from aid_observability.metrics import MonitoringWriter
 from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from aid_diagnosis_worker.backup import GcsTarget, StorageSource, backup_storage
 from aid_diagnosis_worker.diagnose import diagnose, open_automatic
 from aid_diagnosis_worker.evaluate import evaluate_execution
 from aid_diagnosis_worker.knowledge import index, reindex_stale
 from aid_diagnosis_worker.notify import mailer_from_env, notify_threshold
+from aid_diagnosis_worker.platform_metrics import push_metrics
+from aid_diagnosis_worker.report import generate_report
 from aid_diagnosis_worker.retention import SupabaseStorage, run_retention
 
 Handler = Callable[[Mapping[str, Any]], Awaitable[None]]
@@ -32,6 +37,15 @@ def store() -> KnowledgeStore:
 
 async def knowledge_index(payload: Mapping[str, Any]) -> None:
     await index(engine(), payload, store(), provider_for)
+
+
+@lru_cache
+def storage() -> SupabaseStorage:
+    return SupabaseStorage(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
+
+
+async def report_requested(payload: Mapping[str, Any]) -> None:
+    await generate_report(engine(), payload, storage())
 
 
 async def usage_threshold(payload: Mapping[str, Any]) -> None:
@@ -63,6 +77,7 @@ TOPICS: dict[str, Handler] = {
     "incident.updated": no_consumer_yet,
     "diagnosis.published": no_consumer_yet,
     "usage.threshold": usage_threshold,
+    "report.requested": report_requested,
 }
 
 router = APIRouter()
@@ -75,5 +90,28 @@ async def reindex() -> dict[str, int]:
 
 @router.post("/retention/run")
 async def retention() -> dict[str, int]:
-    storage = SupabaseStorage(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
-    return await run_retention(engine(), storage)
+    return await run_retention(engine(), storage())
+
+
+@router.post("/backup/storage")
+async def storage_backup() -> dict[str, int]:
+    # Um cliente HTTP para a rodada inteira (conexões reaproveitadas), fechado no fim.
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
+        source = StorageSource(
+            os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"], client
+        )
+        target = GcsTarget(os.environ["BACKUP_BUCKET"], client)
+        return await backup_storage(engine(), source, target)
+
+
+@router.post("/platform/metrics")
+async def platform_metrics() -> dict[str, float]:
+    """A cada minuto (Cloud Scheduler): medidas da plataforma no Cloud Monitoring (#34)."""
+    async with httpx.AsyncClient(timeout=httpx.Timeout(20.0)) as client:
+        return await push_metrics(
+            engine(),
+            MonitoringWriter(os.environ["GCP_PROJECT_ID"], client),
+            client,
+            os.environ["SUPABASE_URL"],
+            os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+        )

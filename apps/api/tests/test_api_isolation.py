@@ -71,6 +71,11 @@ ROUTES: list[tuple[str, str, str, dict[str, Any] | None]] = [
     ("GET", "/api/v1/diagnoses/{target}", "diagnosis", None),
     ("POST", "/api/v1/diagnoses/{target}/feedback", "diagnosis", {"verdict": "accepted"}),
     ("POST", "/api/v1/incidents/{incident}/knowledge", "incident", None),
+    ("POST", "/api/v1/incidents/{incident}/reports", "incident", {"format": "md"}),
+    ("GET", "/api/v1/incidents/{incident}/reports", "incident", None),
+    ("GET", "/api/v1/reports/{target}", "report", None),
+    ("POST", "/api/v1/reports/{target}/shares", "report", None),
+    ("DELETE", "/api/v1/reports/{target}/shares/{share}", "report", None),
 ]
 
 
@@ -95,7 +100,9 @@ class Untouched(Storage, Mailer):
         self.calls.append(f"upload {path}")
         return "https://storage.test"
 
-    async def sign_download(self, token: str, path: str, seconds: int) -> str:
+    async def sign_download(
+        self, token: str, path: str, seconds: int, bucket: str = "doctor-raw-logs"
+    ) -> str:
         self.calls.append(f"download {path}")
         return "https://storage.test"
 
@@ -140,6 +147,8 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
             "event",
             "incident",
             "diagnosis",
+            "report",
+            "share",
             "document",
             "own_integration",
             "own_incident",
@@ -193,6 +202,12 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
         " :incident, 1, 'published', 'done', 'hybrid', 'hybrid', 'k', now())",
         "insert into doctor.diagnosis_feedback (tenant_id, diagnosis_id, reviewer_id, verdict)"
         " values (:tenant, :diagnosis, :user_b, 'accepted')",
+        "insert into doctor.reports (id, tenant_id, incident_id, diagnosis_id, format, status,"
+        " storage_path, content_sha256, processing_key) values (:report, :tenant, :incident,"
+        " :diagnosis, 'pdf', 'ready', :report_path, repeat('c', 64), 'r')",
+        "insert into doctor.report_shares (id, tenant_id, report_id, token_hash, download_url,"
+        " expires_at) values (:share, :tenant, :report, repeat('d', 64), 'https://s.test/r',"
+        " now() + interval '1 day')",
         "insert into doctor.knowledge_documents (id, tenant_id, title, source, storage_path,"
         " content_type, size_bytes) values (:document, :tenant, 'Runbook', 'upload', :doc_path,"
         " 'text/markdown', 10)",
@@ -205,6 +220,7 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
         "slug_b": f"b-{ids['tenant'][:30]}",
         "path": f"{ids['tenant']}/api/lote.json",
         "doc_path": f"{ids['tenant']}/{ids['document']}/document.md",
+        "report_path": f"{ids['tenant']}/{ids['report']}.pdf",
     }
     async with engine.begin() as connection:
         for sql in statements:
@@ -305,6 +321,7 @@ async def test_recurso_de_outra_organizacao_responde_404(
                         template.replace("{target}", value)
                         .replace("{incident}", value)
                         .replace("{tenant_id}", value)
+                        .replace("{share}", ids["share"])
                     )
 
                 response = await client.request(method, url(ids[resource]), json=body)

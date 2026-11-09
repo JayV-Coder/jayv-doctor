@@ -51,11 +51,14 @@ export API_URL=https://api.staging… RUN_ID=carga-$(date +%Y%m%d-%H%M) SINCE=$(
 INGESTION_TOKEN=aid_ing_… INTEGRATION_ID=… make load:ingestion
 USER_JWTS=jwt1,jwt2 make load:read          # em staging, suba RATE_LIMIT_PER_MINUTE na rodada
 USER_JWT=… INCIDENT_IDS=id1,id2 make load:diagnoses
-SUPABASE_DB_URL=… make load:report          # sai com 1 se alguma meta não foi atingida
+INTEGRATION_ID=… SUPABASE_DB_URL=… make load:report   # sai com 1 se alguma meta não foi atingida
 ```
 
 - Rode em **staging**, nunca no projeto de produção compartilhado com o jayv-coder.
-- O rate limit da API é de 120 requisições/min por Usuário e por token; ele não é o que se mede. Na rodada de leitura, passe vários JWTs ou suba `RATE_LIMIT_PER_MINUTE` só durante o teste.
+- Os limites de requisição não são o que se mede, e há dois:
+  - **API:** 120 requisições/min por Usuário e por token (`RATE_LIMIT_PER_MINUTE`). Na rodada de leitura, passe vários JWTs ou suba o limite só durante o teste.
+  - **Cloud Armor:** 300 requisições/min por IP (`rate_limit_per_minute` da stack). Os 50 Usuários de uma máquina fazem ~3.000/min, então suba esse limite em staging durante a rodada (e volte depois) ou distribua o k6 por várias máquinas. Senão a rodada mede o 429 do balanceador.
+- A meta de erros é de **5xx**: o relatório usa a checagem "sem 5xx" dos scripts, e 4xx (429, 422) aparece no resumo do k6, sem reprovar a meta.
 - Os Diagnósticos em `hybrid` chamam o LLM de verdade e consomem Cota e dinheiro; para medir só a plataforma, use `MODE=rules_only`.
 
 ## Resultados

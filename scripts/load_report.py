@@ -3,7 +3,11 @@ cliente. Zero perda (Eventos aceitos pela API = Eventos gravados com `attributes
 lag de ingestão p95 < 60 s (gravação menos instante do Evento) e o tempo dos Diagnósticos.
 
 Uso: SUPABASE_DB_URL=... uv run python scripts/load_report.py --run carga-1 \
-       --since 2026-11-09T12:00:00Z [--ingestion ingestion-summary.json] [--read read-summary.json]
+       --since 2026-11-09T12:00:00Z --integration <id> \
+       [--ingestion ingestion-summary.json] [--read read-summary.json]
+
+Lotes e Diagnósticos contam só os da Integração (e da Organização dela) da rodada; a meta de
+erros é de 5xx (a checagem "sem 5xx" dos scripts), não de qualquer resposta fora de 2xx.
 """
 
 import argparse
@@ -73,7 +77,7 @@ def verdicts(measured: Measured) -> list[tuple[str, str, bool | None]]:
             None if measured.read_p95_ms is None else measured.read_p95_ms < READ_P95_MS,
         ),
         (
-            "erros abaixo de 0,1%",
+            "5xx abaixo de 0,1%",
             "—" if measured.error_rate is None else f"{measured.error_rate * 100:.3f}%",
             None if measured.error_rate is None else measured.error_rate < ERROR_RATE,
         ),
@@ -94,7 +98,7 @@ def render(run: str, measured: Measured) -> str:
     return "\n".join(lines) + "\n"
 
 
-async def measure(url: str, run: str, since: datetime) -> dict[str, Any]:
+async def measure(url: str, run: str, since: datetime, integration: str) -> dict[str, Any]:
     engine = create_async_engine(
         url.replace("postgresql://", "postgresql+asyncpg://", 1), poolclass=NullPool
     )
@@ -116,9 +120,9 @@ async def measure(url: str, run: str, since: datetime) -> dict[str, Any]:
                 await connection.scalar(
                     text(
                         "select count(*) from doctor.ingestion_batches where created_at >= :since"
-                        " and failed_at is not null"
+                        " and integration_id = cast(:i as uuid) and failed_at is not null"
                     ),
-                    {"since": since},
+                    {"since": since, "i": integration},
                 )
                 or 0
             )
@@ -126,9 +130,10 @@ async def measure(url: str, run: str, since: datetime) -> dict[str, Any]:
                 await connection.scalar(
                     text(
                         "select count(*) from doctor.ingestion_batches where created_at >= :since"
+                        " and integration_id = cast(:i as uuid)"
                         " and processed_at is null and failed_at is null"
                     ),
-                    {"since": since},
+                    {"since": since, "i": integration},
                 )
                 or 0
             )
@@ -137,9 +142,11 @@ async def measure(url: str, run: str, since: datetime) -> dict[str, Any]:
             for row in await connection.execute(
                 text(
                     "select status, extract(epoch from published_at - created_at)::float as took"
-                    " from doctor.diagnoses where created_at >= :since"
+                    " from doctor.diagnoses d where d.created_at >= :since"
+                    " and d.tenant_id = (select g.tenant_id from doctor.integrations g"
+                    "   where g.id = cast(:i as uuid))"
                 ),
-                {"since": since},
+                {"since": since, "i": integration},
             ):
                 diagnoses[row.status] = diagnoses.get(row.status, 0) + 1
                 if row.took is not None:
@@ -159,18 +166,22 @@ def main(argv: Sequence[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", required=True)
     parser.add_argument("--since", required=True, type=datetime.fromisoformat)
+    parser.add_argument("--integration", required=True)
     parser.add_argument("--ingestion", type=Path)
     parser.add_argument("--read", type=Path)
     args = parser.parse_args(argv)
-    found = asyncio.run(measure(os.environ["SUPABASE_DB_URL"], args.run, args.since))
+    found = asyncio.run(
+        measure(os.environ["SUPABASE_DB_URL"], args.run, args.since, args.integration)
+    )
     ingestion = json.loads(args.ingestion.read_text()) if args.ingestion else {}
     read = json.loads(args.read.read_text()) if args.read else {}
     accepted = summary_value(ingestion, "events_accepted", "count")
+    # `checks` dos scripts = a taxa de respostas sem 5xx; 4xx (429, 422) não é erro do servidor.
     failures = [
-        value
+        1 - value
         for value in (
-            summary_value(ingestion, "http_req_failed", "value"),
-            summary_value(read, "http_req_failed", "value"),
+            summary_value(ingestion, "checks", "value"),
+            summary_value(read, "checks", "value"),
         )
         if value is not None
     ]

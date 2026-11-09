@@ -1,7 +1,8 @@
 """Impressão digital do schema doctor para o drill de restauração (ticket #33): contagem por
 tabela e um hash de amostra (as 1.000 primeiras linhas pela chave). `--until` considera só o que
-foi criado até o ponto da restauração, para comparar a origem (tirada depois) com o projeto
-restaurado nesse ponto.
+foi gravado até o ponto da restauração (`created_at`, ou `ingested_at` nos Eventos), para
+comparar a origem (tirada depois) com o projeto restaurado nesse ponto. Tabela sem coluna de
+data fica fora da comparação com `--until`: a contagem dela muda depois do ponto.
 
 Uso:
   SUPABASE_DB_URL=... uv run python scripts/db_fingerprint.py take [--until ISO] > origem.json
@@ -23,9 +24,17 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 SAMPLE = 1000
-# Tabelas que mudam sozinhas entre a origem e o restaurado (relógio, filas, agregados): só a
-# contagem até o ponto vale, a amostra não.
-VOLATILE = {"outbox_messages", "idempotency_keys", "execution_stats_dirty", "usage_deltas"}
+# Filas e agregados cujas linhas saem depois de criadas (outbox drenada, deltas somados,
+# idempotência expirada): nem a contagem até o ponto se mantém, então ficam fora.
+VOLATILE = {
+    "outbox_messages",
+    "idempotency_keys",
+    "execution_stats_dirty",
+    "execution_stats_hourly",
+    "usage_deltas",
+    "incident_counters",
+}
+DATE_COLUMNS = ("created_at", "ingested_at")
 
 
 async def take(url: str, until: datetime | None) -> dict[str, dict[str, Any]]:
@@ -40,34 +49,36 @@ async def take(url: str, until: datetime | None) -> dict[str, dict[str, Any]]:
                 await connection.execute(
                     text(
                         "select c.relname,"
-                        " exists (select 1 from pg_attribute a where a.attrelid = c.oid"
-                        "   and a.attname = 'created_at' and not a.attisdropped) as dated,"
+                        " (select a.attname::text from pg_attribute a where a.attrelid = c.oid"
+                        "   and a.attname = any(:dates) and not a.attisdropped"
+                        "   order by array_position(:dates, a.attname::text) limit 1) as dated,"
                         " exists (select 1 from pg_attribute a where a.attrelid = c.oid"
                         "   and a.attname = 'id' and not a.attisdropped) as keyed"
                         " from pg_class c where c.relnamespace = 'doctor'::regnamespace"
                         " and c.relkind in ('r', 'p') and not c.relispartition order by 1"
-                    )
+                    ),
+                    {"dates": list(DATE_COLUMNS)},
                 )
             ).all()
             for table in tables:
-                where = "where created_at <= :until" if until and table.dated else ""
+                if table.relname in VOLATILE or (until and not table.dated):
+                    continue
+                where = f"where {table.dated} <= :until" if until else ""
                 order = "id" if table.keyed else "t::text"
                 params = {"until": until} if where else {}
                 count = await connection.scalar(
                     text(f"select count(*) from doctor.{table.relname} t {where}"),
                     params,
                 )
-                sample = None
-                if table.relname not in VOLATILE:
-                    sample = await connection.scalar(
-                        text(
-                            "select md5(coalesce(string_agg(x, ',' order by n), '')) from ("
-                            f" select t::text as x, row_number() over (order by {order}) as n"
-                            f" from doctor.{table.relname} t {where}"
-                            f" order by {order} limit {SAMPLE}) s"
-                        ),
-                        params,
-                    )
+                sample = await connection.scalar(
+                    text(
+                        "select md5(coalesce(string_agg(x, ',' order by n), '')) from ("
+                        f" select t::text as x, row_number() over (order by {order}) as n"
+                        f" from doctor.{table.relname} t {where}"
+                        f" order by {order} limit {SAMPLE}) s"
+                    ),
+                    params,
+                )
                 found[table.relname] = {"count": int(count or 0), "sample_md5": sample}
     finally:
         await engine.dispose()

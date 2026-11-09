@@ -96,4 +96,8 @@ async def test_impressao_digital_do_banco_e_estavel() -> None:
     second = await db_fingerprint.take(URL, until)
     assert "events" in first
     assert "incidents" in first
+    # Filas e agregados ficam fora; tabela sem data também, com --until.
+    assert "outbox_messages" not in first
+    assert "usage_deltas" not in first
+    assert "events" in await db_fingerprint.take(URL, None)
     assert db_fingerprint.compare(first, second) == []

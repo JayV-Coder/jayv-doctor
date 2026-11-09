@@ -8,7 +8,7 @@ Runbook do ticket #33. Vale para o Doctor no projeto Supabase compartilhado com 
 |---|---|---|
 | **RPO do banco** | ≤ 2 min | PITR do Supabase (WAL contínuo) |
 | **RTO do banco** | ≤ 4 h | restaurar em projeto novo + copiar o schema `doctor` |
-| **RPO dos arquivos** | ≤ 24 h | espelho diário no GCS (`<projeto>-storage-backup`, 04:00 BRT) |
+| **RPO dos arquivos** | ≤ 1 h | espelho no GCS (`<projeto>-storage-backup`), de hora em hora |
 | **RTO dos arquivos** | ≤ 2 h | cópia de volta do GCS para os buckets `doctor-*` |
 
 Os valores medidos no drill ficam no [registro](#registro-dos-drills).
@@ -32,7 +32,7 @@ Os valores medidos no drill ficam no [registro](#registro-dos-drills).
    SUPABASE_DB_URL=$RESTAURADO uv run python scripts/db_fingerprint.py take --until "$T" > restaurado.json
    uv run python scripts/db_fingerprint.py compare origem.json restaurado.json   # "íntegro" ou as diferenças
    ```
-   A comparação usa a contagem de cada tabela do schema `doctor` (até `T`, pelas que têm `created_at`) e o md5 de uma amostra de 1.000 linhas. Filas e agregados que mudam sozinhos (outbox, idempotência, deltas de uso) entram só pela contagem. Uma linha alterada depois de `T` aparece como "amostra diferente": confira se a alteração é posterior ao ponto antes de tratar como falha.
+   A comparação usa a contagem de cada tabela do schema `doctor` até `T` (por `created_at`, ou `ingested_at` nos Eventos) e o md5 de uma amostra de 1.000 linhas. Ficam fora as filas e os agregados cujas linhas saem depois de criadas (outbox, idempotência, deltas de uso, agregado do Dashboard, contadores) e, com `--until`, as tabelas sem coluna de data. Uma linha alterada depois de `T` aparece como "amostra diferente": confira se a alteração é posterior ao ponto antes de tratar como falha.
 5. **Arquivos:** copie uma pasta de Organização do bucket de backup para um bucket temporário e confira o sha256 de uma amostra contra o original (`gcloud storage hash`).
 6. **Meça e registre** RTO (do passo 3 até o passo 4 íntegro) e RPO (`T` menos o último dado presente no restaurado) no registro abaixo.
 7. **Apague o projeto restaurado** e o bucket temporário: eles têm dados de clientes.

@@ -465,7 +465,7 @@ resource "google_cloud_scheduler_job" "outbox_relay" {
   depends_on = [module.project]
 }
 
-# Backup dos arquivos do Storage (#33): espelho diário dos buckets do Doctor, no Brasil. Com
+# Backup dos arquivos do Storage (#33): espelho dos buckets do Doctor, no Brasil. Com
 # versionamento, o que a origem apaga (retenção, LGPD, exclusão total) sai do espelho e fica 7
 # dias como versão antiga; depois some de vez. Sem soft delete do GCS, para não estender isso.
 resource "google_storage_bucket" "storage_backup" {
@@ -505,12 +505,14 @@ resource "google_storage_bucket_iam_member" "storage_backup_writer" {
 }
 
 resource "google_cloud_scheduler_job" "storage_backup" {
-  project          = var.project_id
-  region           = var.region
-  name             = "${local.name_prefix}-storage-backup"
-  schedule         = "0 7 * * *"
+  project = var.project_id
+  region  = var.region
+  name    = "${local.name_prefix}-storage-backup"
+  # De hora em hora (RPO dos arquivos ≤ 1 h); cada rodada cabe no timeout do worker e a que
+  # não termina continua na seguinte.
+  schedule         = "20 * * * *"
   time_zone        = "Etc/UTC"
-  attempt_deadline = "1800s"
+  attempt_deadline = "600s"
 
   http_target {
     http_method = "POST"

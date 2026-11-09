@@ -1,6 +1,9 @@
 // API de leitura (#33): 50 Usuários simultâneos no Dashboard e nas listas. Meta: p95 < 500 ms e
-// 5xx abaixo de 0,1%. O rate limit por Usuário (RATE_LIMIT_PER_MINUTE) não é o que se mede:
-// em staging, suba o limite na rodada ou passe vários JWTs (USER_JWTS, separados por vírgula).
+// 5xx abaixo de 0,1%. Os limites não são o que se mede, e são dois: o da API, por Usuário
+// (RATE_LIMIT_PER_MINUTE; passe vários JWTs em USER_JWTS ou suba o limite na rodada), e o do
+// Cloud Armor, por IP (`rate_limit_per_minute` da stack, 300/min). 50 VUs de uma máquina fazem
+// ~3.000 requisições/min: em staging, suba o do Cloud Armor só durante a rodada ou distribua o
+// k6 por várias máquinas.
 //
 //   USER_JWTS=jwt1,jwt2 API_URL=https://api… k6 run tests/load/read.js
 import http from "k6/http";

@@ -48,8 +48,10 @@ load\:read: ## carga da API de leitura: 50 Usuários; USER_JWTS, API_URL
 load\:diagnoses: ## 100 Diagnósticos em 1 h; USER_JWT, INCIDENT_IDS, API_URL
 	k6 run tests/load/diagnoses.js
 
-load\:report: ## confere no banco a rodada (zero perda, lag p95, Diagnósticos); RUN_ID, SINCE, SUPABASE_DB_URL
-	uv run python scripts/load_report.py --run $$RUN_ID --since $$SINCE --ingestion ingestion-summary.json --read read-summary.json
+load\:report: ## confere no banco a rodada (zero perda, lag p95, Diagnósticos); RUN_ID, SINCE, INTEGRATION_ID, SUPABASE_DB_URL
+	uv run python scripts/load_report.py --run $$RUN_ID --since $$SINCE --integration $$INTEGRATION_ID \
+	  $$([ -f ingestion-summary.json ] && echo --ingestion ingestion-summary.json) \
+	  $$([ -f read-summary.json ] && echo --read read-summary.json)
 
 contracts: ## regenera modelos Pydantic e tipos TS a partir de packages/contracts/schemas
 	pnpm exec prettier --write packages/contracts/schemas

@@ -4,6 +4,7 @@ certificado do registro, apresenta-o também no TLS (mTLS no balanceador)."""
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -12,7 +13,15 @@ from aid_agent.identity import CERT_FILE, KEY_FILE, Credentials, signature_heade
 
 
 class PlatformError(Exception):
-    """A plataforma recusou (4xx): repetir igual não adianta."""
+    """A plataforma recusou o agente (revogado, segredo ou assinatura inválidos): parar."""
+
+
+class BatchRejectedError(Exception):
+    """A plataforma recusou o lote inteiro (413, 422): reenviar igual não adianta."""
+
+    def __init__(self, status: int) -> None:
+        super().__init__(f"lote recusado: HTTP {status}")
+        self.status = status
 
 
 class Platform:
@@ -39,30 +48,32 @@ class Platform:
         self, method: str, path: str, body: Any = None, params: dict[str, Any] | None = None
     ) -> httpx.Response:
         content = b"" if body is None else json.dumps(body).encode()
-        headers = signature_headers(self.key, self.credentials.secret, method, path, content)
+        # A assinatura cobre caminho e query, exatamente como vão na URL.
+        target = f"{path}?{urlencode(params)}" if params else path
+        headers = signature_headers(self.key, self.credentials.secret, method, target, content)
         if body is not None:
             headers["content-type"] = "application/json"
-        response = self.http.request(method, path, content=content, headers=headers, params=params)
+        response = self.http.request(method, target, content=content, headers=headers)
         if response.status_code in (401, 403):
             raise PlatformError("a plataforma recusou o agente (revogado ou assinatura inválida)")
         return response
 
-    def config(self, known_version: int) -> dict[str, Any] | None:
+    def config(self, known_version: int, version: str) -> dict[str, Any] | None:
+        """Long-poll da config; a chamada é também o sinal de vida, com a versão do agente."""
         response = self.request(
-            "GET", "/api/v1/agent/config", params={"known_version": known_version}
+            "GET",
+            "/api/v1/agent/config",
+            params={"known_version": known_version, "version": version},
         )
         if response.status_code == 304:
             return None
         response.raise_for_status()
         return dict(response.json())
 
-    def heartbeat(self, version: str) -> None:
-        self.request("POST", "/api/v1/agent/heartbeat", {"version": version}).raise_for_status()
-
     def send(self, events: list[dict[str, Any]]) -> dict[str, Any]:
         response = self.request("POST", "/api/v1/agent/events", {"events": events})
         if 400 <= response.status_code < 500 and response.status_code != 429:
-            raise PlatformError(f"lote recusado: HTTP {response.status_code}")
+            raise BatchRejectedError(response.status_code)
         response.raise_for_status()
         return dict(response.json())
 

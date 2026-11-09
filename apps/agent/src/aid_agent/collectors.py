@@ -7,41 +7,35 @@ rede do cliente. A Referência de negócio vira HMAC na plataforma, que tem a ch
 
 import hashlib
 import json
+import os
+from collections import Counter
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo
 
 from aid_connectors.base import stable_uuid7
 from aid_contracts.events import EventValidationError, validate_event
-from aid_ingestion.cleaning import fit_contract
+from aid_ingestion.cleaning import EventSanitizer
 from aid_ingestion.mapping import RejectedLineError, to_event
 from aid_ingestion.parsing import read_records
-from aid_security import Sanitizer
 
 from aid_agent.buffer import Buffer
 
 SOURCE = {"provider": "sap", "service": "agent"}
-UNTOUCHED = {"schema_version", "event_id", "integration_id", "timestamp", "severity"}
-IDS = ("execution_id", "trace_id")
-CONTENT = Sanitizer()
-IDENTIFIERS = Sanitizer(exclude_kinds=("cartao",))
 IDOC_ERRORS = {"51", "56", "63", "65", "66", "69"}
+# A mesma Sanitização da plataforma, sem a chave das Referências (a plataforma sanitiza de novo).
+LOCAL = EventSanitizer()
 
 
 def sanitize(event: dict[str, Any]) -> dict[str, Any]:
-    """Sanitização local com os mesmos detectores e a mesma divisão da plataforma
-    (`aid_ingestion.cleaning`), sem a chave das Referências. A plataforma sanitiza de novo."""
-    content = {
-        k: v for k, v in event.items() if k not in UNTOUCHED and k not in IDS and k != "source"
-    }
-    source = dict(event.get("source") or {})
-    ids: dict[str, Any] = {k: event[k] for k in IDS if k in event}
-    ids["source"] = {k: v for k, v in source.items() if k != "provider"}
-    cleaned_content, _ = CONTENT.sanitize(content)
-    cleaned_ids, _ = IDENTIFIERS.sanitize(ids)
-    cleaned_source = {"provider": source.get("provider"), **cleaned_ids.pop("source")}
-    return fit_contract({**event, **cleaned_content, **cleaned_ids, "source": cleaned_source})
+    return LOCAL(event)[0]
+
+
+def sap_zone() -> ZoneInfo:
+    """Fuso do servidor SAP: datas e horas das tabelas e mensagens vêm no horário local dele."""
+    return ZoneInfo(os.environ.get("AID_SAP_TIMEZONE", "UTC"))
 
 
 def stable_event_id(key: str, at: str) -> str:
@@ -60,9 +54,10 @@ def enqueue(buffer: Buffer, events: list[dict[str, Any]]) -> int:
 
 
 class DirectoryCollector:
-    """Arquivos de exportação (SM58, SLG1, status de IDoc, NDJSON no contrato) numa pasta. Lê só
-    o que mudou desde a última rodada; um arquivo regravado é lido de novo, e os ids estáveis
-    impedem a duplicação."""
+    """Arquivos de exportação (SM58, SLG1, status de IDoc, NDJSON no contrato) numa pasta. Um
+    arquivo novo ou mudado (tamanho ou data) é lido inteiro. O `event_id` vem do nome do arquivo
+    e do conteúdo do registro, não da linha: regravar, acrescentar ou reordenar não duplica, e a
+    fila não enfileira de novo o que já foi enviado."""
 
     def __init__(self, spec: Mapping[str, Any], integration_id: str, buffer: Buffer) -> None:
         self.folder = Path(str(spec["path"]))
@@ -80,14 +75,12 @@ class DirectoryCollector:
                 continue
             stat = file.stat()
             key = f"dir:{file}"
-            mark = json.loads(self.buffer.checkpoint(key) or "{}")
-            if mark.get("size") == stat.st_size and mark.get("mtime") == stat.st_mtime:
+            mark = {"size": stat.st_size, "mtime": stat.st_mtime}
+            if json.loads(self.buffer.checkpoint(key) or "{}") == mark:
                 continue
-            done = int(mark.get("lines", 0)) if stat.st_size >= int(mark.get("size", 0)) else 0
-            events, last = [], done
+            events, seen = [], Counter[str]()
             for line in read_records(file.read_bytes(), self.format):
-                last = max(last, line.number)
-                if line.number <= done or line.record is None:
+                if line.record is None:
                     continue
                 try:
                     mapped = to_event(line.record, self.integration_id, SOURCE)
@@ -95,15 +88,15 @@ class DirectoryCollector:
                     continue
                 digest = hashlib.sha256(
                     json.dumps(line.record, sort_keys=True, default=str).encode()
-                ).hexdigest()[:16]
+                ).hexdigest()[:24]
+                # Registros idênticos no mesmo arquivo continuam distintos pela ocorrência.
+                seen[digest] += 1
                 mapped["event_id"] = stable_event_id(
-                    f"{file.name}:{line.number}:{digest}", mapped["timestamp"]
+                    f"{file.name}:{digest}:{seen[digest]}", mapped["timestamp"]
                 )
                 events.append(sanitize(mapped))
             added += enqueue(self.buffer, events)
-            self.buffer.save_checkpoint(
-                key, json.dumps({"size": stat.st_size, "mtime": stat.st_mtime, "lines": last})
-            )
+            self.buffer.save_checkpoint(key, json.dumps(mark))
         return added
 
 
@@ -112,12 +105,21 @@ class RfcConnection(Protocol):
 
 
 def sap_moment(date: str, time: str) -> str:
-    return datetime.strptime(f"{date}{time}", "%Y%m%d%H%M%S").replace(tzinfo=UTC).isoformat()
+    local = datetime.strptime(f"{date}{time}", "%Y%m%d%H%M%S").replace(tzinfo=sap_zone())
+    return local.astimezone(UTC).isoformat()
+
+
+# Páginas por rodada: o resto fica para a próxima, a partir do cursor salvo.
+MAX_PAGES = 20
 
 
 class RfcTableCollector:
-    """Tabelas de IDoc via RFC_READ_TABLE, só da allowlist (EDIDC, EDIDS). O filtro é montado só
-    com a data do Checkpoint (dígitos), nunca com texto da config."""
+    """Tabelas de IDoc via RFC_READ_TABLE, só da allowlist (EDIDC, EDIDS).
+
+    O filtro usa só a marca de data e hora salva (dígitos), nunca texto da config: lê o que
+    mudou desde a marca, em páginas de `max_rows` (`ROWSKIPS`). Se a rodada não chega ao fim, o
+    cursor (marca e páginas lidas) fica salvo e a próxima continua dele; a marca só avança quando
+    a leitura termina. Linhas relidas não duplicam: a fila ignora o que já foi enviado."""
 
     def __init__(
         self,
@@ -132,37 +134,59 @@ class RfcTableCollector:
         self.integration_id = integration_id
         self.buffer = buffer
         self.connect = connect
+        self.date_field, self.time_field = (
+            ("LOGDAT", "LOGTIM") if self.table == "EDIDS" else ("UPDDAT", "UPDTIM")
+        )
+
+    def cursor(self) -> tuple[str, int]:
+        found = json.loads(self.buffer.checkpoint(f"rfc_table:{self.table}") or "{}")
+        since = str(found.get("since", ""))
+        if not since.isdigit() or len(since) != 14:
+            since = datetime.now(sap_zone()).strftime("%Y%m%d000000")
+        return since, int(found.get("skip", 0))
+
+    def options(self, since: str) -> list[dict[str, str]]:
+        day, time = since[:8], since[8:]
+        # Uma condição por linha: cada linha de OPTIONS tem até 72 caracteres.
+        return [
+            {"TEXT": f"{self.date_field} > '{day}'"},
+            {"TEXT": f"OR ( {self.date_field} = '{day}'"},
+            {"TEXT": f"AND {self.time_field} >= '{time}' )"},
+        ]
 
     def collect(self) -> int:
-        key = f"rfc_table:{self.table}"
-        since = self.buffer.checkpoint(key) or datetime.now(UTC).strftime("%Y%m%d")
-        if not since.isdigit() or len(since) != 8:
-            since = datetime.now(UTC).strftime("%Y%m%d")
-        date_field = "LOGDAT" if self.table == "EDIDS" else "UPDDAT"
-        found = self.connect().call(
-            "RFC_READ_TABLE",
-            QUERY_TABLE=self.table,
-            DELIMITER="|",
-            ROWCOUNT=self.max_rows,
-            FIELDS=[{"FIELDNAME": field} for field in self.fields],
-            OPTIONS=[{"TEXT": f"{date_field} >= '{since}'"}],
-        )
-        events, newest = [], since
-        for row in found.get("DATA", []):
-            values = dict(
-                zip(
-                    self.fields,
-                    (part.strip() for part in str(row.get("WA", "")).split("|")),
-                    strict=False,
-                )
+        since, skip = self.cursor()
+        connection = self.connect()
+        added, newest, finished = 0, since, False
+        for _ in range(MAX_PAGES):
+            found = connection.call(
+                "RFC_READ_TABLE",
+                QUERY_TABLE=self.table,
+                DELIMITER="|",
+                ROWCOUNT=self.max_rows,
+                ROWSKIPS=skip,
+                FIELDS=[{"FIELDNAME": field} for field in self.fields],
+                OPTIONS=self.options(since),
             )
-            event = self.to_event(values)
-            if event is None:
-                continue
-            events.append(sanitize(event))
-            newest = max(newest, values.get(date_field, since))
-        added = enqueue(self.buffer, events)
-        self.buffer.save_checkpoint(key, newest)
+            rows = list(found.get("DATA", []))
+            events = []
+            for row in rows:
+                parts = (part.strip() for part in str(row.get("WA", "")).split("|"))
+                values = dict(zip(self.fields, parts, strict=False))
+                event = self.to_event(values)
+                if event is None:
+                    continue
+                events.append(sanitize(event))
+                stamp = values.get(self.date_field, "") + values.get(self.time_field, "")
+                if stamp.isdigit() and len(stamp) == 14:
+                    newest = max(newest, stamp)
+            added += enqueue(self.buffer, events)
+            skip += len(rows)
+            if len(rows) < self.max_rows:
+                finished = True
+                break
+        cursor = {"since": newest, "skip": 0} if finished else {"since": since, "skip": skip}
+        self.buffer.save_checkpoint(f"rfc_table:{self.table}", json.dumps(cursor))
         return added
 
     def to_event(self, row: Mapping[str, str]) -> dict[str, Any] | None:
@@ -225,13 +249,13 @@ class RfcFunctionCollector:
 
     def collect(self) -> int:
         key = f"rfc_function:{self.name}"
-        since = self.buffer.checkpoint(key) or datetime.now(UTC).strftime("%Y%m%d000000")
+        since = self.buffer.checkpoint(key) or datetime.now(sap_zone()).strftime("%Y%m%d000000")
         found = self.connect().call(self.name, IV_SINCE=since)
         events, newest = [], since
         for row in found.get("ET_MESSAGES", []):
             stamp = str(row.get("TIMESTAMP", ""))
             try:
-                at = datetime.strptime(stamp, "%Y%m%d%H%M%S").replace(tzinfo=UTC).isoformat()
+                at = sap_moment(stamp[:8], stamp[8:])
             except ValueError:
                 continue
             kind = str(row.get("TYPE", "I")).upper()[:1]

@@ -1625,6 +1625,7 @@
       "get": {
         "tags": ["agent"],
         "summary": "Config",
+        "description": "Long-poll da config, que também é o sinal de vida do agente (`version` na query).",
         "operationId": "config_api_v1_agent_config_get",
         "parameters": [
           {
@@ -1635,6 +1636,16 @@
               "type": "integer",
               "default": 0,
               "title": "Known Version"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Version"
             }
           },
           {
@@ -1699,88 +1710,6 @@
           },
           "304": {
             "description": "sem mudança"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/agent/heartbeat": {
-      "post": {
-        "tags": ["agent"],
-        "summary": "Heartbeat",
-        "operationId": "heartbeat_api_v1_agent_heartbeat_post",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          },
-          {
-            "name": "x-aid-timestamp",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Aid-Timestamp"
-            }
-          },
-          {
-            "name": "x-aid-signature",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Aid-Signature"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AgentHeartbeat"
-              }
-            }
-          }
-        },
-        "responses": {
-          "204": {
-            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -1945,6 +1874,24 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
         "requestBody": {
@@ -2011,6 +1958,24 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
             }
           }
         ],
@@ -2083,6 +2048,24 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
           }
         ],
         "responses": {
@@ -2132,6 +2115,24 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
             }
           }
         ],
@@ -5463,20 +5464,6 @@
         "type": "object",
         "required": ["config"],
         "title": "AgentConfigChange"
-      },
-      "AgentHeartbeat": {
-        "properties": {
-          "version": {
-            "type": "string",
-            "maxLength": 40,
-            "minLength": 1,
-            "title": "Version"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": ["version"],
-        "title": "AgentHeartbeat"
       },
       "AgentRegistered": {
         "properties": {

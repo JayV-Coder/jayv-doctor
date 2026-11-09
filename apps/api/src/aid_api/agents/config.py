@@ -39,6 +39,11 @@ TABLES: dict[str, tuple[str, ...]] = {
         "STATXT",
     ),
 }
+# Campos sem os quais o agente não monta o Evento (id, status e instante).
+REQUIRED: dict[str, frozenset[str]] = {
+    "EDIDC": frozenset({"DOCNUM", "STATUS", "UPDDAT", "UPDTIM"}),
+    "EDIDS": frozenset({"DOCNUM", "STATUS", "COUNTR", "LOGDAT", "LOGTIM"}),
+}
 PATTERN = re.compile(r"^[A-Za-z0-9_.*?-]{1,64}$")
 FUNCTION = re.compile(r"^Z_AID_[A-Z0-9_]{1,24}$")
 MAX_COLLECTIONS = 10
@@ -78,11 +83,16 @@ def validate(config: Mapping[str, Any]) -> dict[str, Any]:
             )
         elif kind == "rfc_table":
             table = str(item.get("table", ""))
-            fields = item.get("fields") or list(TABLES.get(table, ()))
-            if table not in TABLES or not set(fields) <= set(TABLES[table]):
-                raise invalid(
-                    f"collections[{index}]: tabela e campos da allowlist ({', '.join(TABLES)})"
-                )
+            if table not in TABLES:
+                raise invalid(f"collections[{index}].table: só {', '.join(TABLES)}")
+            fields = item.get("fields") or list(TABLES[table])
+            if not isinstance(fields, list) or not all(isinstance(f, str) for f in fields):
+                raise invalid(f"collections[{index}].fields: lista de nomes de campo")
+            if not set(fields) <= set(TABLES[table]):
+                raise invalid(f"collections[{index}].fields: só campos da allowlist de {table}")
+            if not REQUIRED[table] <= set(fields):
+                needed = ", ".join(sorted(REQUIRED[table]))
+                raise invalid(f"collections[{index}].fields: inclua {needed}")
             rows = item.get("max_rows", 1000)
             if not isinstance(rows, int) or not 1 <= rows <= 5000:
                 raise invalid(f"collections[{index}].max_rows: de 1 a 5000")

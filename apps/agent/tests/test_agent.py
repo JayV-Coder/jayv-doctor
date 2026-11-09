@@ -14,7 +14,7 @@ from aid_agent import main as agent_main
 from aid_agent.buffer import Buffer
 from aid_agent.client import Platform, PlatformError
 from aid_agent.collectors import DirectoryCollector, RfcFunctionCollector, RfcTableCollector
-from aid_agent.identity import Credentials, load_or_create_key, signature_headers
+from aid_agent.identity import Credentials, load_key, signature_headers
 from aid_agent.updater import apply, signed_payload
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -38,7 +38,13 @@ class FakePlatform:
         assert request.headers["x-aid-signature"]
         if self.revoked:
             return httpx.Response(401, json={"code": "invalid_agent"})
+        if request.url.path == "/api/v1/agent/config":
+            # A query vai assinada junto com o caminho.
+            assert request.url.query
+            return httpx.Response(304)
         if request.url.path == "/api/v1/agent/events":
+            if len(request.content) > 1_000_000:
+                return httpx.Response(413)
             self.posts += 1
             events = json.loads(request.content)["events"]
             for event in events:
@@ -50,7 +56,7 @@ class FakePlatform:
 def platform_for(fake: FakePlatform, tmp_path: Path) -> Platform:
     credentials = Credentials("https://api.test", "a-1", "aid_agt_x")
     return Platform(
-        credentials, load_or_create_key(tmp_path), transport=httpx.MockTransport(fake.handler)
+        credentials, Ed25519PrivateKey.generate(), transport=httpx.MockTransport(fake.handler)
     )
 
 
@@ -105,7 +111,7 @@ def test_resposta_perdida_reenvia_o_mesmo_event_id(tmp_path: Path) -> None:
 
     credentials = Credentials("https://api.test", "a-1", "aid_agt_x")
     platform = Platform(
-        credentials, load_or_create_key(tmp_path), transport=httpx.MockTransport(flaky)
+        credentials, Ed25519PrivateKey.generate(), transport=httpx.MockTransport(flaky)
     )
     buffer = Buffer(tmp_path / "b.sqlite3")
     folder = tmp_path / "exports"
@@ -131,10 +137,10 @@ def test_sanitiza_localmente_antes_de_enfileirar(tmp_path: Path) -> None:
 def test_revogado_para_na_proxima_chamada(tmp_path: Path) -> None:
     fake = FakePlatform()
     platform = platform_for(fake, tmp_path)
-    platform.heartbeat("0.1.0")
+    assert platform.config(0, "0.1.0") is None
     fake.revoked = True
     with pytest.raises(PlatformError):
-        platform.heartbeat("0.1.0")
+        platform.config(0, "0.1.0")
 
 
 class FakeRfc:
@@ -180,7 +186,11 @@ def test_rfc_le_so_a_tabela_e_os_campos_autorizados(tmp_path: Path) -> None:
     assert added == 2
     function, parameters = rfc.calls[0]
     assert (function, parameters["QUERY_TABLE"]) == ("RFC_READ_TABLE", "EDIDS")
-    assert parameters["OPTIONS"][0]["TEXT"].startswith("LOGDAT >= '")
+    assert [line["TEXT"].split(" '")[0] for line in parameters["OPTIONS"]] == [
+        "LOGDAT >",
+        "OR ( LOGDAT =",
+        "AND LOGTIM >=",
+    ]
     events = {event["execution_id"]: event for event in buffer.take(10)}
     assert events["0000000000123456"]["error"]["code"] == "IDOC 51"
     assert "error" not in events["0000000000123457"]
@@ -253,7 +263,7 @@ def test_atualizacao_so_com_assinatura_e_sha256_validos(tmp_path: Path) -> None:
 def test_assinatura_bate_com_a_da_api(tmp_path: Path) -> None:
     from aid_api.ingestion.agent import verify
 
-    key = load_or_create_key(tmp_path)
+    key = Ed25519PrivateKey.generate()
     raw = key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     headers = signature_headers(
         key, "aid_agt_x", "POST", "/api/v1/agent/events", b"{}", 1_800_000_000
@@ -267,7 +277,6 @@ def test_assinatura_bate_com_a_da_api(tmp_path: Path) -> None:
         b"{}",
         1_800_000_000,
     )
-    assert oct((tmp_path / "agent.key").stat().st_mode & 0o777) == "0o600"
 
 
 def test_nenhuma_porta_de_entrada() -> None:
@@ -294,3 +303,128 @@ def test_nenhuma_porta_de_entrada() -> None:
             for alias in node.names
         }
         assert not names & forbidden, (file.name, names & forbidden)
+
+
+def test_registro_novo_troca_a_chave_e_token_errado_preserva_a_atual(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AID_AGENT_STATE", str(tmp_path))
+    answers = iter([{"agent_id": "a-1", "secret": "aid_agt_1", "certificate": None}])
+
+    def fake_register(_api: str, token: str, key: str, _version: str) -> dict[str, Any]:
+        if token == "errado":  # noqa: S105 - token de teste
+            raise PlatformError("token de registro inválido ou vencido")
+        return (
+            next(answers)
+            if token == "primeiro"  # noqa: S105 - token de teste
+            else {"agent_id": "a-1", "secret": "aid_agt_2", "certificate": None}
+        )
+
+    monkeypatch.setattr(agent_main, "register", fake_register)
+    api = ["--api", "https://api.test"]
+    assert agent_main.main(["register", *api, "--token", "primeiro"]) == 0
+    first = (tmp_path / "agent.key").read_bytes()
+    assert oct((tmp_path / "agent.key").stat().st_mode & 0o777) == "0o600"
+    with pytest.raises(PlatformError):
+        agent_main.main(["register", *api, "--token", "errado"])
+    assert (tmp_path / "agent.key").read_bytes() == first
+    # Rotação: o mesmo volume, chave nova.
+    assert agent_main.main(["register", *api, "--token", "segundo"]) == 0
+    assert (tmp_path / "agent.key").read_bytes() != first
+    assert load_key(tmp_path) is not None
+
+
+def test_lote_acima_de_1_mb_e_dividido_e_recusa_nao_trava_a_fila(tmp_path: Path) -> None:
+    fake = FakePlatform()
+    platform = platform_for(fake, tmp_path)
+    buffer = Buffer(tmp_path / "b.sqlite3")
+    big = [
+        {
+            "event_id": f"0192e1c4-7b2c-7d4e-8f00-{n:012d}",
+            "integration_id": INTEGRATION,
+            "error": {"message": "x" * 8000},
+        }
+        for n in range(500)
+    ]
+    buffer.enqueue(big)
+    assert agent_main.flush(platform, buffer) == 500
+    assert (len(fake.received), buffer.size()) == (500, 0)
+    assert max(len(json.dumps(batch)) for batch in agent_main.batches(big)) < 1_000_000
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(422, json={"code": "validation_error"})
+
+    credentials = Credentials("https://api.test", "a-1", "aid_agt_x")
+    refusing = Platform(
+        credentials, Ed25519PrivateKey.generate(), transport=httpx.MockTransport(refuse)
+    )
+    buffer.enqueue(
+        [{"event_id": "0192e1c4-7b2c-7d4e-8f00-999999999999", "integration_id": INTEGRATION}]
+    )
+    assert agent_main.flush(refusing, buffer) == 0
+    assert (buffer.size(), buffer.rejected()) == (0, 1)
+
+
+def test_arquivo_regravado_e_lido_inteiro_sem_reenviar_o_que_ja_foi(tmp_path: Path) -> None:
+    folder = tmp_path / "exports"
+    folder.mkdir()
+    buffer = Buffer(tmp_path / "b.sqlite3")
+    collector = DirectoryCollector({"path": str(folder)}, INTEGRATION, buffer)
+    export(folder, "sm58.csv", 100)
+    assert collector.collect() == 100
+    buffer.ack([event["event_id"] for event in buffer.take(500)])
+    # Regravado no lugar com outro conteúdo, maior: tudo é novo.
+    export(folder, "sm58.csv", 150, start=1000)
+    assert collector.collect() == 150
+    buffer.ack([event["event_id"] for event in buffer.take(500)])
+    # Regravado com os mesmos 150 e mais 10 no fim: só os 10.
+    export(folder, "sm58.csv", 160, start=1000)
+    assert collector.collect() == 10
+
+
+class PagedRfc:
+    """RFC_READ_TABLE com ROWSKIPS sobre um conjunto fixo de linhas."""
+
+    def __init__(self, rows: list[str]) -> None:
+        self.rows = rows
+        self.calls = 0
+
+    def call(self, function: str, **parameters: Any) -> dict[str, Any]:
+        self.calls += 1
+        start = parameters["ROWSKIPS"]
+        page = self.rows[start : start + parameters["ROWCOUNT"]]
+        return {"DATA": [{"WA": row} for row in page]}
+
+
+def test_rfc_pagina_e_continua_do_cursor_sem_perder_linhas(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from aid_agent import collectors
+
+    monkeypatch.setattr(collectors, "MAX_PAGES", 2)
+    rows = [
+        f"{n:016d}|20261101|10{n // 60 % 60:02d}{n % 60:02d}|000001|51|E0|E0|101|Erro {n}"
+        for n in range(3000)
+    ]
+    rfc = PagedRfc(rows)
+    buffer = Buffer(tmp_path / "b.sqlite3")
+    fields = [
+        "DOCNUM",
+        "LOGDAT",
+        "LOGTIM",
+        "COUNTR",
+        "STATUS",
+        "STAMQU",
+        "STAMID",
+        "STAMNO",
+        "STATXT",
+    ]
+    spec = {"table": "EDIDS", "fields": fields, "max_rows": 1000}
+    buffer.save_checkpoint("rfc_table:EDIDS", json.dumps({"since": "20261101000000"}))
+    collector = RfcTableCollector(spec, INTEGRATION, buffer, lambda: rfc)
+    assert collector.collect() == 2000
+    assert json.loads(buffer.checkpoint("rfc_table:EDIDS") or "{}")["skip"] == 2000
+    assert collector.collect() == 1000
+    assert buffer.size() == 3000
+    cursor = json.loads(buffer.checkpoint("rfc_table:EDIDS") or "{}")
+    assert cursor == {"since": "20261101104959", "skip": 0}

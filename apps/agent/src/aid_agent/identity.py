@@ -25,23 +25,27 @@ def write_private(path: Path, content: bytes) -> None:
         file.write(content)
 
 
-def load_or_create_key(state: Path) -> Ed25519PrivateKey:
+def load_key(state: Path) -> Ed25519PrivateKey:
     path = state / KEY_FILE
-    if path.exists():
-        key = serialization.load_pem_private_key(path.read_bytes(), password=None)
-        if not isinstance(key, Ed25519PrivateKey):
-            raise ValueError(f"{path} não é uma chave Ed25519")
-        return key
-    key = Ed25519PrivateKey.generate()
-    write_private(
-        path,
-        key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.PKCS8,
-            serialization.NoEncryption(),
-        ),
-    )
+    key = serialization.load_pem_private_key(path.read_bytes(), password=None)
+    if not isinstance(key, Ed25519PrivateKey):
+        raise ValueError(f"{path} não é uma chave Ed25519")
     return key
+
+
+def save_registration(
+    state: Path, key: Ed25519PrivateKey, credentials: "Credentials", certificate: str | None
+) -> None:
+    """Grava a chave e a identidade só depois do registro aceito: um token errado não estraga
+    a identidade que já funciona. Cada registro (inclusive a rotação) tem chave nova."""
+    pem = key.private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    )
+    write_private(state / KEY_FILE, pem)
+    write_private(state / STATE_FILE, json.dumps(credentials.__dict__).encode())
+    (state / CERT_FILE).unlink(missing_ok=True)
+    if certificate:
+        write_private(state / CERT_FILE, certificate.encode())
 
 
 def public_key(key: Ed25519PrivateKey) -> str:
@@ -54,12 +58,6 @@ class Credentials:
     api_url: str
     agent_id: str
     secret: str
-
-
-def save_credentials(state: Path, credentials: Credentials, certificate: str | None) -> None:
-    write_private(state / STATE_FILE, json.dumps(credentials.__dict__).encode())
-    if certificate:
-        write_private(state / CERT_FILE, certificate.encode())
 
 
 def load_credentials(state: Path) -> Credentials | None:

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import type { RegistrationToken } from "@/lib/api";
 import { createAgent } from "../actions";
 import { InstallCommand } from "../install-command";
@@ -12,6 +12,7 @@ export function NewAgentForm({ integrations }: { integrations: Option[] }) {
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<RegistrationToken | null>(null);
   const [busy, startTransition] = useTransition();
+  const key = useRef(crypto.randomUUID());
 
   if (token) {
     return (
@@ -28,7 +29,8 @@ export function NewAgentForm({ integrations }: { integrations: Option[] }) {
       className="stack"
       action={(form) => {
         startTransition(async () => {
-          const issued = await createAgent(form);
+          const issued = await createAgent(form, key.current);
+          if (!issued.ok && !issued.offline) key.current = crypto.randomUUID();
           setError(issued.ok ? null : issued.message);
           if (issued.ok) setToken(issued.token);
         });

@@ -3,7 +3,7 @@
 O agente se apresenta com o segredo dele (`Authorization: Bearer aid_agt_…`, só o hash no banco)
 e assina cada requisição com a chave Ed25519 que ele mesmo gerou:
 
-    assinatura = Ed25519(f"{método}\\n{caminho}\\n{timestamp}\\n{sha256(corpo)}")
+    assinatura = Ed25519(f"{método}\\n{caminho[?query]}\\n{timestamp}\\n{sha256(corpo)}")
 
 nos cabeçalhos `X-AID-Timestamp` (segundos Unix) e `X-AID-Signature` (base64). A API confere a
 assinatura com a chave pública registrada e o banco confere o status a cada chamada: revogado
@@ -65,6 +65,11 @@ class AgentIdentity:
 
 def secret_hash(secret: str) -> str:
     return hashlib.sha256(secret.encode()).hexdigest()
+
+
+def signed_target(path: str, query: str) -> str:
+    """O que a assinatura cobre da URL: caminho e query, como foram enviados."""
+    return f"{path}?{query}" if query else path
 
 
 def signed_message(method: str, path: str, timestamp: str, body: bytes) -> bytes:

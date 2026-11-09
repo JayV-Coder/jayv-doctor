@@ -15,7 +15,7 @@ import pytest_asyncio
 from aid_api.agents.config import validate
 from aid_api.core.auth import Claims, get_claims
 from aid_api.core.errors import ApiError
-from aid_api.ingestion.agent import signed_message, verify
+from aid_api.ingestion.agent import signed_message, signed_target, verify
 from aid_api.main import create_app
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -78,6 +78,13 @@ def test_assinatura_alterada_vencida_ou_de_outra_chave_e_recusada() -> None:
         assert raised.value.status == 401
 
 
+def test_assinatura_cobre_a_query() -> None:
+    assert signed_target("/api/v1/agent/config", "") == "/api/v1/agent/config"
+    assert signed_target("/api/v1/agent/config", "known_version=2") == (
+        "/api/v1/agent/config?known_version=2"
+    )
+
+
 def test_config_so_da_allowlist() -> None:
     ok = validate(
         {
@@ -100,6 +107,9 @@ def test_config_so_da_allowlist() -> None:
         {"collections": [{"type": "directory", "path": "/exports/../etc"}]},
         {"collections": [{"type": "directory", "path": "relativo/dir"}]},
         {"collections": [{"type": "shell", "command": "ls"}]},
+        {"collections": [{"type": "rfc_table", "table": "EDIDS", "fields": ["DOCNUM", "STATUS"]}]},
+        {"collections": [{"type": "rfc_table", "table": "EDIDS", "fields": [{}]}]},
+        {"collections": [{"type": "rfc_table", "table": "EDIDS", "fields": "DOCNUM"}]},
     ):
         with pytest.raises(ApiError):
             validate(bad)
@@ -214,6 +224,28 @@ async def test_registro_lote_assinado_e_revogacao_na_proxima_chamada(
                 headers=signed(key, secret, "GET", "/api/v1/agent/config", b""),
             )
             assert config.json()["config"]["collections"][0]["table"] == "EDIDS"
+            polled = await agent.get(
+                "/api/v1/agent/config?known_version=0&version=0.1.0",
+                headers=signed(
+                    key, secret, "GET", "/api/v1/agent/config?known_version=0&version=0.1.0", b""
+                ),
+            )
+            assert polled.status_code == 200, polled.text
+            # A query vai na assinatura: trocar a versão depois de assinar é recusado.
+            tampered = await agent.get(
+                "/api/v1/agent/config?known_version=0&version=9.9.9",
+                headers=signed(
+                    key, secret, "GET", "/api/v1/agent/config?known_version=0&version=0.1.0", b""
+                ),
+            )
+            assert tampered.status_code == 401
+            huge = b'{"events": [' + b" " * 1_100_000 + b"]}"
+            too_big = await agent.post(
+                "/api/v1/agent/events",
+                content=huge,
+                headers=signed(key, secret, "POST", "/api/v1/agent/events", huge),
+            )
+            assert too_big.status_code == 413
             forged = await agent.post(
                 "/api/v1/agent/events",
                 content=body,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import type { RegistrationToken } from "@/lib/api";
 import { revokeAgent, rotateAgent } from "./actions";
 import { InstallCommand } from "./install-command";
@@ -17,6 +17,9 @@ export function AgentActions({
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<RegistrationToken | null>(null);
   const [confirming, setConfirming] = useState(false);
+  // Uma chave por tentativa com resposta; sem resposta, repete a mesma.
+  const rotation = useRef(crypto.randomUUID());
+  const revocation = useRef(crypto.randomUUID());
   const [busy, startTransition] = useTransition();
   if (revoked) return null;
 
@@ -29,9 +32,10 @@ export function AgentActions({
           disabled={busy}
           onClick={() => {
             startTransition(async () => {
-              const issued = await rotateAgent(id);
+              const issued = await rotateAgent(id, rotation.current);
               setError(issued.ok ? null : issued.message);
               setToken(issued.ok ? issued.token : null);
+              if (issued.ok || !issued.offline) rotation.current = crypto.randomUUID();
             });
           }}
         >
@@ -48,7 +52,9 @@ export function AgentActions({
               return;
             }
             startTransition(async () => {
-              setError(await revokeAgent(id));
+              const revoked = await revokeAgent(id, revocation.current);
+              setError(revoked.ok ? null : revoked.message);
+              if (revoked.ok || !revoked.offline) revocation.current = crypto.randomUUID();
               setConfirming(false);
             });
           }}

@@ -14,19 +14,20 @@ O agente coleta do SAP que não é alcançável pela internet: roda numa máquin
 2. Na máquina do agente, rode o comando mostrado:
 
    ```sh
+   docker rm -f aid-agent >/dev/null 2>&1; \
    docker run --rm -v aid-agent:/var/lib/aid-agent ghcr.io/jayv-coder/aid-agent:latest \
-     register --api https://api.exemplo.com.br --token aid_reg_…
+     register --api https://api.exemplo.com.br --token aid_reg_… && \
    docker run -d --name aid-agent --restart unless-stopped -v aid-agent:/var/lib/aid-agent \
      ghcr.io/jayv-coder/aid-agent:latest run
    ```
 
-   O registro gera a chave Ed25519 no volume (`/var/lib/aid-agent/agent.key`, 0600), troca o token pelo segredo do agente e grava os dois no volume. O volume é a identidade do agente: guarde-o como guardaria uma chave.
+   O registro gera uma chave Ed25519 nova, troca o token pelo segredo do agente e, só com o registro aceito, grava os dois no volume (`/var/lib/aid-agent`, arquivos 0600). O volume é a identidade do agente: guarde-o como guardaria uma chave.
 3. Em até 5 min o card do agente fica **Conectado**, com a versão.
 
 ## Coletas
 
 - **Pasta de exportações:** arquivos CSV, NDJSON ou JSON que um job do SAP grava numa pasta montada no contêiner (`-v /exports/sap:/exports/sap:ro`). Os formatos de SM58, SLG1 e status de IDoc são os da Importação manual ([docs/guia](../guia/)). Arquivo novo ou regravado é lido de novo; o `event_id` estável evita duplicar.
-- **Status de IDoc via RFC:** `RFC_READ_TABLE` em `EDIDS` (ou `EDIDC`), só os campos de controle e status, a partir da última data lida.
+- **Status de IDoc via RFC:** `RFC_READ_TABLE` em `EDIDS` (ou `EDIDC`), só os campos de controle e status, a partir da última data e hora lidas, em páginas de `max_rows`. Até 20 páginas por rodada; o resto continua na rodada seguinte, do cursor salvo.
 - **Função customizada `Z_AID_…`:** para SLG1 e SM58 sem exportação. Contrato: importa `IV_SINCE` (AAAAMMDDhhmmss) e devolve a tabela `ET_MESSAGES` com `TIMESTAMP`, `TYPE`, `ID`, `NUMBER`, `MESSAGE`, `OBJECT` e `EXTERNAL_ID`.
 
 ### Usuário técnico SAP (mínimo privilégio)
@@ -37,7 +38,7 @@ Usuário do tipo **Sistema** (sem login de diálogo), com:
 - `S_TABU_NAM` com `ACTVT = 03` e `TABLE = EDIDC, EDIDS` (leitura só dessas tabelas);
 - nada de `S_TABU_DIS` amplo, `S_DEVELOP` ou perfis `SAP_ALL`/`SAP_NEW`.
 
-As credenciais ficam só na máquina do agente, em variáveis de ambiente: `AID_SAP_ASHOST`, `AID_SAP_SYSNR`, `AID_SAP_CLIENT`, `AID_SAP_USER` e `AID_SAP_PASSWORD`.
+As credenciais ficam só na máquina do agente, em variáveis de ambiente: `AID_SAP_ASHOST`, `AID_SAP_SYSNR`, `AID_SAP_CLIENT`, `AID_SAP_USER` e `AID_SAP_PASSWORD`. Datas e horas do SAP vêm no fuso do servidor: informe-o em `AID_SAP_TIMEZONE` (ex.: `America/Sao_Paulo`; padrão `UTC`).
 
 ### Biblioteca RFC
 
@@ -45,8 +46,9 @@ A imagem não traz biblioteca RFC: o NW RFC SDK tem licença da SAP, e o PyRFC f
 
 ## Operação
 
-- **Sem rede:** a coleta continua para a fila em disco (`buffer.sqlite3`). Quando a rede volta, o agente envia em lotes de 500, sem duplicar.
+- **Sem rede:** a coleta continua para a fila em disco (`buffer.sqlite3`). Quando a rede volta, o agente envia em lotes de até 500 Eventos e 900 KB, sem duplicar: os ids enviados ficam registrados por 14 dias, e a plataforma deduplica pelo `event_id`.
+- **Lote recusado** pela plataforma (fora erro de rede, Cota esgotada ou revogação) vai para a tabela `rejected` da fila e aparece no log, sem travar o resto.
 - **Revogar:** no card, **Revogar → Confirmar**. A próxima requisição do agente é recusada e ele para com o código 3.
-- **Trocar a identidade** (máquina nova, suspeita de vazamento): **Novo token** no card, e `register` de novo com um volume novo.
+- **Trocar a identidade** (máquina nova, suspeita de vazamento): **Novo token** no card e rode o comando mostrado. O registro gera chave nova; o fingerprint no card muda.
 - **Atualização:** troque a imagem (`docker pull` e recrie o contêiner). Fora do Docker, como zipapp com `AID_AGENT_BINARY`, o agente baixa e aplica só a versão com assinatura válida da chave de release (`AID_AGENT_RELEASE_KEY`) e sai com o código 75 para o supervisor reiniciar.
 - **Logs:** só contagens e erros de coleta; nenhum conteúdo de Evento.

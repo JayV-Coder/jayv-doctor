@@ -17,12 +17,12 @@ from aid_api.ingestion.agent import (
     get_agent_repository,
     release,
     secret_hash,
+    signed_target,
     unauthorized,
     verify,
 )
 from aid_api.ingestion.schemas import (
     AgentConfig,
-    AgentHeartbeat,
     AgentRegistered,
     AgentRegistration,
     AgentUpdate,
@@ -32,9 +32,11 @@ from aid_api.ingestion.schemas import (
 agent = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 Repository = Annotated[AgentRepository, Depends(get_agent_repository)]
 # Long-poll da config: responde na hora se mudou, senão espera até 25 s (abaixo dos 30 s comuns
-# de proxy na rede do cliente).
+# de proxy na rede do cliente), olhando o banco a cada 5 s.
 LONG_POLL_SECONDS = 25.0
-POLL_STEP = 2.0
+POLL_STEP = 5.0
+# Só `/events` tem corpo de verdade; as outras rotas assinam um corpo vazio.
+SMALL_BODY = 4096
 
 
 async def authenticated(
@@ -50,11 +52,15 @@ async def authenticated(
     if not x_aid_timestamp or not x_aid_signature:
         raise unauthorized()
     identity = await repository.identify(secret_hash(secret))
-    body = await request.body()
+    # O corpo é lido com o mesmo teto da ingestão por API, sem passar dele na memória, e fica
+    # guardado para a rota.
+    limit = service.MAX_BYTES if request.url.path.endswith("/events") else SMALL_BODY
+    body = await service.read_limited(request, limit)
+    request.state.body = body
     verify(
         identity.public_key,
         request.method,
-        request.url.path,
+        signed_target(request.url.path, request.url.query),
         x_aid_timestamp,
         x_aid_signature,
         body,
@@ -76,7 +82,11 @@ async def register(body: AgentRegistration, repository: Repository) -> AgentRegi
 
 
 @agent.get("/config", response_model=AgentConfig, responses={304: {"description": "sem mudança"}})
-async def config(identity: Agent, repository: Repository, known_version: int = 0) -> Any:
+async def config(
+    identity: Agent, repository: Repository, known_version: int = 0, version: str = ""
+) -> Any:
+    """Long-poll da config, que também é o sinal de vida do agente (`version` na query)."""
+    await repository.seen(identity.secret_hash, version[:40] or "desconhecida")
     deadline = time.monotonic() + LONG_POLL_SECONDS
     current = identity
     while current.config_version == known_version and time.monotonic() < deadline:
@@ -93,11 +103,6 @@ async def config(identity: Agent, repository: Repository, known_version: int = 0
     )
 
 
-@agent.post("/heartbeat", status_code=status.HTTP_204_NO_CONTENT)
-async def heartbeat(body: AgentHeartbeat, identity: Agent, repository: Repository) -> None:
-    await repository.seen(identity.secret_hash, body.version)
-
-
 @agent.post("/events", status_code=status.HTTP_202_ACCEPTED, response_model=IngestionResult)
 async def events(
     request: Request,
@@ -108,7 +113,7 @@ async def events(
     """O mesmo contrato e os mesmos limites do POST /ingestion/events, com o tenant e a
     Integração vindos do agente."""
     check_rate(limiter, f"agent:{identity.agent_id}")
-    batch = service.parse_batch(await request.body())
+    batch = service.parse_batch(request.state.body)
     accepted, rejected = service.split(batch, identity.integration_id)
     if accepted:
         await repository.accept(identity.secret_hash, accepted)

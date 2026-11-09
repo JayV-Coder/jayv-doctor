@@ -12,10 +12,11 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from aid_agent import __version__
 from aid_agent.buffer import Buffer
-from aid_agent.client import Platform, PlatformError, register
+from aid_agent.client import BatchRejectedError, Platform, PlatformError, register
 from aid_agent.collectors import (
     DirectoryCollector,
     RfcConnection,
@@ -25,14 +26,16 @@ from aid_agent.collectors import (
 from aid_agent.identity import (
     Credentials,
     load_credentials,
-    load_or_create_key,
+    load_key,
     public_key,
-    save_credentials,
+    save_registration,
 )
 from aid_agent.updater import RESTART, apply
 
 log = logging.getLogger("aid_agent")
 BATCH = 500
+# Abaixo do 1 MB da API, com folga para o envelope `{"events": [...]}`.
+MAX_BATCH_BYTES = 900_000
 
 
 def state_dir() -> Path:
@@ -62,13 +65,49 @@ def rfc_connection() -> RfcConnection:
     return connection
 
 
+def batches(events: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    """Divide em lotes que cabem no limite de bytes da API."""
+    found: list[list[dict[str, Any]]] = [[]]
+    size = 0
+    for event in events:
+        length = len(json.dumps(event)) + 1
+        if found[-1] and size + length > MAX_BATCH_BYTES:
+            found.append([])
+            size = 0
+        found[-1].append(event)
+        size += length
+    return [batch for batch in found if batch]
+
+
+def deliver(platform: Platform, buffer: Buffer, events: list[dict[str, Any]]) -> int:
+    """Envia um lote. Recusado por tamanho, divide ao meio; recusado de outro jeito (ou um
+    Evento sozinho grande demais), vai para a quarentena da fila em vez de travá-la."""
+    try:
+        platform.send(events)
+    except BatchRejectedError as exc:
+        if exc.status == 413 and len(events) > 1:
+            half = len(events) // 2
+            return deliver(platform, buffer, events[:half]) + deliver(
+                platform, buffer, events[half:]
+            )
+        buffer.reject(events, f"HTTP {exc.status}")
+        log.error(
+            "%d Eventos recusados pela plataforma (HTTP %d) e postos de lado",
+            len(events),
+            exc.status,
+        )
+        return 0
+    buffer.ack([event["event_id"] for event in events])
+    return len(events)
+
+
 def flush(platform: Platform, buffer: Buffer) -> int:
-    """Envia a fila em lotes de 500. Falha de rede para aqui e a fila espera a próxima rodada."""
+    """Envia a fila em lotes de até 500 Eventos e 900 KB. Falha de rede (ou Cota esgotada) para
+    aqui, e a fila espera a próxima rodada."""
     sent = 0
     while events := buffer.take(BATCH):
-        platform.send(events)
-        buffer.ack([event["event_id"] for event in events])
-        sent += len(events)
+        for batch in batches(events):
+            sent += deliver(platform, buffer, batch)
     return sent
 
 
@@ -110,14 +149,13 @@ def run(once: bool = False) -> int:
     if credentials is None:
         log.error("agente sem registro: rode `aid-agent register --token …`")
         return 2
-    platform = Platform(credentials, load_or_create_key(state), state)
+    platform = Platform(credentials, load_key(state), state)
     buffer = Buffer(state / "buffer.sqlite3")
     # A última config fica na fila em disco: reiniciado sem rede, o agente continua coletando.
     saved = json.loads(buffer.checkpoint("config") or "null") or {"config_version": 0}
     while True:
         try:
-            platform.heartbeat(__version__)
-            found = platform.config(int(saved["config_version"]))
+            found = platform.config(int(saved["config_version"]), __version__)
             if found is not None:
                 saved = found
                 buffer.save_checkpoint("config", json.dumps(found))
@@ -129,8 +167,12 @@ def run(once: bool = False) -> int:
         except httpx.HTTPError:
             log.warning("sem rede com a plataforma; a coleta continua para a fila em disco")
         config = dict(saved.get("config") or {})
-        if saved.get("integration_id"):
-            cycle(platform, buffer, config, str(saved["integration_id"]))
+        try:
+            if saved.get("integration_id"):
+                cycle(platform, buffer, config, str(saved["integration_id"]))
+        except PlatformError:
+            log.error("a plataforma recusou o agente: confira se ele foi revogado")
+            return 3
         if once:
             return 0
         time.sleep(int(config.get("interval_seconds", 300)))
@@ -171,13 +213,10 @@ def main(argv: list[str] | None = None) -> int:
             log.error("AID_API_URL precisa ser https://")
             return 2
         state = state_dir()
-        key = load_or_create_key(state)
+        key = Ed25519PrivateKey.generate()
         found = register(args.api, args.token, public_key(key), __version__)
-        save_credentials(
-            state,
-            Credentials(args.api, found["agent_id"], found["secret"]),
-            found.get("certificate"),
-        )
+        credentials = Credentials(args.api, found["agent_id"], found["secret"])
+        save_registration(state, key, credentials, found.get("certificate"))
         log.info("agente %s registrado", found["agent_id"])
         return 0
     return run(once=args.once)

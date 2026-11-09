@@ -12,7 +12,10 @@ const MESSAGES: Record<string, string> = {
 const GENERIC = "Não foi possível concluir agora. Tente de novo.";
 const OFFLINE = "Sem conexão. Tente de novo.";
 
-export type Issued = { ok: true; token: RegistrationToken } | { ok: false; message: string };
+// `offline`: o pedido pode nem ter chegado, então a tela repete com a mesma chave idempotente.
+// Com resposta da API (deu certo ou não), a próxima tentativa usa chave nova.
+export type Failure = { ok: false; message: string; offline: boolean };
+export type Issued = { ok: true; token: RegistrationToken } | Failure;
 
 async function failure(response: Response): Promise<string> {
   const { code, title } = (await response.json().catch(() => ({}))) as {
@@ -24,10 +27,16 @@ async function failure(response: Response): Promise<string> {
   return MESSAGES[code ?? ""] ?? GENERIC;
 }
 
+// A chave vem da tela: repetir o pedido sem resposta (rede instável, clique duplo) devolve o
+// mesmo token em vez de emitir outro e invalidar o que já foi copiado.
+function idempotent(key: string, init: RequestInit): RequestInit {
+  return { ...init, headers: { "Idempotency-Key": key } };
+}
+
 async function issue(path: string, init: RequestInit): Promise<Issued> {
   const response = await apiFetch(path, init).catch(() => null);
-  if (!response) return { ok: false, message: OFFLINE };
-  if (!response.ok) return { ok: false, message: await failure(response) };
+  if (!response) return { ok: false, message: OFFLINE, offline: true };
+  if (!response.ok) return { ok: false, message: await failure(response), offline: false };
   revalidatePath("/conectores/agentes");
   return { ok: true, token: (await response.json()) as RegistrationToken };
 }
@@ -49,28 +58,32 @@ function collections(form: FormData): object[] {
   return found;
 }
 
-export async function createAgent(form: FormData): Promise<Issued> {
-  return issue("/agents", {
-    method: "POST",
-    body: JSON.stringify({
-      name: form.get("name"),
-      integration_id: form.get("integration_id"),
-      config: { collections: collections(form) },
+export async function createAgent(form: FormData, key: string): Promise<Issued> {
+  return issue(
+    "/agents",
+    idempotent(key, {
+      method: "POST",
+      body: JSON.stringify({
+        name: form.get("name"),
+        integration_id: form.get("integration_id"),
+        config: { collections: collections(form) },
+      }),
     }),
-  });
+  );
 }
 
 // Rotação: o segredo e a chave atuais param na hora; o agente se registra de novo com o token.
-export async function rotateAgent(id: string): Promise<Issued> {
-  return issue(`/agents/${encodeURIComponent(id)}/rotate`, { method: "POST" });
+export async function rotateAgent(id: string, key: string): Promise<Issued> {
+  return issue(`/agents/${encodeURIComponent(id)}/rotate`, idempotent(key, { method: "POST" }));
 }
 
-export async function revokeAgent(id: string): Promise<string | null> {
-  const response = await apiFetch(`/agents/${encodeURIComponent(id)}/revoke`, {
-    method: "POST",
-  }).catch(() => null);
-  if (!response) return OFFLINE;
-  if (!response.ok) return failure(response);
+export async function revokeAgent(id: string, key: string): Promise<{ ok: true } | Failure> {
+  const response = await apiFetch(
+    `/agents/${encodeURIComponent(id)}/revoke`,
+    idempotent(key, { method: "POST" }),
+  ).catch(() => null);
+  if (!response) return { ok: false, message: OFFLINE, offline: true };
+  if (!response.ok) return { ok: false, message: await failure(response), offline: false };
   revalidatePath("/conectores/agentes");
-  return null;
+  return { ok: true };
 }

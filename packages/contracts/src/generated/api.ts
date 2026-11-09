@@ -377,27 +377,13 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Config */
+    /**
+     * Config
+     * @description Long-poll da config, que também é o sinal de vida do agente (`version` na query).
+     */
     get: operations["config_api_v1_agent_config_get"];
     put?: never;
     post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/agent/heartbeat": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /** Heartbeat */
-    post: operations["heartbeat_api_v1_agent_heartbeat_post"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1272,11 +1258,6 @@ export interface components {
       config: {
         [key: string]: unknown;
       };
-    };
-    /** AgentHeartbeat */
-    AgentHeartbeat: {
-      /** Version */
-      version: string;
     };
     /** AgentRegistered */
     AgentRegistered: {
@@ -3967,6 +3948,7 @@ export interface operations {
     parameters: {
       query?: {
         known_version?: number;
+        version?: string;
       };
       header?: {
         authorization?: string | null;
@@ -3989,41 +3971,6 @@ export interface operations {
       };
       /** @description sem mudança */
       304: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content?: never;
-      };
-      /** @description Validation Error */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["HTTPValidationError"];
-        };
-      };
-    };
-  };
-  heartbeat_api_v1_agent_heartbeat_post: {
-    parameters: {
-      query?: never;
-      header?: {
-        authorization?: string | null;
-        "x-aid-timestamp"?: string | null;
-        "x-aid-signature"?: string | null;
-      };
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AgentHeartbeat"];
-      };
-    };
-    responses: {
-      /** @description Successful Response */
-      204: {
         headers: {
           [name: string]: unknown;
         };
@@ -4109,6 +4056,7 @@ export interface operations {
       query?: never;
       header?: {
         authorization?: string | null;
+        "idempotency-key"?: string | null;
       };
       path?: never;
       cookie?: never;
@@ -4144,6 +4092,7 @@ export interface operations {
       query?: never;
       header?: {
         authorization?: string | null;
+        "idempotency-key"?: string | null;
       };
       path: {
         target: string;
@@ -4183,6 +4132,7 @@ export interface operations {
       query?: never;
       header?: {
         authorization?: string | null;
+        "idempotency-key"?: string | null;
       };
       path: {
         target: string;
@@ -4214,6 +4164,7 @@ export interface operations {
       query?: never;
       header?: {
         authorization?: string | null;
+        "idempotency-key"?: string | null;
       };
       path: {
         target: string;

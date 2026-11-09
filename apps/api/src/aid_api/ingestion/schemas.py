@@ -72,9 +72,3 @@ class AgentConfig(BaseModel):
     config: dict[str, Any]
     config_version: int
     update: AgentUpdate | None = None
-
-
-class AgentHeartbeat(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    version: str = Field(min_length=1, max_length=40)

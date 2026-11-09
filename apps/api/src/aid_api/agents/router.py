@@ -11,10 +11,16 @@ from aid_api.agents.config import validate
 from aid_api.agents.repo import AgentRepository, get_agents_repository
 from aid_api.agents.schemas import Agent, AgentConfigChange, NewAgent, RegistrationToken
 from aid_api.core.auth import Claims, require_manager, require_role
+from aid_api.core.idempotency import Idempotent, IdempotentRoute
 from aid_api.core.permissions import MANAGE_CONNECTORS, VIEW
 from aid_api.core.rate_limit import rate_limit
 
-router = APIRouter(prefix="/api/v1/agents", tags=["agents"], dependencies=[Depends(rate_limit)])
+router = APIRouter(
+    prefix="/api/v1/agents",
+    tags=["agents"],
+    route_class=IdempotentRoute,
+    dependencies=[Depends(rate_limit)],
+)
 Viewer = Annotated[Claims, Depends(require_role(*VIEW))]
 Manager = Annotated[Claims, Depends(require_manager(*MANAGE_CONNECTORS))]
 Repository = Annotated[AgentRepository, Depends(get_agents_repository)]
@@ -22,12 +28,21 @@ TOKEN_HOURS = 24
 IMAGE = "ghcr.io/jayv-coder/aid-agent:latest"
 
 
-def install_command(request: Request, token: str) -> str:
+def public_api_url(request: Request) -> str:
+    # Dependência, e não `Request` na rota: a `IdempotentRoute` já ocupa o parâmetro `Request`.
+    return os.environ.get("AID_PUBLIC_API_URL") or str(request.base_url).rstrip("/")
+
+
+ApiUrl = Annotated[str, Depends(public_api_url)]
+
+
+def install_command(api: str, token: str) -> str:
     """O comando que o cliente roda na máquina do agente: só a URL pública da API e o token."""
-    api = os.environ.get("AID_PUBLIC_API_URL") or str(request.base_url).rstrip("/")
-    # O registro roda uma vez (--rm); o agente em si sobe depois, com reinício automático.
+    # Serve para instalar e para a rotação: tira o contêiner antigo (se houver), registra uma vez
+    # (--rm, com chave nova) e sobe o agente com reinício automático.
     return (
-        f"docker run --rm -v aid-agent:/var/lib/aid-agent {IMAGE} register --api {api}"
+        "docker rm -f aid-agent >/dev/null 2>&1;"
+        f" docker run --rm -v aid-agent:/var/lib/aid-agent {IMAGE} register --api {api}"
         f" --token {token} && docker run -d --name aid-agent --restart unless-stopped"
         f" -v aid-agent:/var/lib/aid-agent {IMAGE} run"
     )
@@ -40,7 +55,7 @@ async def list_agents(claims: Viewer, repository: Repository) -> list[Agent]:
 
 @router.post("", response_model=RegistrationToken, status_code=status.HTTP_201_CREATED)
 async def create_agent(
-    body: NewAgent, request: Request, claims: Manager, repository: Repository
+    body: NewAgent, api: ApiUrl, claims: Manager, repository: Repository, _: Idempotent
 ) -> RegistrationToken:
     agent_id, token = await repository.create(
         claims, body.name, str(body.integration_id), validate(body.config)
@@ -49,13 +64,13 @@ async def create_agent(
         id=agent_id,
         registration_token=token,
         expires_in_hours=TOKEN_HOURS,
-        install_command=install_command(request, token),
+        install_command=install_command(api, token),
     )
 
 
 @router.patch("/{target}", response_model=dict[str, int])
 async def change_config(
-    target: UUID, body: AgentConfigChange, claims: Manager, repository: Repository
+    target: UUID, body: AgentConfigChange, claims: Manager, repository: Repository, _: Idempotent
 ) -> dict[str, int]:
     return {
         "config_version": await repository.change_config(claims, str(target), validate(body.config))
@@ -63,18 +78,20 @@ async def change_config(
 
 
 @router.post("/{target}/revoke", status_code=status.HTTP_204_NO_CONTENT)
-async def revoke_agent(target: UUID, claims: Manager, repository: Repository) -> None:
+async def revoke_agent(
+    target: UUID, claims: Manager, repository: Repository, _: Idempotent
+) -> None:
     await repository.revoke(claims, str(target))
 
 
 @router.post("/{target}/rotate", response_model=RegistrationToken)
 async def rotate_agent(
-    target: UUID, request: Request, claims: Manager, repository: Repository
+    target: UUID, api: ApiUrl, claims: Manager, repository: Repository, _: Idempotent
 ) -> RegistrationToken:
     token = await repository.rotate(claims, str(target))
     return RegistrationToken(
         id=str(target),
         registration_token=token,
         expires_in_hours=TOKEN_HOURS,
-        install_command=install_command(request, token),
+        install_command=install_command(api, token),
     )

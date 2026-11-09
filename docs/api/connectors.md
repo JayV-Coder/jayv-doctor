@@ -19,9 +19,10 @@ Exigem `Authorization: Bearer <JWT do Supabase Auth>` e Organização ativa. Tod
 - **Config nova** recomeça a coleta do zero, e a deduplicação descarta o que repetir. Uma Sincronização que já estava rodando não grava o Checkpoint da config antiga.
 - **Conector desativado** pela plataforma não é pausado nem retomado pela API.
 - **Config** é validada pelo conector do provedor. O erro traz o nome do campo e a regra, nunca o valor.
-- `provider`: `fake`, `gcp`, `salesforce` ou `sap`. Hoje `fake` e `gcp` têm conector (a config do GCP está em `docs/operations/conectores.md`); `salesforce` e `sap` respondem `422 provider_unavailable` até os tickets #37 e #38.
+- `provider`: `fake`, `gcp`, `salesforce` ou `sap`. Hoje `fake`, `gcp` e `salesforce` têm conector (as configs estão em `docs/operations/conectores.md`); `sap` responde `422 provider_unavailable` até o ticket #38.
+- **Teste de conexão** (`POST /connectors/test` e `/connectors/{id}/test`): `{ok, message, capabilities}`. `capabilities` diz quais fontes a conta do cliente oferece (no Salesforce: `integration_log`, `apex_log`, `event_log_file`).
 
-- **Resposta** traz também `paused_reason` (`auth` ou `manual`), `checkpoint` (no formato do provedor; o do GCP tem `timestamp`) e `last_sync_records`, os registros da última Sincronização terminada (`null` antes da primeira).
+- **Resposta** traz também `paused_reason` (`auth`, `manual` ou `api_limit`, o limite diário de API do provedor, retomado sozinho), `checkpoint` (no formato do provedor; o do GCP tem `timestamp`) e `last_sync_records`, os registros da última Sincronização terminada (`null` antes da primeira).
 - **Teste do GCP** é também a prévia do assistente: a `message` diz quantos registros da última hora atendem aos filtros.
 
 Status e política de falhas estão em [`docs/operations/conectores.md`](../operations/conectores.md).

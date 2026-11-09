@@ -67,7 +67,7 @@ export default async function ConnectorsPage() {
       <article className="card soon" aria-labelledby="proxima-versao" aria-disabled="true">
         <div className="row-between">
           <h2 id="proxima-versao" className="t muted">
-            Salesforce · SAP
+            SAP
           </h2>
           <Chip tone="info">v0.2</Chip>
         </div>

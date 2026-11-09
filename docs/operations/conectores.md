@@ -25,6 +25,8 @@ Se o worker cair no meio, a próxima Sincronização retoma do último Checkpoin
 | Erro inesperado (bug, banco, credencial ausente) | conta como falha | como as falhas acima |
 | 1ª e 2ª falha seguida | `active` | em 1 min |
 | 3ª falha seguida em diante | `failing` | backoff de 5 min, dobrando até 1 h |
+| Limite diário de API do provedor em 80% (`api_limit`, #37) | `paused` com `paused_reason = 'api_limit'`, sem contar falha | o agendador retoma sozinho depois de 1 h e confere de novo |
+| Cota de Eventos da Organização esgotada (`quota`, #31) | mantém, sem contar falha | de hora em hora |
 
 Dentro de uma Sincronização, timeout, 429 e erro temporário são repetidos até 5 vezes, com backoff. O `Retry-After` do provedor é respeitado até 60 s. Autenticação, configuração inválida e Checkpoint que não avança ou volta a um valor já visto (paginação quebrada) não são repetidos. Pausa ou desativação feitas durante a Sincronização continuam valendo no fim dela.
 
@@ -52,6 +54,47 @@ O conector `fake` aceita falhas injetadas pela config (`fail: {page, kind, times
 ## Credenciais
 
 Ficam no Supabase Vault (ADR-0006), com o nome `doctor/connector/<id>`, porque o Vault é do projeto inteiro. A tabela guarda só o `secret_id`, que o cliente nem consegue ler. A leitura é só pela `service_role`, sem papel novo no banco compartilhado (ADR-0009), e cada acesso chama `doctor.record_audit`, que o ticket #28 vai implementar.
+
+## Salesforce (`salesforce`, ticket #37)
+
+O Conector lê objetos de log de integração do cliente (`*__c`), `ApexLog` e, com Shield ou Event Monitoring, `EventLogFile`. Ele **só lê**: o usuário de integração precisa de leitura nesses objetos.
+
+```json
+{
+  "environment": "production",
+  "auth": "jwt_bearer",
+  "sources": ["integration_log", "apex_log"],
+  "integration_log": {
+    "object": "Integration_Log__c",
+    "timestamp_field": "CreatedDate",
+    "operation_field": "Operation__c",
+    "severity_field": "Level__c",
+    "message_field": "Message__c",
+    "status_code_field": "Status_Code__c",
+    "execution_field": "Correlation_Id__c",
+    "fields": [],
+    "filters": [{ "field": "Level__c", "operator": "!=", "value": "DEBUG" }]
+  },
+  "api_version": "62.0",
+  "page_size": 200,
+  "requests_per_minute": 60
+}
+```
+
+- **Autenticação:** feita pela Connected App do cliente, sem senha de usuário.
+  - **JWT Bearer**, o recomendado: a credencial no Vault é `{"client_id", "username", "private_key"}`, com a chave privada do certificado carregado na Connected App, e o usuário precisa estar pré-autorizado nela.
+  - **Web Server Flow**: a credencial é `{"client_id", "client_secret", "refresh_token"}`.
+  
+  O token vai sempre para `login.salesforce.com` ou `test.salesforce.com` (sandbox), e o `instance_url` devolvido precisa ser `https://*.salesforce.com` ou `*.force.com`. Assim, uma resposta adulterada não desvia a sessão (SSRF).
+- **SOQL parametrizado e limitado** (`aid_connectors/salesforce/soql.py`):
+  - o construtor só aceita os objetos e campos da allowlist da própria config, os campos fixos de `ApexLog` e `EventLogFile`, e o objeto de log, que precisa ser `__c`;
+  - filtros só com `=` e `!=` em campos da allowlist, com o valor escapado;
+  - `LIMIT` obrigatório, de 1 a 2.000;
+  - não existe SOQL livre na config nem na tela.
+- **Checkpoint por fonte:** `(SystemModstamp, Id)`, com desempate pelo `Id` no mesmo instante, para não perder nem repetir registros. O `event_id` é estável (UUIDv7 do `Id`).
+- **Limites:** o Conector lê o `Sforce-Limit-Info` de toda resposta. Com 80% do limite diário usado, ou com `REQUEST_LIMIT_EXCEEDED`, a Sincronização para com `api_limit`. O Conector fica pausado, com o motivo na tela, e o agendador retoma depois de 1 h, porque o limite do Salesforce é uma janela móvel de 24 h.
+- **Capacidades:** o teste de conexão lê a lista de objetos (`describeGlobal`) e diz quais fontes a edição tem, por exemplo "EventLogFile indisponível nesta edição". Uma fonte indisponível fica de fora, e as outras seguem.
+- **Enriquecimento** (status de `Order` e `Account` por Referência): fica para o ticket #40.
 
 ## Google Cloud Logging (`gcp`)
 

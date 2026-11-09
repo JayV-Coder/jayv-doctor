@@ -8,6 +8,7 @@
 !packages/db/**
 !packages/diagnosis-engine/**
 !packages/knowledge/**
+!packages/observability/**
 !packages/security/**
 !workers/connectors/**
 !workers/correlation/**

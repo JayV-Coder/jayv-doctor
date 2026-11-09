@@ -60,3 +60,32 @@ variable "rate_limit_per_minute" {
   type        = number
   default     = 300
 }
+
+# Dimensionamento (#33, docs/operations/capacity.md). Com NullPool, cada requisição em curso pode
+# abrir uma conexão no Supavisor; o projeto é compartilhado com o jayv-coder (ADR-0009), então o
+# Doctor fica com uma fatia dos clientes do pooler.
+variable "api_max_instances" {
+  type    = number
+  default = 4
+}
+
+variable "api_concurrency" {
+  type    = number
+  default = 40
+}
+
+variable "worker_max_instances" {
+  type    = number
+  default = 3
+}
+
+variable "worker_concurrency" {
+  type    = number
+  default = 8
+}
+
+variable "supavisor_client_budget" {
+  description = "Clientes do Supavisor reservados ao Doctor (o resto é do jayv-coder)."
+  type        = number
+  default     = 300
+}

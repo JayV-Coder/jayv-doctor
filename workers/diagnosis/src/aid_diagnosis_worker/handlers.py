@@ -11,6 +11,7 @@ from aid_knowledge.storage import KnowledgeStore
 from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from aid_diagnosis_worker.backup import GcsTarget, backup_storage
 from aid_diagnosis_worker.diagnose import diagnose, open_automatic
 from aid_diagnosis_worker.evaluate import evaluate_execution
 from aid_diagnosis_worker.knowledge import index, reindex_stale
@@ -77,3 +78,9 @@ async def reindex() -> dict[str, int]:
 async def retention() -> dict[str, int]:
     storage = SupabaseStorage(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
     return await run_retention(engine(), storage)
+
+
+@router.post("/backup/storage")
+async def storage_backup() -> dict[str, int]:
+    storage = SupabaseStorage(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
+    return await backup_storage(engine(), storage, GcsTarget(os.environ["BACKUP_BUCKET"]))

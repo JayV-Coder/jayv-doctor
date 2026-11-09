@@ -81,6 +81,9 @@ files = [
     "workers/relay/tests",
     "workers/runtime/src",
     "workers/runtime/tests",
+    "scripts/load_report.py",
+    "scripts/db_fingerprint.py",
+    "tests/operations",
 ]
 
 # Cada módulo da API só depende de `core`, nunca de outro módulo (ADR-0002).

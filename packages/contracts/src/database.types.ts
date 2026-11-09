@@ -1123,6 +1123,20 @@ isOneToOne: false
                   Relationships: [
 
                   ]
+                },"platform_jobs": {
+                  Row: {
+                    "details": NonNullable<Json>,"last_success_at": string,"name": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "details"?: NonNullable<Json>,"last_success_at": string,"name": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "details"?: NonNullable<Json>,"last_success_at"?: string,"name"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+
+                  ]
                 },"raw_log_objects": {
                   Row: {
                     "created_at": string,"expires_at": string,"id": string,"sha256": string,"size_bytes": number,"source": string,"storage_path": string,"tenant_id": string

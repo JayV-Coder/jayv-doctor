@@ -1,5 +1,5 @@
 # Comandos do dia a dia. Requer: Node 22 + pnpm 9 (corepack), uv; Docker + Supabase CLI para os alvos db:*.
-.PHONY: dev-setup dev lint typecheck test format check contracts eval eval-hybrid eval-gate db\:reset db\:types db\:test db\:lint
+.PHONY: dev-setup dev lint typecheck test format check contracts eval eval-hybrid eval-gate load\:ingestion load\:read load\:diagnoses load\:report db\:reset db\:types db\:test db\:lint
 
 dev-setup: ## instala dependências TS e Python e os hooks de pre-commit
 	pnpm install
@@ -38,6 +38,18 @@ eval-hybrid: ## avaliação também no híbrido, com o provedor real e o juiz (p
 
 eval-gate: ## gate de regressão: rules_only não cai mais de 2 p.p. contra a linha de base
 	uv run python -m aid_evaluation gate
+
+load\:ingestion: ## carga de ingestão (k6, #33): 3,5 Eventos/s e pico de 200/s; RUN_ID, INGESTION_TOKEN, INTEGRATION_ID, API_URL
+	k6 run --summary-export=ingestion-summary.json tests/load/ingestion.js
+
+load\:read: ## carga da API de leitura: 50 Usuários; USER_JWTS, API_URL
+	k6 run --summary-export=read-summary.json tests/load/read.js
+
+load\:diagnoses: ## 100 Diagnósticos em 1 h; USER_JWT, INCIDENT_IDS, API_URL
+	k6 run tests/load/diagnoses.js
+
+load\:report: ## confere no banco a rodada (zero perda, lag p95, Diagnósticos); RUN_ID, SINCE, SUPABASE_DB_URL
+	uv run python scripts/load_report.py --run $$RUN_ID --since $$SINCE --ingestion ingestion-summary.json --read read-summary.json
 
 contracts: ## regenera modelos Pydantic e tipos TS a partir de packages/contracts/schemas
 	pnpm exec prettier --write packages/contracts/schemas

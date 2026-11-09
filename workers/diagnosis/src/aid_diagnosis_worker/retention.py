@@ -42,6 +42,15 @@ class SupabaseStorage:
                 # Falha sobe: a linha só sai depois do arquivo, e o job repete amanhã.
                 response.raise_for_status()
 
+    async def download(self, bucket: str, path: str) -> bytes | None:
+        """O arquivo, para o backup (#33); `None` se já foi apagado."""
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
+            response = await client.get(f"{self.base}/{bucket}/{path}", headers=self.headers)
+        if response.status_code in (400, 404):
+            return None
+        response.raise_for_status()
+        return response.content
+
 
 async def purge_raw_logs(engine: AsyncEngine, storage: Storage) -> Counter[str]:
     removed: Counter[str] = Counter()

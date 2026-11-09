@@ -36,6 +36,8 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --all-packages --locked
+      # O PDF do Relatório técnico (#32): as mesmas bibliotecas da imagem do worker.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy
@@ -60,6 +62,7 @@ jobs:
           version: latest
       - run: pnpm install --frozen-lockfile
       - run: uv sync --all-packages --locked
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core
       # Storage entra a partir do ticket #11 (Importação manual).
       - run: supabase start -x realtime,imgproxy,studio,postgres-meta,edge-runtime,logflare,vector,supavisor
       - name: Configurar app web com a stack local
@@ -105,6 +108,7 @@ jobs:
             workers/diagnosis/tests/test_diagnose.py \
             workers/diagnosis/tests/test_retention.py \
             workers/diagnosis/tests/test_quotas.py \
+            workers/diagnosis/tests/test_report.py \
             workers/diagnosis/tests/test_backup.py \
             tests/operations \
             packages/knowledge/tests/test_knowledge_db.py
@@ -131,13 +135,18 @@ jobs:
     strategy:
       matrix:
         include:
-          - { package: aid-api, app: "aid_api.main:app" }
-          - { package: aid-worker, app: "aid_worker.main:app" }
+          - { package: aid-api, app: "aid_api.main:app", system: "" }
+          - {
+              package: aid-worker,
+              app: "aid_worker.main:app",
+              system: "libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core",
+            }
     steps:
       - uses: actions/checkout@v5
       - run: >-
           docker build -f infrastructure/docker/python.Dockerfile
-          --build-arg PACKAGE=${{ matrix.package }} --build-arg APP=${{ matrix.app }} .
+          --build-arg PACKAGE=${{ matrix.package }} --build-arg APP=${{ matrix.app }}
+          --build-arg SYSTEM_PACKAGES="${{ matrix.system }}" .
 
   contracts:
     name: Contratos gerados atualizados

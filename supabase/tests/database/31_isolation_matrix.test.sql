@@ -33,6 +33,7 @@ declare
   match uuid := gen_random_uuid();
   incident uuid := gen_random_uuid();
   diagnosis uuid := gen_random_uuid();
+  report uuid := gen_random_uuid();
   document uuid := gen_random_uuid();
   connector uuid := gen_random_uuid();
 begin
@@ -77,6 +78,11 @@ begin
   values (t, diagnosis, 1, 'rule_match', match, 'INT-003', '504');
   update doctor.diagnoses set status = 'published', stage = 'done', published_at = now() where id = diagnosis;
   insert into doctor.diagnosis_feedback (tenant_id, diagnosis_id, verdict) values (t, diagnosis, 'accepted');
+  insert into doctor.reports (id, tenant_id, incident_id, diagnosis_id, format, status, storage_path,
+    content_sha256, processing_key)
+  values (report, t, incident, diagnosis, 'pdf', 'ready', t::text || '/r.pdf', repeat('c', 64), 'r-' || t::text);
+  insert into doctor.report_shares (tenant_id, report_id, token_hash, download_url, expires_at)
+  values (t, report, encode(sha256(t::text::bytea), 'hex'), 'https://storage.test/r', now() + interval '1 day');
   insert into doctor.knowledge_documents (id, tenant_id, title, source, storage_path, content_type,
     size_bytes, status)
   values (document, t, 'Runbook', 'upload', t::text || '/x/document.md', 'text/markdown', 10, 'ready');

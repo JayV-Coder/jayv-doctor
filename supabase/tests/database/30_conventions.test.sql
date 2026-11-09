@@ -100,12 +100,13 @@ select is(
   null, 'security definer: search_path fixo e sem execute para public'
 );
 
--- O token de ingestão é a única porta anônima: as duas funções resolvem o tenant pelo hash.
+-- As portas anônimas resolvem o tenant pelo hash de um token: as duas da ingestão e a abertura do
+-- link compartilhável do Relatório técnico (#32, ADR-0014).
 select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p
    where p.pronamespace = 'doctor'::regnamespace and has_function_privilege('anon', p.oid, 'execute')),
-  array['accept_ingestion_batch', 'resolve_ingestion_token'],
-  'anon só executa as funções da ingestão por token'
+  array['accept_ingestion_batch', 'open_report_share', 'record_report_share_access', 'resolve_ingestion_token'],
+  'anon só executa as funções por token (ingestão e link do Relatório)'
 );
 
 -- O inventário pega a tabela nova fora do padrão (é o que bloqueia o merge): as mesmas views.

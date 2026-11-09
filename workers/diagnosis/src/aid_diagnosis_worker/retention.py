@@ -15,12 +15,15 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 RAW_LOGS = "doctor-raw-logs"
 KNOWLEDGE = "doctor-knowledge"
+REPORTS = "doctor-reports"
 BATCH = 500
 log = logging.getLogger(__name__)
 
 
 class Storage(Protocol):
     async def remove(self, bucket: str, paths: Sequence[str]) -> None: ...
+
+    async def upload(self, bucket: str, path: str, data: bytes, content_type: str) -> None: ...
 
 
 class SupabaseStorage:
@@ -41,6 +44,16 @@ class SupabaseStorage:
                 )
                 # Falha sobe: a linha só sai depois do arquivo, e o job repete amanhã.
                 response.raise_for_status()
+
+    async def upload(self, bucket: str, path: str, data: bytes, content_type: str) -> None:
+        """Sobrescreve: a reentrega da mesma mensagem gera e sobe o mesmo caminho."""
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
+            response = await client.post(
+                f"{self.base}/{bucket}/{path}",
+                headers={**self.headers, "content-type": content_type, "x-upsert": "true"},
+                content=data,
+            )
+        response.raise_for_status()
 
 
 async def purge_raw_logs(engine: AsyncEngine, storage: Storage) -> Counter[str]:
@@ -91,7 +104,7 @@ async def delete_tenant(engine: AsyncEngine, storage: Storage, tenant: str) -> s
             text("select doctor.freeze_tenant(cast(:t as uuid))"), {"t": tenant}
         )
     removed = 0
-    for bucket in (RAW_LOGS, KNOWLEDGE):
+    for bucket in (RAW_LOGS, KNOWLEDGE, REPORTS):
         found = await tenant_objects(engine, tenant, bucket)
         if found:
             await storage.remove(bucket, found)
@@ -103,7 +116,7 @@ async def delete_tenant(engine: AsyncEngine, storage: Storage, tenant: str) -> s
             {"t": tenant, "n": removed},
         )
     # O que tiver chegado no meio (escrita que já estava em curso) sai também.
-    for bucket in (RAW_LOGS, KNOWLEDGE):
+    for bucket in (RAW_LOGS, KNOWLEDGE, REPORTS):
         late = await tenant_objects(engine, tenant, bucket)
         if late:
             await storage.remove(bucket, late)
@@ -142,12 +155,35 @@ async def measure_storage(engine: AsyncEngine) -> None:
                 " from doctor.tenants t left join ("
                 " select split_part(o.name, '/', 1) as tenant,"
                 " sum(coalesce((o.metadata ->> 'size')::bigint, 0)) as bytes"
-                " from storage.objects o where o.bucket_id in (:raw, :knowledge)"
+                " from storage.objects o where o.bucket_id in (:raw, :knowledge, :reports)"
                 " group by 1) s on s.tenant = t.id::text"
                 " where t.status in ('active', 'suspended')"
             ),
-            {"raw": RAW_LOGS, "knowledge": KNOWLEDGE},
+            {"raw": RAW_LOGS, "knowledge": KNOWLEDGE, "reports": REPORTS},
         )
+
+
+async def purge_orphan_reports(engine: AsyncEngine, storage: Storage) -> int:
+    """Relatório técnico (#32) segue o Incidente: quando a purga apaga o Incidente, a linha do
+    relatório sai em cascata e o arquivo fica sem dono. Sai aqui, depois da purga."""
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        paths = list(
+            (
+                await connection.execute(
+                    text(
+                        "select o.name from storage.objects o where o.bucket_id = :b"
+                        " and o.created_at < now() - interval '1 hour'"
+                        " and not exists (select 1 from doctor.reports r"
+                        " where r.storage_path = o.name)"
+                    ),
+                    {"b": REPORTS},
+                )
+            ).scalars()
+        )
+    if paths:
+        await storage.remove(REPORTS, paths)
+    return len(paths)
 
 
 async def run_retention(engine: AsyncEngine, storage: Storage) -> dict[str, int]:
@@ -189,6 +225,12 @@ async def run_retention(engine: AsyncEngine, storage: Storage) -> dict[str, int]
     except Exception:
         failures += 1
         log.exception("drop das partições vencidas falhou")
+    orphans = 0
+    try:
+        orphans = await purge_orphan_reports(engine, storage)
+    except Exception:
+        failures += 1
+        log.exception("remoção dos relatórios sem dono falhou")
     try:
         await measure_storage(engine)
     except Exception:
@@ -199,6 +241,7 @@ async def run_retention(engine: AsyncEngine, storage: Storage) -> dict[str, int]
         "raw_logs": sum(raw_logs.values()),
         "tenants": len(tenants),
         "partitions": len(dropped),
+        "orphan_reports": orphans,
         "deleted_tenants": len(receipts),
         "failures": failures + deletion_failures,
     }

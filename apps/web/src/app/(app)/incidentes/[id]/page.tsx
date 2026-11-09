@@ -144,7 +144,12 @@ export default async function IncidentPage({
           <b>Resolução:</b> {incident.resolution_note}
         </p>
       )}
-      {operator && <NewDiagnosis incidentId={incident.id} />}
+      <div className="row-between">
+        {operator && <NewDiagnosis incidentId={incident.id} />}
+        <Link className="btn" href={`/incidentes/${incident.id}/relatorio`}>
+          Relatório
+        </Link>
+      </div>
       {operator && (
         <IncidentControls
           id={incident.id}

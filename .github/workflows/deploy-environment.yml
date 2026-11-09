@@ -44,11 +44,12 @@ jobs:
           build() {
             image="$REGISTRY/$PROJECT/aid/$1:$SHA"
             docker build -f infrastructure/docker/python.Dockerfile \
-              --build-arg PACKAGE="$2" --build-arg APP="$3" -t "$image" .
+              --build-arg PACKAGE="$2" --build-arg APP="$3" --build-arg SYSTEM_PACKAGES="$4" \
+              -t "$image" .
             docker push "$image"
           }
           build api aid-api aid_api.main:app
-          build worker aid-worker aid_worker.main:app
+          build worker aid-worker aid_worker.main:app "libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core"
       - name: Publicar a API e os workers
         env:
           PROJECT: ${{ vars.GCP_PROJECT_ID }}

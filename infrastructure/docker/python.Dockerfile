@@ -1,6 +1,8 @@
 # Imagem da API e dos workers. Contexto: raiz do repositório.
 #   docker build -f infrastructure/docker/python.Dockerfile \
 #     --build-arg PACKAGE=aid-api --build-arg APP=aid_api.main:app .
+#   Worker: --build-arg SYSTEM_PACKAGES="libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0
+#     fonts-dejavu-core" (o PDF do Relatório técnico).
 FROM python:3.12-slim AS build
 ARG PACKAGE
 ENV UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
@@ -25,7 +27,14 @@ RUN uv sync --frozen --no-dev --no-editable --package "$PACKAGE"
 
 FROM python:3.12-slim
 ARG APP
-ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 APP=$APP
+# Bibliotecas do sistema de quem precisa: o worker gera o PDF do Relatório técnico (#32) com o
+# WeasyPrint (Pango, HarfBuzz) e a fonte DejaVu, que cobre o português.
+ARG SYSTEM_PACKAGES=""
+RUN if [ -n "$SYSTEM_PACKAGES" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends $SYSTEM_PACKAGES \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
+ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 APP=$APP XDG_CACHE_HOME=/tmp/cache
 RUN useradd --system --uid 10001 aid
 WORKDIR /app
 COPY --from=build /app/.venv .venv

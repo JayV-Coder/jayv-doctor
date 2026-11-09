@@ -38,8 +38,13 @@ export function SharedDownload() {
             const anchor = document.createElement("a");
             anchor.href = url;
             anchor.download = filename(response.headers.get("content-disposition"));
+            document.body.append(anchor);
             anchor.click();
-            URL.revokeObjectURL(url);
+            anchor.remove();
+            // Safari no iOS e o Firefox ainda leem o blob depois do clique: libera só depois.
+            setTimeout(() => {
+              URL.revokeObjectURL(url);
+            }, 60_000);
           });
         }}
       >

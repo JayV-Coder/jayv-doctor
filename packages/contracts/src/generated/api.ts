@@ -2545,12 +2545,12 @@ export interface components {
       created_at: string;
       /** Completed At */
       completed_at: string | null;
+      /** Shares */
+      shares: components["schemas"]["ReportShare"][];
       /** Download Url */
       download_url: string | null;
       /** Expires In */
       expires_in: number | null;
-      /** Shares */
-      shares: components["schemas"]["ReportShare"][];
     };
     /** ReportQueued */
     ReportQueued: {
@@ -2651,6 +2651,8 @@ export interface components {
       created_at: string;
       /** Completed At */
       completed_at: string | null;
+      /** Shares */
+      shares: components["schemas"]["ReportShare"][];
     };
     /** ResourceUsage */
     ResourceUsage: {

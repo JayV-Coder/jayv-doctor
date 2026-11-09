@@ -42,9 +42,11 @@ class ReportData:
     evidence: Sequence[Mapping[str, Any]]
     recommendations: Sequence[Mapping[str, Any]]
     reviews: Sequence[Mapping[str, Any]]
-    # `None`: o pedido não incluiu a timeline.
+    # `None`: o pedido não incluiu a timeline. Os Eventos mais recentes, até o limite do worker.
     timeline: Sequence[Mapping[str, Any]] | None
     generated_at: datetime
+    # Quantos Eventos o Incidente tem, para avisar quando a timeline foi cortada.
+    timeline_total: int | None = None
 
 
 @dataclass(frozen=True)
@@ -61,13 +63,31 @@ class Section:
 class Rendered:
     content: bytes
     content_type: str
+    # Do arquivo entregue (confere com `sha256sum`); é o que a linha e a trilha guardam.
     sha256: str
+    # Do texto (corpo em Markdown), o que sai no rodapé: igual no PDF e no `.md`.
+    body_sha256: str
 
 
 def clean(value: Any) -> str:
     text = REFERENCE.sub("[referência]", str(value))
     sanitized, _ = SANITIZER.sanitize(text)
     return str(sanitized)
+
+
+# Texto vindo de log e de Usuário não pode virar sintaxe no `.md` (seção falsa, imagem, link).
+MARKDOWN = re.compile(r"([\\`*_\[\]<>#!|~])")
+
+
+def md(text: str) -> str:
+    return MARKDOWN.sub(r"\\\1", " ".join(text.split()))
+
+
+def fence(text: str) -> list[str]:
+    """Bloco de código com cerca maior que qualquer sequência de crases do trecho."""
+    longest = max((len(run) for run in re.findall(r"`+", text)), default=0)
+    mark = "`" * max(3, longest + 1)
+    return [mark, text, mark]
 
 
 def when(moment: datetime, seconds: bool = False) -> str:
@@ -194,11 +214,15 @@ def timeline(data: ReportData) -> Section | None:
     if data.timeline is None:
         return None
     items = [
-        f"{when(item['timestamp'], seconds=True).split(' ')[1]} · {clean(item['operation'])}"
+        f"{when(item['timestamp'], seconds=True)} · {clean(item['operation'])}"
         f" · {item['severity']}" + (f" · {clean(item['summary'])}" if item.get("summary") else "")
         for item in data.timeline
     ]
-    return Section("Timeline", [] if items else ["Sem Eventos."], items)
+    paragraphs = [] if items else ["Sem Eventos."]
+    total = data.timeline_total or len(items)
+    if total > len(items):
+        paragraphs.append(f"Os {len(items)} Eventos mais recentes, de {total}.")
+    return Section("Timeline", paragraphs, items)
 
 
 def sections(data: ReportData) -> list[Section]:
@@ -215,23 +239,29 @@ def sections(data: ReportData) -> list[Section]:
 
 def markdown_body(data: ReportData) -> str:
     title, subtitle = header(data)
-    lines = [f"# Relatório técnico · {clean(data.organization)}", "", f"**{title}**", "", subtitle]
+    lines = [
+        f"# Relatório técnico · {md(clean(data.organization))}",
+        "",
+        f"**{md(title)}**",
+        "",
+        md(subtitle),
+    ]
     for section in sections(data):
-        lines += ["", f"## {section.title}"]
+        lines += ["", f"## {md(section.title)}"]
         for paragraph in section.paragraphs:
-            lines += ["", paragraph]
+            lines += ["", md(paragraph)]
         if section.items:
             lines.append("")
             for index, item in enumerate(section.items, 1):
-                lines.append(f"{index}. {item}" if section.ordered else f"- {item}")
+                lines.append(f"{index}. {md(item)}" if section.ordered else f"- {md(item)}")
         for excerpt in section.code:
-            lines += ["", "```", excerpt, "```"]
+            lines += ["", *fence(excerpt)]
     # Termina em linha em branco: o `---` do rodapé não vira título do parágrafo anterior.
     return "\n".join(lines) + "\n\n"
 
 
 def footer(data: ReportData, digest: str) -> str:
-    return f"Gerado em {when(data.generated_at)} (horário de Brasília) · sha256 {digest}"
+    return f"Gerado em {when(data.generated_at)} (horário de Brasília) · sha256 do texto {digest}"
 
 
 STYLE = " ".join(
@@ -284,8 +314,8 @@ def render(data: ReportData, format: Format) -> Rendered:
     digest = hashlib.sha256(body.encode()).hexdigest()
     if format == "md":
         content = f"{body}---\n{footer(data, digest)}\n".encode()
-        return Rendered(content, "text/markdown", digest)
+        return Rendered(content, "text/markdown", hashlib.sha256(content).hexdigest(), digest)
     from weasyprint import HTML  # type: ignore[import-untyped]  # pesado: só no PDF
 
-    pdf = HTML(string=html_document(data, digest)).write_pdf()
-    return Rendered(bytes(pdf or b""), "application/pdf", digest)
+    pdf = bytes(HTML(string=html_document(data, digest)).write_pdf() or b"")
+    return Rendered(pdf, "application/pdf", hashlib.sha256(pdf).hexdigest(), digest)

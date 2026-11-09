@@ -14,7 +14,7 @@ import pytest
 from aid_diagnosis_engine.llm.fake import FakeProvider
 from aid_diagnosis_worker.diagnose import diagnose
 from aid_diagnosis_worker.evaluate import evaluate_execution
-from aid_diagnosis_worker.report import generate_report
+from aid_diagnosis_worker.report import ReportBusyError, generate_report
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -145,11 +145,9 @@ async def test_relatorio_vai_para_o_storage_com_o_hash_e_sem_referencia_em_claro
     assert content_type == "text/markdown"
     assert row["size_bytes"] == len(content)
     body = content.decode()
-    assert row["content_sha256"] in body.rsplit("\n---\n", 1)[1]
-    assert (
-        hashlib.sha256(body.rsplit("\n---\n", 1)[0].encode() + b"\n").hexdigest()
-        == (row["content_sha256"])
-    )
+    assert hashlib.sha256(content).hexdigest() == row["content_sha256"]
+    text_part, footer = body.rsplit("\n---\n", 1)
+    assert hashlib.sha256(text_part.encode() + b"\n").hexdigest() in footer
     assert "## Timeline" in body
     assert "UPSTREAM_TIMEOUT" in body
     assert "hmac:" not in body
@@ -197,3 +195,25 @@ async def test_storage_fora_do_ar_volta_para_a_fila_e_desiste_na_terceira(
     assert await generate_report(engine, {"report_id": report}, storage) == "failed"
     row = await one(engine, "select status, error from doctor.reports where id = :r", r=report)
     assert (row["status"], row["error"]) == ("failed", "Não foi possível gerar o relatório.")
+
+
+@pytest.mark.asyncio
+async def test_entrega_repetida_durante_a_geracao_volta_para_a_fila(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    incident = await incident_with(engine, tenant, 1)
+    report = await requested(engine, tenant, incident)
+    await run(engine, "update doctor.reports set status = 'running' where id = :r", r=report)
+    with pytest.raises(ReportBusyError):
+        await generate_report(engine, {"report_id": report}, MemoryStorage())
+    # Posse vencida (o worker caiu no meio): a próxima entrega retoma.
+    async with engine.begin() as connection:
+        # Sem o trigger de updated_at, para simular o relógio.
+        await connection.execute(text("set local session_replication_role = replica"))
+        await connection.execute(
+            text(
+                "update doctor.reports set updated_at = now() - interval '3 minutes' where id = :r"
+            ),
+            {"r": report},
+        )
+    assert await generate_report(engine, {"report_id": report}, MemoryStorage()) == "ready"

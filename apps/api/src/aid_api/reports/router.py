@@ -88,12 +88,9 @@ async def get_report(
     async def sign(path: str) -> str:
         return await storage.sign_download(token, path, DOWNLOAD_SECONDS, BUCKET)
 
-    summary, url, shares = await repository.detail(claims, str(target), sign)
+    summary, url = await repository.detail(claims, str(target), sign)
     return Report(
-        **summary.model_dump(),
-        download_url=url,
-        expires_in=DOWNLOAD_SECONDS if url else None,
-        shares=shares,
+        **summary.model_dump(), download_url=url, expires_in=DOWNLOAD_SECONDS if url else None
     )
 
 
@@ -134,6 +131,8 @@ async def open_shared_report(
     content = await storage.fetch(found.download_url) if found else None
     if found is None or content is None:
         raise ApiError(404, "not_found", "Link inválido, vencido ou revogado.")
+    # Só o acesso que entregou o arquivo conta e vai para a trilha.
+    await repository.record_access(body.token)
     return Response(
         content,
         media_type=MEDIA[found.format],

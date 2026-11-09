@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from aid_api.core.auth import Claims
 from aid_api.core.db import anonymous_tx, translated_tx
@@ -49,6 +50,26 @@ def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+SHARES = (
+    "select id::text, report_id::text, expires_at, revoked_at, access_count, last_accessed_at,"
+    " created_at from doctor.report_shares where report_id = any(cast(:ids as uuid[]))"
+    " and revoked_at is null and expires_at > now() order by created_at desc"
+)
+
+
+async def active_shares(
+    connection: AsyncConnection, ids: list[str]
+) -> dict[str, list[ReportShare]]:
+    """Os links ativos de cada relatório numa consulta; o RLS devolve vazio para o Viewer."""
+    found: dict[str, list[ReportShare]] = {report: [] for report in ids}
+    if ids:
+        result = await connection.execute(text(SHARES), {"ids": ids})
+        for row in result.mappings():
+            item = dict(row)
+            found[item.pop("report_id")].append(ReportShare.model_validate(item))
+    return found
+
+
 class ReportRepository:
     async def request(
         self, claims: Claims, incident: str, body: ReportRequest, key: str
@@ -85,11 +106,13 @@ class ReportRepository:
                 ),
                 {"i": incident},
             )
-            return [ReportSummary.model_validate(dict(row)) for row in result.mappings()]
+            rows = [dict(row) for row in result.mappings()]
+            shares = await active_shares(connection, [row["id"] for row in rows])
+        return [ReportSummary.model_validate({**row, "shares": shares[row["id"]]}) for row in rows]
 
     async def detail(
         self, claims: Claims, target: str, sign: Callable[[str], Awaitable[str]]
-    ) -> tuple[ReportSummary, str | None, list[ReportShare]]:
+    ) -> tuple[ReportSummary, str | None]:
         async with translated_tx(claims, ERRORS) as connection:
             row = (
                 (
@@ -105,25 +128,11 @@ class ReportRepository:
             )
             if row is None:
                 raise ApiError(404, "not_found", "Relatório não encontrado.")
-            # O RLS dos links devolve vazio para o Viewer.
-            shares = [
-                ReportShare.model_validate(dict(item))
-                for item in (
-                    await connection.execute(
-                        text(
-                            "select id::text, expires_at, revoked_at, access_count,"
-                            " last_accessed_at, created_at from doctor.report_shares"
-                            " where report_id = cast(:r as uuid) order by created_at desc"
-                        ),
-                        {"r": target},
-                    )
-                ).mappings()
-            ]
-        summary = ReportSummary.model_validate(
-            {k: v for k, v in row.items() if k != "storage_path"}
-        )
+            shares = (await active_shares(connection, [target]))[target]
+        fields = {k: v for k, v in row.items() if k != "storage_path"}
+        summary = ReportSummary.model_validate({**fields, "shares": shares})
         url = await sign(row["storage_path"]) if row["status"] == "ready" else None
-        return summary, url, shares
+        return summary, url
 
     async def ready_path(self, claims: Claims, target: str) -> str:
         async with translated_tx(claims, ERRORS) as connection:
@@ -183,6 +192,13 @@ class ReportRepository:
         if row is None:
             return None
         return SharedFile(row.download_url, row.format, row.filename)
+
+    async def record_access(self, token: str) -> None:
+        """Depois de o arquivo ser entregue: conta o acesso e grava na trilha."""
+        async with anonymous_tx(ERRORS) as connection:
+            await connection.execute(
+                text("select doctor.record_report_share_access(:h)"), {"h": token_hash(token)}
+            )
 
 
 def get_report_repository() -> ReportRepository:

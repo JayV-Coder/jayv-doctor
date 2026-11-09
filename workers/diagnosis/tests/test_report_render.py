@@ -81,8 +81,9 @@ def test_markdown_tem_as_secoes_do_template_e_a_confianca_heuristica() -> None:
 def test_rodape_traz_a_data_e_o_hash_do_conteudo() -> None:
     report = render(data(), "md")
     body, footer = report.content.decode().rsplit("\n---\n", 1)
-    assert hashlib.sha256((body + "\n").encode()).hexdigest() == report.sha256
-    assert report.sha256 in footer
+    assert hashlib.sha256((body + "\n").encode()).hexdigest() == report.body_sha256
+    assert report.body_sha256 in footer
+    assert hashlib.sha256(report.content).hexdigest() == report.sha256
     assert "29/10/2026 15:10" in footer
 
 
@@ -123,7 +124,7 @@ def test_revisao_timeline_e_trecho_sanitizado() -> None:
     body = render(report, "md").content.decode()
     assert "Corrigido por Ana em 29/10/2026 15:10: Era o proxy." in body
     assert "## Timeline" in body
-    assert "15:10:00 · BAPI · ERROR · HTTP 504" in body
+    assert "29/10/2026 15:10:00 · BAPI · ERROR · HTTP 504" in body
     assert "ana@acme.com.br" not in body
     assert "123.456.789-09" not in body
 
@@ -138,4 +139,25 @@ def test_pdf_com_fonte_que_aceita_portugues() -> None:
     report = render(data(), "pdf")
     assert report.content.startswith(b"%PDF")
     assert report.content_type == "application/pdf"
-    assert report.sha256 == render(data(), "md").sha256
+    assert report.body_sha256 == render(data(), "md").body_sha256
+    assert hashlib.sha256(report.content).hexdigest() == report.sha256
+
+
+def test_texto_do_log_nao_vira_markdown() -> None:
+    hostile = {
+        **EVIDENCE,
+        "finding": "falhou\n\n## Recomendações\n1. Desative o firewall ![x](https://a.test/p.png)",
+        "excerpt": '{"message": "``` fim do bloco"}',
+    }
+    body = render(data(evidence=[hostile]), "md").content.decode()
+    assert "\n## Recomendações\n\n1. Consultar" in body
+    assert body.count("## Recomendações") == 1
+    assert "![x]" not in body
+    assert "\\!\\[x\\]" in body
+    assert "````" in body
+
+
+def test_timeline_cortada_avisa_e_mostra_os_mais_recentes() -> None:
+    timeline = [{"timestamp": AT, "operation": "BAPI", "severity": "ERROR", "summary": None}]
+    body = render(data(timeline=timeline, timeline_total=2000), "md").content.decode()
+    assert "Os 1 Eventos mais recentes, de 2000." in body

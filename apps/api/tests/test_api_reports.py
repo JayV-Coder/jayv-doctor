@@ -8,7 +8,7 @@ from aid_api.core.auth import Claims, get_claims
 from aid_api.core.storage import Storage, get_storage
 from aid_api.main import create_app
 from aid_api.reports.repo import ReportRepository, SharedFile, get_report_repository, token_hash
-from aid_api.reports.schemas import ReportQueued, ReportRequest, ReportShare, ReportSummary
+from aid_api.reports.schemas import ReportQueued, ReportRequest, ReportSummary
 from fastapi.testclient import TestClient
 
 TENANT_ID = "00000000-0000-4000-8000-00000000ac01"
@@ -29,12 +29,14 @@ SUMMARY = ReportSummary(
     error=None,
     created_at=NOW,
     completed_at=NOW,
+    shares=[],
 )
 
 
 class FakeRepository(ReportRepository):
     shared: ClassVar[dict[str, str]] = {}
     requests: ClassVar[list[tuple[str, ReportRequest]]] = []
+    accessed: ClassVar[list[str]] = []
 
     async def request(
         self, claims: Claims, incident: str, body: ReportRequest, key: str
@@ -44,8 +46,8 @@ class FakeRepository(ReportRepository):
 
     async def detail(
         self, claims: Claims, target: str, sign: Callable[[str], Awaitable[str]]
-    ) -> tuple[ReportSummary, str | None, list[ReportShare]]:
-        return SUMMARY, await sign(f"{TENANT_ID}/{REPORT}.pdf"), []
+    ) -> tuple[ReportSummary, str | None]:
+        return SUMMARY, await sign(f"{TENANT_ID}/{REPORT}.pdf")
 
     async def ready_path(self, claims: Claims, target: str) -> str:
         return f"{TENANT_ID}/{REPORT}.pdf"
@@ -55,6 +57,9 @@ class FakeRepository(ReportRepository):
     ) -> tuple[str, datetime]:
         self.shared[token_hash(token)] = download_url
         return "share-1", NOW
+
+    async def record_access(self, token: str) -> None:
+        self.accessed.append(token)
 
     async def open_shared(self, token: str) -> SharedFile | None:
         url = self.shared.get(token_hash(token))
@@ -117,5 +122,7 @@ def test_link_compartilhado_abre_sem_sessao_pelo_proxy() -> None:
     assert opened.content.startswith(b"%PDF")
     assert opened.headers["content-disposition"] == 'attachment; filename="inc-0142.pdf"'
     assert "storage.test" not in opened.text
+    assert FakeRepository.accessed == [token]
     wrong = anonymous.post("/api/v1/shared-reports", json={"token": "x" * 43})
     assert wrong.status_code == 404
+    assert FakeRepository.accessed == [token]

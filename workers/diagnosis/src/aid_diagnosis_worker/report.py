@@ -16,7 +16,8 @@ from aid_diagnosis_worker.retention import REPORTS, Storage
 
 log = logging.getLogger(__name__)
 MAX_ATTEMPTS = 3
-LEASE = timedelta(minutes=5)
+# A geração leva segundos; a posse curta deixa a reentrega retomar logo depois de uma queda.
+LEASE = timedelta(minutes=2)
 TIMELINE_LIMIT = 500
 EXCERPT_CHARS = 600
 
@@ -130,9 +131,17 @@ async def load(engine: AsyncEngine, report: Any) -> ReportData:
                 " where diagnosis_id = cast(:d as uuid) order by rank",
                 d=report.diagnosis_id,
             )
-        timeline = None
+        timeline, total = None, None
         if report.include_timeline:
             # Os Eventos das Execuções do Incidente, na janela delas (lê só as partições do mês).
+            total = await connection.scalar(
+                text(
+                    "select count(*) from doctor.events e where e.execution_ref in ("
+                    " select ie.execution_id from doctor.incident_executions ie"
+                    " where ie.incident_id = cast(:i as uuid))"
+                ),
+                {"i": report.incident_id},
+            )
             timeline = await rows(
                 connection,
                 "with runs as (select x.id, x.first_event_at, x.last_event_at"
@@ -145,10 +154,12 @@ async def load(engine: AsyncEngine, report: Any) -> ReportData:
                 " from doctor.events e where e.execution_ref in (select id from runs)"
                 " and e.timestamp between (select min(first_event_at) from runs)"
                 " and (select max(last_event_at) from runs)"
-                " order by e.timestamp limit :n",
+                " order by e.timestamp desc limit :n",
                 i=report.incident_id,
                 n=TIMELINE_LIMIT,
             )
+            # Os mais recentes, em ordem cronológica.
+            timeline.reverse()
     return ReportData(
         organization=str(organization or "Organização"),
         incident=incident,
@@ -159,6 +170,7 @@ async def load(engine: AsyncEngine, report: Any) -> ReportData:
         reviews=reviews,
         timeline=timeline,
         generated_at=datetime.now(UTC),
+        timeline_total=int(total) if total is not None else None,
     )
 
 
@@ -169,6 +181,19 @@ async def finish(engine: AsyncEngine, report: Any, path: str, size: int, digest:
             text("select doctor.finish_report(cast(:r as uuid), :p, cast(:s as bigint), :h)"),
             {"r": report.id, "p": path, "s": size, "h": digest},
         )
+
+
+class ReportBusyError(Exception):
+    """Relatório em geração por outra entrega: a mensagem volta para a fila."""
+
+
+async def still_running(engine: AsyncEngine, report_id: str) -> bool:
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        status = await connection.scalar(
+            text("select status from doctor.reports where id = cast(:r as uuid)"), {"r": report_id}
+        )
+    return bool(status == "running")
 
 
 async def give_up_or_release(engine: AsyncEngine, report: Any) -> bool:
@@ -194,6 +219,10 @@ async def generate_report(engine: AsyncEngine, payload: Mapping[str, Any], stora
     """`ready`, `failed` ou `ignored` (já pronto, ou outra entrega cuidando dele)."""
     report = await claim(engine, str(payload["report_id"]))
     if report is None:
+        if await still_running(engine, str(payload["report_id"])):
+            # Outra entrega tem a posse (ou caiu no meio): erro, para o Pub/Sub entregar de novo
+            # depois do backoff, quando a posse vencida deixa retomar.
+            raise ReportBusyError(str(payload["report_id"]))
         return "ignored"
     try:
         rendered = render(await load(engine, report), cast("Format", report.format))

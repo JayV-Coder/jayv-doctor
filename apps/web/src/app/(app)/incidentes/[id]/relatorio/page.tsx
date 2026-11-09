@@ -7,7 +7,7 @@ import { confidenceText, reviewable, verdictLabel, verdictOf } from "@/lib/diagn
 import { formatDateTime } from "@/lib/format";
 import { getIncident } from "@/lib/incidents/api";
 import { incidentCode } from "@/lib/incidents/labels";
-import { getReport, listReports } from "@/lib/reports/api";
+import { listReports } from "@/lib/reports/api";
 import { previewName, reportLine } from "@/lib/reports/labels";
 import { ReportForm } from "./report-form";
 import { ShareList } from "./share-list";
@@ -39,14 +39,6 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const current = versions?.find((version) => reviewable(version.status));
   const diagnosis = current ? await getDiagnosis(current.id) : null;
   const recent = reports.slice(0, HISTORY);
-  // Os links de cada relatório pronto (só quem compartilha os vê).
-  const details = operator
-    ? await Promise.all(
-        recent.map((report) =>
-          report.status === "ready" ? getReport(report.id) : Promise.resolve(null),
-        ),
-      )
-    : [];
   const verdict = verdictOf(diagnosis?.feedback);
 
   return (
@@ -122,10 +114,9 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
         <>
           <h2 className="label">Gerados</h2>
           <ul className="list" aria-label="Relatórios gerados">
-            {recent.map((report, index) => {
-              const shares = (details[index]?.shares ?? []).filter(
-                (share) => share.revoked_at === null && new Date(share.expires_at) > new Date(),
-              );
+            {recent.map((report) => {
+              // A API traz só os links ativos, e só para quem compartilha.
+              const shares = report.shares;
               return (
                 <li key={report.id}>
                   <div className="li">

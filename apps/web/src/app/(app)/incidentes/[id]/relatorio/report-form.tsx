@@ -41,11 +41,18 @@ export function ReportForm({ incidentId }: { incidentId: string }) {
     for (let attempt = 0; attempt < POLL_TRIES; attempt += 1) {
       const status = await reportStatus(created.value);
       if (status === "ready") return created.value;
-      if (status === "failed") break;
+      if (status === "failed") {
+        // Falhou de vez: o próximo clique é outro pedido.
+        setError("Não foi possível gerar o relatório. Tente de novo.");
+        setKey(crypto.randomUUID());
+        return null;
+      }
       await new Promise((resolve) => setTimeout(resolve, POLL_MS));
     }
-    setError("Não foi possível gerar o relatório. Tente de novo.");
-    setKey(crypto.randomUUID());
+    // Ainda na fila: a chave fica, e clicar de novo retoma o mesmo relatório (sem duplicar).
+    setError(
+      "O relatório ainda está sendo gerado. Clique de novo em instantes ou baixe pelo histórico.",
+    );
     return null;
   }
 

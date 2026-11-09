@@ -8679,6 +8679,13 @@
             ],
             "title": "Completed At"
           },
+          "shares": {
+            "items": {
+              "$ref": "#/components/schemas/ReportShare"
+            },
+            "type": "array",
+            "title": "Shares"
+          },
           "download_url": {
             "anyOf": [
               {
@@ -8700,13 +8707,6 @@
               }
             ],
             "title": "Expires In"
-          },
-          "shares": {
-            "items": {
-              "$ref": "#/components/schemas/ReportShare"
-            },
-            "type": "array",
-            "title": "Shares"
           }
         },
         "type": "object",
@@ -8724,9 +8724,9 @@
           "error",
           "created_at",
           "completed_at",
+          "shares",
           "download_url",
-          "expires_in",
-          "shares"
+          "expires_in"
         ],
         "title": "Report"
       },
@@ -8943,6 +8943,13 @@
               }
             ],
             "title": "Completed At"
+          },
+          "shares": {
+            "items": {
+              "$ref": "#/components/schemas/ReportShare"
+            },
+            "type": "array",
+            "title": "Shares"
           }
         },
         "type": "object",
@@ -8959,7 +8966,8 @@
           "content_sha256",
           "error",
           "created_at",
-          "completed_at"
+          "completed_at",
+          "shares"
         ],
         "title": "ReportSummary"
       },

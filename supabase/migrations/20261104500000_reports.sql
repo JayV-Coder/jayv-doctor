@@ -193,48 +193,73 @@ begin
 end;
 $$;
 
--- Abertura pelo link, sem sessão: só link ativo de relatório pronto. Cada acesso conta e fica na
--- trilha da Organização dona do relatório.
+-- O link vale enquanto estiver ativo, o relatório pronto, a Organização ativa (nem suspensa
+-- nem com exclusão marcada) e quem compartilhou ainda for Analyst ou acima nela.
+create function doctor.active_report_share(token_hash text)
+returns doctor.report_shares
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select s.* from doctor.report_shares s
+  join doctor.reports r on r.tenant_id = s.tenant_id and r.id = s.report_id and r.status = 'ready'
+  join doctor.tenants t on t.id = s.tenant_id
+    and t.status = 'active' and t.deletion_scheduled_for is null
+  join doctor.memberships m on m.tenant_id = s.tenant_id and m.user_id = s.created_by
+    and m.role in ('owner', 'admin', 'analyst')
+  where s.token_hash = active_report_share.token_hash
+    and s.revoked_at is null and s.expires_at > now()
+$$;
+
+-- Abertura pelo link, sem sessão: devolve a URL guardada, sem efeito. A API busca o arquivo e só
+-- então registra o acesso (`record_report_share_access`).
 create function doctor.open_report_share(token_hash text)
 returns table (download_url text, format text, filename text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select s.download_url, r.format,
+    'inc-' || lpad(coalesce(i.number, 0)::text, 4, '0') || '.' || r.format
+  from doctor.active_report_share(open_report_share.token_hash) s
+  join doctor.reports r on r.tenant_id = s.tenant_id and r.id = s.report_id
+  join doctor.incidents i on i.tenant_id = r.tenant_id and i.id = r.incident_id
+  where s.id is not null
+$$;
+
+-- Arquivo entregue: conta o acesso e grava `report.share_accessed` na trilha da Organização dona.
+create function doctor.record_report_share_access(token_hash text)
+returns void
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
-  share doctor.report_shares;
-  found_report doctor.reports;
-  incident_number integer;
+  share doctor.report_shares := doctor.active_report_share(token_hash);
 begin
-  select * into share from doctor.report_shares s
-  where s.token_hash = open_report_share.token_hash and s.revoked_at is null and s.expires_at > now();
   if share.id is null then
     return;
   end if;
-  select * into found_report from doctor.reports r
-  where r.tenant_id = share.tenant_id and r.id = share.report_id and r.status = 'ready';
-  if found_report.id is null then
-    return;
-  end if;
-  select i.number into incident_number from doctor.incidents i
-  where i.tenant_id = found_report.tenant_id and i.id = found_report.incident_id;
   update doctor.report_shares s set access_count = s.access_count + 1, last_accessed_at = now()
   where s.id = share.id;
   perform doctor.write_audit(share.tenant_id, 'report.share_accessed', 'report',
-    found_report.id::text, null, jsonb_build_object('share_id', share.id));
-  return query select share.download_url, found_report.format,
-    'inc-' || lpad(coalesce(incident_number, 0)::text, 4, '0') || '.' || found_report.format;
+    share.report_id::text, null, jsonb_build_object('share_id', share.id));
 end;
 $$;
 
 revoke all on function doctor.request_report(uuid, text, boolean, boolean, text) from public, anon, service_role;
 revoke all on function doctor.create_report_share(uuid, text, text) from public, anon, service_role;
 revoke all on function doctor.revoke_report_share(uuid) from public, anon, service_role;
+revoke all on function doctor.active_report_share(text) from public, anon, authenticated, service_role;
 revoke all on function doctor.open_report_share(text) from public, service_role;
+revoke all on function doctor.record_report_share_access(text) from public, service_role;
 grant execute on function doctor.request_report(uuid, text, boolean, boolean, text) to authenticated;
 grant execute on function doctor.create_report_share(uuid, text, text) to authenticated;
 grant execute on function doctor.revoke_report_share(uuid) to authenticated;
 grant execute on function doctor.open_report_share(text) to anon, authenticated;
+grant execute on function doctor.record_report_share_access(text) to anon, authenticated;
 
 -- O worker conclui: arquivo no Storage, a linha `ready` e a geração na trilha (com o hash).
 create function doctor.finish_report(report uuid, path text, size bigint, digest text)
@@ -259,8 +284,8 @@ $$;
 revoke all on function doctor.finish_report(uuid, text, bigint, text) from public, anon, authenticated;
 grant execute on function doctor.finish_report(uuid, text, bigint, text) to service_role;
 
--- Revisão humana para o Relatório: o worker não lê `auth.users`; sai o nome (ou o e-mail) de
--- quem revisou.
+-- Revisão humana para o Relatório: o worker não lê `auth.users`. Sai o nome de quem revisou e
+-- nunca o e-mail, porque o relatório vai para fora da Organização.
 create function doctor.report_reviews(tenant uuid, diagnosis uuid)
 returns table (verdict text, reviewer text, comment text, created_at timestamptz)
 language sql
@@ -269,7 +294,7 @@ security definer
 set search_path = ''
 as $$
   select f.verdict,
-    coalesce(nullif(btrim(u.raw_user_meta_data ->> 'full_name'), ''), u.email, 'Usuário removido'),
+    coalesce(nullif(btrim(u.raw_user_meta_data ->> 'full_name'), ''), 'Revisor da Organização'),
     f.comment, f.created_at
   from doctor.diagnosis_feedback f
   left join auth.users u on u.id = f.reviewer_id

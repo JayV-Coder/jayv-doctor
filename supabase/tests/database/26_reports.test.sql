@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(20);
+select plan(25);
 
 select tests.create_user('00000000-0000-4000-8000-0000000a0001', 'analyst@acme.test');
 select tests.create_user('00000000-0000-4000-8000-0000000a0002', 'viewer@acme.test');
@@ -102,8 +102,27 @@ select results_eq(
   $$values ('https://storage.test/a'::text, 'pdf'::text)$$,
   'o link abre sem sessão'
 );
+select throws_ok($$select access_count from doctor.report_shares$$, '42501', null, 'anon não lê a tabela');
+select lives_ok($$select doctor.record_report_share_access(repeat('a', 64))$$,
+  'o acesso conta depois de o arquivo ser entregue');
+select tests.clear_authentication();
+select is((select access_count from doctor.report_shares where token_hash = repeat('a', 64)), 1,
+  'um acesso contado');
+-- Organização suspensa: o link para de abrir.
+update doctor.tenants set status = 'suspended' where id = '00000000-0000-4000-8000-00000000ac01';
+select tests.authenticate_as_anon();
+select is((select count(*)::int from doctor.open_report_share(repeat('a', 64))), 0,
+  'Organização suspensa não serve o link');
+select tests.clear_authentication();
+update doctor.tenants set status = 'active' where id = '00000000-0000-4000-8000-00000000ac01';
+-- Quem compartilhou perdeu o Papel: o link também para.
+update doctor.memberships set role = 'viewer' where user_id = '00000000-0000-4000-8000-0000000a0001';
+select tests.authenticate_as_anon();
+select is((select count(*)::int from doctor.open_report_share(repeat('a', 64))), 0,
+  'quem compartilhou já não é Analyst: o link não abre');
 select is((select count(*)::int from doctor.open_report_share(repeat('b', 64))), 0, 'token errado não abre');
 select tests.clear_authentication();
+update doctor.memberships set role = 'analyst' where user_id = '00000000-0000-4000-8000-0000000a0001';
 select tests.authenticate_as('00000000-0000-4000-8000-0000000a0001', '00000000-0000-4000-8000-00000000ac01', 'analyst');
 select lives_ok(
   $$select doctor.revoke_report_share((select id from doctor.report_shares))$$, 'Analyst revoga o link'

@@ -43,14 +43,14 @@ class ReportSummary(BaseModel):
     error: str | None
     created_at: datetime
     completed_at: datetime | None
+    # Os links ativos, para quem compartilha (Analyst ou acima); vazio para o Viewer.
+    shares: list[ReportShare]
 
 
 class Report(ReportSummary):
     # Só quando pronto: URL assinada de 5 min.
     download_url: str | None
     expires_in: int | None
-    # Os links, para quem compartilha (Analyst ou acima); vazio para o Viewer.
-    shares: list[ReportShare]
 
 
 class ReportShareCreated(BaseModel):

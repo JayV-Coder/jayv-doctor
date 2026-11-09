@@ -1018,3 +1018,59 @@ async def test_uso_da_organizacao_com_os_limites_do_plano(
         "connectors_active",
         "members",
     }
+
+
+@pytest.mark.asyncio
+async def test_relatorio_lista_com_os_links_ativos_contra_o_banco(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """O histórico traz os links ativos numa consulta só (sem assinar URL por relatório)."""
+    from aid_api.core import db
+    from aid_api.reports.repo import ReportRepository
+
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    tenant = tenants[0]
+    integration, incident, report = str(uuid4()), str(uuid4()), str(uuid4())
+    async with engine.begin() as connection:
+        for sql in (
+            "insert into public.organization_members (org_id, user_id, role)"
+            " values (:t, :u, 'member')",
+            "insert into doctor.memberships (tenant_id, user_id, role) values (:t, :u, 'analyst')",
+            "insert into doctor.integrations (id, tenant_id, name, source_system, target_system,"
+            " environment) values (:g, :t, 'Pedidos', 'salesforce', 'sap', 'prd')",
+            "insert into doctor.incidents (id, tenant_id, integration_id, title, category,"
+            " severity, rule_code, rule_version, first_seen_at, last_seen_at, execution_count)"
+            " values (:i, :t, :g, 'Timeout', 'TIMEOUT', 'high', 'INT-003', '2026.10.1', now(),"
+            " now(), 1)",
+            "insert into doctor.reports (id, tenant_id, incident_id, format, status, storage_path,"
+            " content_sha256, processing_key) values (cast(:r as uuid), :t, :i, 'pdf',"
+            " 'ready', 'x.pdf', repeat('c', 64), 'k-' || cast(:r as text))",
+            "insert into doctor.report_shares (tenant_id, report_id, token_hash, download_url,"
+            " expires_at, revoked_at) values (:t, :r, repeat('1', 64), 'u',"
+            " now() + interval '1 day', null), (:t, :r, repeat('2', 64), 'u',"
+            " now() + interval '1 day', now())",
+        ):
+            await connection.execute(
+                text(sql), {"t": tenant, "u": user, "g": integration, "i": incident, "r": report}
+            )
+    try:
+        repository = ReportRepository()
+        found = await repository.for_incident(claims_for(tenant, user, "analyst"), incident)
+        assert [len(item.shares) for item in found] == [1]
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("update doctor.memberships set role = 'viewer' where user_id = :u"),
+                {"u": user},
+            )
+        viewer = await repository.for_incident(claims_for(tenant, user, "viewer"), incident)
+        assert [len(item.shares) for item in viewer] == [0]
+    finally:
+        async with engine.begin() as connection:
+            for table in ("reports", "incidents", "integrations", "memberships"):
+                await connection.execute(
+                    text(f"delete from doctor.{table} where tenant_id = :t"),  # noqa: S608
+                    {"t": tenant},
+                )
+            await connection.execute(
+                text("delete from public.organization_members where org_id = :t"), {"t": tenant}
+            )

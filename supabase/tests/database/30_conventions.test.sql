@@ -104,7 +104,7 @@ select is(
 select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p
    where p.pronamespace = 'doctor'::regnamespace and has_function_privilege('anon', p.oid, 'execute')),
-  array['accept_ingestion_batch', 'open_report_share', 'resolve_ingestion_token'],
+  array['accept_ingestion_batch', 'open_report_share', 'record_report_share_access', 'resolve_ingestion_token'],
   'anon só executa as funções por token (ingestão e link do Relatório)'
 );
 

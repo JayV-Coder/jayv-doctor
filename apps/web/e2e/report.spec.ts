@@ -54,7 +54,7 @@ test("Relatório técnico: gera, baixa, compartilha e revoga o link (Tela 19)", 
   expect(file).toContain("# Relatório técnico · ");
   expect(file).toContain("INC-0001 · Timeout");
   expect(file).toContain("## Evidências");
-  expect(file).toMatch(/sha256 [0-9a-f]{64}/);
+  expect(file).toMatch(/sha256 do texto [0-9a-f]{64}/);
   expect(file).not.toContain("hmac:");
 
   // Link: abre sem conta, e revogado deixa de abrir.

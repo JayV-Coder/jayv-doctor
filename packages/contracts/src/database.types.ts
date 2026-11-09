@@ -1413,6 +1413,28 @@ isOneToOne: false
 "accept_invitation":
 { Args: { "token_hash": string }; Returns: string
                            },
+"active_report_share":
+{ Args: { "token_hash": string }; Returns: {
+              "access_count": number,
+"created_at": string,
+"created_by": string | null,
+"download_url": string,
+"expires_at": string,
+"id": string,
+"last_accessed_at": string | null,
+"report_id": string,
+"revoked_at": string | null,
+"revoked_by": string | null,
+"tenant_id": string,
+"token_hash": string,
+"updated_at": string
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "report_shares"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
 "add_incident_comment":
 { Args: { "body": string,"mentioned": (string)[],"target": string }; Returns: string
                            },
@@ -1648,6 +1670,9 @@ isOneToOne: false
                            },
 "record_audit_export":
 { Args: { "filters": Json }; Returns: undefined
+                           },
+"record_report_share_access":
+{ Args: { "token_hash": string }; Returns: undefined
                            },
 "refresh_execution_stats":
 { Args: { "batch"?: number }; Returns: number

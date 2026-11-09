@@ -4,9 +4,10 @@ O Relatório técnico (#32) tem um link opcional para quem não é da Organizaç
 
 Por isso o link aponta para o app, `…/compartilhado#<token>`. O token fica no fragmento, que o navegador não envia ao servidor (como no aceite do convite). A página manda o token no corpo de um `POST /api/v1/shared-reports`, sem sessão, e a API:
 
-1. calcula o sha256 do token e chama `doctor.open_report_share` como `anon` (a única porta anônima além da ingestão por token);
-2. a função confere se o link está ativo, conta o acesso, grava `report.share_accessed` na trilha da Organização dona e devolve a URL assinada guardada;
-3. a API busca o arquivo por essa URL e devolve os bytes. A URL nunca chega a quem tem o link.
+1. calcula o sha256 do token e chama `doctor.open_report_share` como `anon`. Ela e `record_report_share_access` são as únicas portas anônimas além da ingestão por token;
+2. a função confere se o link está ativo (não vencido nem revogado, Organização ativa, quem compartilhou ainda Analyst ou acima) e devolve a URL assinada guardada;
+3. a API busca o arquivo por essa URL e devolve os bytes. A URL nunca chega a quem tem o link;
+4. só com o arquivo entregue, `record_report_share_access` conta o acesso e grava `report.share_accessed` na trilha da Organização dona.
 
 A URL assinada é gerada na hora de compartilhar, com o JWT de quem compartilha (a política do bucket vale) e a mesma validade de 7 dias. A API não usa `service_role` (ADR-0004).
 

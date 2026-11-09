@@ -20,6 +20,7 @@ from typing import Any
 import httpx
 from aid_contracts.events import EventValidationError, validate_event
 from aid_db import platform_role
+from aid_observability.tracing import tracer
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -380,7 +381,10 @@ async def ingest_batch(batch_id: str, engine: AsyncEngine, master_key: bytes) ->
         if closed:
             return "ignored"
         if rows:
-            await connection.execute(INSERT_EVENT, rows)
+            # A gravação em doctor.events no mesmo trace da requisição que aceitou o lote (#34).
+            with tracer.start_as_current_span("doctor.events insert") as span:
+                span.set_attribute("aid.events", len(rows))
+                await connection.execute(INSERT_EVENT, rows)
         await connection.execute(
             text(
                 "update doctor.ingestion_batches set processed_at = now(), skipped = :s"

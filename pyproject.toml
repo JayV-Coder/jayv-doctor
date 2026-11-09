@@ -9,7 +9,7 @@ requires-python = ">=3.12,<3.13"
 package = false
 
 [tool.uv.workspace]
-members = ["apps/api", "packages/connectors", "packages/contracts", "packages/correlation", "packages/db", "packages/diagnosis-engine", "packages/evaluation", "packages/knowledge", "packages/security", "workers/connectors", "workers/correlation", "workers/diagnosis", "workers/ingestion", "workers/relay", "workers/runtime"]
+members = ["apps/api", "packages/connectors", "packages/contracts", "packages/correlation", "packages/db", "packages/diagnosis-engine", "packages/evaluation", "packages/knowledge", "packages/observability", "packages/security", "workers/connectors", "workers/correlation", "workers/diagnosis", "workers/ingestion", "workers/relay", "workers/runtime"]
 
 [dependency-groups]
 dev = [
@@ -71,6 +71,8 @@ files = [
     "workers/diagnosis/src",
     "workers/diagnosis/tests",
     "packages/db/src",
+    "packages/observability/src",
+    "packages/observability/tests",
     "packages/security/src",
     "packages/security/tests",
     "workers/connectors/src",

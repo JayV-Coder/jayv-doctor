@@ -16,6 +16,7 @@ members = [
     "aid-evaluation",
     "aid-ingestion",
     "aid-knowledge",
+    "aid-observability",
     "aid-relay",
     "aid-security",
     "aid-worker",
@@ -31,6 +32,7 @@ dependencies = [
     { name = "aid-contracts" },
     { name = "aid-db" },
     { name = "aid-knowledge" },
+    { name = "aid-observability" },
     { name = "aid-security" },
     { name = "asyncpg" },
     { name = "fastapi" },
@@ -50,6 +52,7 @@ requires-dist = [
     { name = "aid-contracts", editable = "packages/contracts" },
     { name = "aid-db", editable = "packages/db" },
     { name = "aid-knowledge", editable = "packages/knowledge" },
+    { name = "aid-observability", editable = "packages/observability" },
     { name = "aid-security", editable = "packages/security" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "fastapi", specifier = ">=0.162" },
@@ -145,12 +148,14 @@ name = "aid-db"
 version = "0.1.0"
 source = { editable = "packages/db" }
 dependencies = [
+    { name = "aid-observability" },
     { name = "asyncpg" },
     { name = "sqlalchemy", extra = ["asyncio"] },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "aid-observability", editable = "packages/observability" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
 ]
@@ -180,6 +185,7 @@ dependencies = [
     { name = "aid-db" },
     { name = "aid-diagnosis-engine" },
     { name = "aid-knowledge" },
+    { name = "aid-observability" },
     { name = "fastapi" },
     { name = "sqlalchemy", extra = ["asyncio"] },
 ]
@@ -189,6 +195,7 @@ requires-dist = [
     { name = "aid-db", editable = "packages/db" },
     { name = "aid-diagnosis-engine", editable = "packages/diagnosis-engine" },
     { name = "aid-knowledge", editable = "packages/knowledge" },
+    { name = "aid-observability", editable = "packages/observability" },
     { name = "fastapi", specifier = ">=0.162" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
 ]
@@ -215,6 +222,7 @@ source = { editable = "workers/ingestion" }
 dependencies = [
     { name = "aid-contracts" },
     { name = "aid-db" },
+    { name = "aid-observability" },
     { name = "aid-security" },
     { name = "asyncpg" },
     { name = "httpx" },
@@ -225,6 +233,7 @@ dependencies = [
 requires-dist = [
     { name = "aid-contracts", editable = "packages/contracts" },
     { name = "aid-db", editable = "packages/db" },
+    { name = "aid-observability", editable = "packages/observability" },
     { name = "aid-security", editable = "packages/security" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "httpx", specifier = ">=0.28" },
@@ -251,11 +260,29 @@ requires-dist = [
 ]
 
 [[package]]
+name = "aid-observability"
+version = "0.1.0"
+source = { editable = "packages/observability" }
+dependencies = [
+    { name = "httpx" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-sdk" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "opentelemetry-api", specifier = ">=1.30" },
+    { name = "opentelemetry-sdk", specifier = ">=1.30" },
+]
+
+[[package]]
 name = "aid-relay"
 version = "0.0.0"
 source = { editable = "workers/relay" }
 dependencies = [
     { name = "aid-db" },
+    { name = "aid-observability" },
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "httpx" },
@@ -265,6 +292,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "aid-db", editable = "packages/db" },
+    { name = "aid-observability", editable = "packages/observability" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "fastapi", specifier = ">=0.162" },
     { name = "httpx", specifier = ">=0.28" },
@@ -285,8 +313,10 @@ dependencies = [
     { name = "aid-correlation-worker" },
     { name = "aid-diagnosis-worker" },
     { name = "aid-ingestion" },
+    { name = "aid-observability" },
     { name = "aid-relay" },
     { name = "fastapi" },
+    { name = "opentelemetry-exporter-gcp-trace" },
     { name = "uvicorn" },
 ]
 
@@ -296,8 +326,10 @@ requires-dist = [
     { name = "aid-correlation-worker", editable = "workers/correlation" },
     { name = "aid-diagnosis-worker", editable = "workers/diagnosis" },
     { name = "aid-ingestion", editable = "workers/ingestion" },
+    { name = "aid-observability", editable = "packages/observability" },
     { name = "aid-relay", editable = "workers/relay" },
     { name = "fastapi", specifier = ">=0.162" },
+    { name = "opentelemetry-exporter-gcp-trace", specifier = ">=1.9" },
     { name = "uvicorn", specifier = ">=0.54" },
 ]
 

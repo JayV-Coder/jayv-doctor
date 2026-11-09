@@ -237,6 +237,50 @@ run "dimensionamento_acima_do_supavisor_e_barrado" {
   expect_failures = [check.conexoes_cabem_no_supavisor]
 }
 
+run "cada_alerta_tem_runbook_e_vai_para_o_plantao" {
+  command = plan
+
+  variables {
+    alert_emails = ["plantao@exemplo.test"]
+  }
+
+  assert {
+    condition = toset(keys(module.observability.alerts)) == toset([
+      "dlq", "outbox_lag", "workers_stopped", "supabase_cpu", "llm_errors", "api_errors",
+    ])
+    error_message = "Os seis alertas do ticket: DLQ, outbox, workers, CPU do Supabase, LLM e 5xx da API."
+  }
+  assert {
+    condition     = alltrue([for content in values(module.observability.alerts) : strcontains(content, "/docs/operations/runbooks/")])
+    error_message = "Cada alerta aponta para o runbook dele."
+  }
+  assert {
+    condition     = google_cloud_scheduler_job.platform_metrics.schedule == "* * * * *"
+    error_message = "As medidas da plataforma vão para o Cloud Monitoring a cada minuto."
+  }
+  assert {
+    condition     = alltrue([for name in keys(local.workers) : module.workers[name].env["OTEL_ENABLED"] == "true"])
+    error_message = "Os workers mandam traces (o trace vai da API até a gravação em events)."
+  }
+}
+
+run "admin_health_so_para_operadores" {
+  command = plan
+
+  variables {
+    platform_operators = ["group:operacao@exemplo.test"]
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service_iam_member.operators["group:operacao@exemplo.test"].role == "roles/run.invoker"
+    error_message = "Operadores invocam o relay pelo IAM; o relay segue interno."
+  }
+  assert {
+    condition     = module.workers["relay"].ingress == "INGRESS_TRAFFIC_INTERNAL_ONLY" && !module.workers["relay"].public_invoker
+    error_message = "O /admin/health não é público."
+  }
+}
+
 run "chave_secreta_do_supabase_e_recusada" {
   command = plan
 

@@ -12,7 +12,11 @@ import os
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
+from aid_observability import logs, tracing
+from aid_observability.logs import bind
+from aid_observability.tracing import context_from, tracer
 from fastapi import APIRouter, FastAPI, Response, status
+from opentelemetry.trace import SpanKind
 from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
@@ -110,7 +114,23 @@ def create_app(worker: str, handlers: Mapping[str, Handler]) -> FastAPI:
                 envelope.message.message_id,
             )
             return Response(status_code=status.HTTP_501_NOT_IMPLEMENTED)
-        await handler(envelope.message)
+        attributes = envelope.message.attributes
+        # Filho do span de quem gravou a mensagem na outbox (atributo `traceparent`, #34).
+        with (
+            tracer.start_as_current_span(
+                f"pubsub {topic}", context=context_from(attributes), kind=SpanKind.CONSUMER
+            ) as span,
+            bind(
+                worker=worker,
+                topic=topic,
+                message_id=envelope.message.message_id,
+                tenant_id=attributes.get("tenant_id"),
+            ),
+        ):
+            span.set_attribute("messaging.message.id", envelope.message.message_id)
+            if attributes.get("tenant_id"):
+                span.set_attribute("tenant.id", attributes["tenant_id"])
+            await handler(envelope.message)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     for router in routers_for(worker):
@@ -119,4 +139,7 @@ def create_app(worker: str, handlers: Mapping[str, Handler]) -> FastAPI:
 
 
 WORKER = os.environ.get("WORKER_NAME", "")
+# Logs JSON para o Cloud Logging e traces no Cloud Trace (com OTEL_ENABLED), antes das rotas.
+logs.configure_logging()
+tracing.configure(f"worker-{WORKER}")
 app = create_app(WORKER, handlers_for(WORKER))

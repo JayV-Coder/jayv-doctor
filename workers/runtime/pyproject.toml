@@ -4,16 +4,19 @@ version = "0.0.0"
 description = "Runtime dos workers acionados por push do Pub/Sub"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "aid-observability",
     "aid-connector-worker",
     "aid-correlation-worker",
     "aid-diagnosis-worker",
     "aid-ingestion",
     "aid-relay",
     "fastapi>=0.162",
+    "opentelemetry-exporter-gcp-trace>=1.9",
     "uvicorn>=0.54",
 ]
 
 [tool.uv.sources]
+aid-observability = { workspace = true }
 aid-connector-worker = { workspace = true }
 aid-correlation-worker = { workspace = true }
 aid-diagnosis-worker = { workspace = true }

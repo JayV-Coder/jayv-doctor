@@ -29,8 +29,9 @@ locals {
     # Diagnóstico publicado (#24): quem consome chega com os alertas (v0.3).
     "diagnosis.published" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
     # Avisos de Cota aos 80% e 100% (#31): e-mail para Owner e Admin.
-    "usage.threshold" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
-    "connector.sync"  = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
+    "usage.threshold"  = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    "report.requested" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
+    "connector.sync"   = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
   }
 
   # voyage-api-key: a busca da Base de conhecimento gera o embedding da pergunta (#23).

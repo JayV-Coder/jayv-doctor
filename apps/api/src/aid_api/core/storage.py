@@ -46,8 +46,12 @@ class Storage:
         """Os primeiros `limit` bytes e o tamanho total, ou `None` se o objeto não existe."""
         raise NotImplementedError
 
-    async def sign_download(self, token: str, path: str, seconds: int) -> str:
+    async def sign_download(self, token: str, path: str, seconds: int, bucket: str = BUCKET) -> str:
         """URL assinada de leitura, válida por `seconds`."""
+        raise NotImplementedError
+
+    async def fetch(self, signed_url: str) -> bytes | None:
+        """O arquivo de uma URL assinada (proxy do link do Relatório); `None` se já não existe."""
         raise NotImplementedError
 
 
@@ -91,11 +95,11 @@ class SupabaseStorage(Storage):
             return
         raise unavailable()
 
-    async def sign_download(self, token: str, path: str, seconds: int) -> str:
+    async def sign_download(self, token: str, path: str, seconds: int, bucket: str = BUCKET) -> str:
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT) as client:
                 response = await client.post(
-                    f"{self.base}/object/sign/{self.object_path(path)}",
+                    f"{self.base}/object/sign/{self.object_path(path, bucket)}",
                     headers=self.headers(token),
                     json={"expiresIn": seconds},
                 )
@@ -103,10 +107,25 @@ class SupabaseStorage(Storage):
             raise unavailable() from exc
         if response.status_code in (400, 403, 404):
             # Sem permissão no bucket ou objeto já apagado pela retenção.
-            raise ApiError(404, "not_found", "Log bruto não encontrado.")
+            raise ApiError(404, "not_found", "Arquivo não encontrado.")
         if response.status_code != 200:
             raise unavailable()
         return f"{self.base}{response.json()['signedURL']}"
+
+    async def fetch(self, signed_url: str) -> bytes | None:
+        # Só URL do próprio Storage: o banco guarda a URL, mas a origem é conferida aqui.
+        if not signed_url.startswith(f"{self.base}/object/sign/"):
+            return None
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+                response = await client.get(signed_url)
+        except httpx.HTTPError as exc:
+            raise unavailable() from exc
+        if response.status_code in (400, 404):
+            return None
+        if response.status_code != 200:
+            raise unavailable()
+        return response.content
 
     async def head(self, token: str, path: str, limit: int) -> Head | None:
         try:

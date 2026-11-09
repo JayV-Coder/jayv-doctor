@@ -90,6 +90,11 @@ async def anonymous_tx(
     try:
         async with (engine or get_engine()).begin() as connection:
             await connection.execute(text("set local role anon"))
+            # IP e request_id na trilha também sem Usuário (abertura do link do Relatório, #32).
+            await connection.execute(
+                text("select set_config('doctor.request', :meta, true)"),
+                {"meta": request_meta.current() or ""},
+            )
             yield connection
     except DBAPIError as exc:
         factory = errors.get(sqlstate(exc) or "")

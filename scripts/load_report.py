@@ -176,6 +176,8 @@ def main(argv: Sequence[str]) -> int:
     ingestion = json.loads(args.ingestion.read_text()) if args.ingestion else {}
     read = json.loads(args.read.read_text()) if args.read else {}
     accepted = summary_value(ingestion, "events_accepted", "count")
+    # Evento recusado pela API é defeito do gerador de carga, não perda: mas a rodada não vale.
+    rejected = summary_value(ingestion, "events_rejected", "count") or 0
     # `checks` dos scripts = a taxa de respostas sem 5xx; 4xx (429, 422) não é erro do servidor.
     failures = [
         1 - value
@@ -196,6 +198,9 @@ def main(argv: Sequence[str]) -> int:
         error_rate=max(failures) if failures else None,
     )
     sys.stdout.write(render(args.run, measured))
+    if rejected:
+        sys.stdout.write(f"\n{int(rejected)} Eventos recusados pela API: confira o gerador.\n")
+        return 1
     return 0 if all(ok is not False for _, _, ok in verdicts(measured)) else 1
 
 

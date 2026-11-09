@@ -37,7 +37,9 @@ export function execution(integrationId) {
     source: { provider: "sap", service: "PI" },
     operation: `CARGA_${step}`,
     severity: failed && index === 2 ? "ERROR" : "INFO",
-    ...(failed && index === 2 ? { error: { http_status: 504, message: "UPSTREAM_TIMEOUT" } } : {}),
+    ...(failed && index === 2
+      ? { error: { category: "TIMEOUT", http_status: 504, message: "UPSTREAM_TIMEOUT" } }
+      : {}),
     attributes: { load_run: RUN_ID },
   }));
 }

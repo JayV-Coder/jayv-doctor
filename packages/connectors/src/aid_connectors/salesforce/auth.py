@@ -21,10 +21,10 @@ import httpx
 import jwt
 
 from aid_connectors.base import ConnectorError, Secret
+from aid_connectors.common import is_loopback
 
 LOGIN = {"production": "https://login.salesforce.com", "sandbox": "https://test.salesforce.com"}
 INSTANCE = re.compile(r"^[a-z0-9-]+(\.[a-z0-9-]+)*\.(salesforce|force)\.com$")
-LOOPBACK = ("http://127.0.0.1:", "http://localhost:")
 
 
 @dataclass(frozen=True)
@@ -38,7 +38,7 @@ def login_url(environment: str, environ: Mapping[str, str] = os.environ) -> str:
     """`AID_SF_LOGIN_URL` só existe para o Salesforce falso do E2E e só aceita loopback."""
     override = environ.get("AID_SF_LOGIN_URL")
     if override:
-        if not override.startswith(LOOPBACK):
+        if not is_loopback(override):
             raise ValueError("endpoint do Salesforce trocado só pode ser loopback (E2E)")
         return override.rstrip("/")
     return LOGIN[environment]
@@ -46,7 +46,7 @@ def login_url(environment: str, environ: Mapping[str, str] = os.environ) -> str:
 
 def trusted_instance(url: str, login: str) -> str:
     parsed = urlparse(url)
-    if login.startswith(LOOPBACK) and url.startswith(LOOPBACK):
+    if is_loopback(login) and is_loopback(url):
         return url.rstrip("/")
     if (
         parsed.scheme != "https"

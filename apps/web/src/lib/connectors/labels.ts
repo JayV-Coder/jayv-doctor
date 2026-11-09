@@ -70,7 +70,7 @@ export function pauseText(reason: string | null | undefined): string {
     return "Pausado: o provedor recusou a credencial. Envie uma credencial nova para retomar.";
   }
   if (reason === "api_limit") {
-    return "Pausado: o limite diário da API do provedor chegou a 80%. A coleta volta sozinha na janela seguinte.";
+    return "Aguardando: o limite diário da API do provedor chegou a 80%. A coleta volta sozinha na janela seguinte.";
   }
   return "Pausado por um Owner ou Admin.";
 }

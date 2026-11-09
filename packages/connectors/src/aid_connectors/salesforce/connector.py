@@ -4,6 +4,7 @@
 80% do limite diário de API, até a janela seguinte."""
 
 import asyncio
+import logging
 import re
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
@@ -27,13 +28,16 @@ from aid_connectors.salesforce.soql import (
     APEX_LOG,
     EVENT_LOG_FILE,
     IDENTIFIER,
+    OPERATORS,
     Filter,
     QueryNotAllowedError,
     Source,
     integration_log,
+    literal,
     select,
 )
 
+log = logging.getLogger(__name__)
 SOURCES = ("integration_log", "apex_log", "event_log_file")
 LABELS = {
     "integration_log": "objeto de log de integração",
@@ -45,6 +49,20 @@ USAGE = re.compile(r"api-usage=(\d+)/(\d+)")
 DAILY_SHARE = 0.8
 # O limite diário é uma janela móvel de 24 h: a Sincronização volta a conferir de hora em hora.
 LIMIT_WINDOW_SECONDS = 3600
+
+
+class SourceUnavailableError(Exception):
+    """A fonte não existe nesta org (INVALID_TYPE) ou o usuário não lê o objeto
+    (INSUFFICIENT_ACCESS): ela fica de fora e as outras seguem."""
+
+
+def error_codes(response: httpx.Response) -> set[str]:
+    try:
+        body = response.json()
+    except ValueError:
+        return set()
+    items = body if isinstance(body, list) else [body]
+    return {str(item.get("errorCode")) for item in items if isinstance(item, dict)}
 
 
 def usage(response: httpx.Response) -> tuple[int, int] | None:
@@ -129,11 +147,13 @@ class SalesforceConnector:
         for item in raw:
             if not isinstance(item, Mapping) or not IDENTIFIER.match(str(item.get("field", ""))):
                 raise QueryNotAllowedError("filtro inválido")
-            found.append(
-                Filter(
-                    str(item["field"]), str(item.get("operator", "=")), str(item.get("value", ""))
-                )
-            )
+            operator = str(item.get("operator", "="))
+            if operator not in OPERATORS:
+                raise QueryNotAllowedError(f"operador fora da allowlist: {operator}")
+            value = str(item.get("value", ""))
+            # Mesma regra da consulta: valor recusado aqui não chega à Sincronização.
+            literal(value)
+            found.append(Filter(str(item["field"]), operator, value))
         return found
 
     def sources(self, config: Mapping[str, Any]) -> dict[str, Source]:
@@ -188,18 +208,23 @@ class SalesforceConnector:
         if response.status_code == 401:
             self.session = None
             raise ConnectorError("auth", "O Salesforce recusou a sessão.")
-        if response.status_code == 403:
-            text = response.text
-            if "REQUEST_LIMIT_EXCEEDED" in text:
-                raise ConnectorError(
-                    "api_limit",
-                    "Limite diário da API do Salesforce esgotado: as Sincronizações pausam até"
-                    " a janela seguinte.",
-                    LIMIT_WINDOW_SECONDS,
-                )
-            raise ConnectorError("auth", "O usuário da Connected App não tem acesso a este objeto.")
-        if response.status_code == 400 and "INVALID_TYPE" in response.text:
-            raise ConnectorError("invalid", "Objeto indisponível nesta org.")
+        codes = error_codes(response)
+        if "REQUEST_LIMIT_EXCEEDED" in codes:
+            raise ConnectorError(
+                "api_limit",
+                "Limite diário da API do Salesforce esgotado: as Sincronizações pausam até"
+                " a janela seguinte.",
+                LIMIT_WINDOW_SECONDS,
+            )
+        if codes & {"INVALID_TYPE", "INSUFFICIENT_ACCESS"} or response.status_code == 403:
+            raise SourceUnavailableError(", ".join(sorted(codes)) or "403")
+        if codes & {"INVALID_FIELD", "MALFORMED_QUERY", "INVALID_QUERY_FILTER_OPERATOR"}:
+            # Campo da config que não existe no objeto: repetir não resolve.
+            raise ConnectorError(
+                "invalid",
+                f"O Salesforce recusou a consulta ({', '.join(sorted(codes))}): confira os"
+                " campos do objeto de log.",
+            )
         raise ConnectorError("transient", f"O Salesforce respondeu HTTP {response.status_code}.")
 
     async def available(
@@ -207,16 +232,17 @@ class SalesforceConnector:
     ) -> dict[str, bool]:
         """Quais fontes a org oferece, pela lista de objetos (`describeGlobal`)."""
         described = await self.call(client, secret, config, "/sobjects")
+        # Nome de objeto no Salesforce não diferencia maiúsculas.
         names = {
-            str(item.get("name"))
+            str(item.get("name")).lower()
             for item in described.get("sobjects", [])
             if isinstance(item, Mapping)
         }
         log = (config.get("integration_log") or {}).get("object")
         return {
-            "integration_log": bool(log) and str(log) in names,
-            "apex_log": "ApexLog" in names,
-            "event_log_file": "EventLogFile" in names,
+            "integration_log": bool(log) and str(log).lower() in names,
+            "apex_log": "apexlog" in names,
+            "event_log_file": "eventlogfile" in names,
         }
 
     async def test_connection(
@@ -257,33 +283,51 @@ class SalesforceConnector:
         page_size = int(config.get("page_size", 200))
         filters = self.filters(config)
         async with self.client() as client:
-            capabilities = await self.available(client, secret, config)
             for name, source in allowlist.items():
-                # Fonte que a edição não tem fica de fora; as outras seguem (#37).
-                if not capabilities.get(name):
-                    continue
-                while True:
-                    mark = state.get(name)
-                    after = (moment(mark["at"]), str(mark["id"])) if mark else None
-                    query = select(
-                        source,
-                        objects,
-                        after=after,
-                        limit=page_size,
-                        filters=filters if name == "integration_log" else (),
-                    )
-                    found = await self.call(client, secret, config, f"/query?q={quote(query)}")
-                    records = [r for r in found.get("records", []) if isinstance(r, Mapping)]
-                    if not records:
-                        break
-                    last = records[-1]
-                    state[name] = {
-                        "at": moment(last["SystemModstamp"]).isoformat(),
-                        "id": str(last["Id"]),
-                    }
-                    yield Batch(
-                        [to_event(record, source, config) for record in records],
-                        {"sources": {**state}},
-                    )
-                    if len(records) < page_size:
-                        break
+                try:
+                    async for batch in self.pages(
+                        client, secret, config, name, source, objects, state, page_size, filters
+                    ):
+                        yield batch
+                except SourceUnavailableError as exc:
+                    # Fonte que a edição não tem, ou que o usuário não lê: fica de fora e as
+                    # outras seguem (#37). Sem o describeGlobal a cada Sincronização.
+                    log.warning("Salesforce: fonte %s indisponível (%s)", name, exc)
+
+    async def pages(
+        self,
+        client: httpx.AsyncClient,
+        secret: Secret,
+        config: Mapping[str, Any],
+        name: str,
+        source: Source,
+        objects: Mapping[str, Source],
+        state: dict[str, Any],
+        page_size: int,
+        filters: list[Filter],
+    ) -> AsyncIterator[Batch]:
+        while True:
+            mark = state.get(name)
+            after = (moment(mark["at"]), str(mark["id"])) if mark else None
+            query = select(
+                source,
+                objects,
+                after=after,
+                limit=page_size,
+                filters=filters if name == "integration_log" else (),
+            )
+            found = await self.call(client, secret, config, f"/query?q={quote(query)}")
+            records = [r for r in found.get("records", []) if isinstance(r, Mapping)]
+            if not records:
+                break
+            last = records[-1]
+            state[name] = {
+                "at": moment(last["SystemModstamp"]).isoformat(),
+                "id": str(last["Id"]),
+            }
+            yield Batch(
+                [to_event(record, source, config) for record in records],
+                {"sources": {**state}},
+            )
+            if len(records) < page_size:
+                break

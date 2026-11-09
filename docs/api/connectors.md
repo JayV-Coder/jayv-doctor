@@ -22,7 +22,7 @@ Exigem `Authorization: Bearer <JWT do Supabase Auth>` e Organização ativa. Tod
 - `provider`: `fake`, `gcp`, `salesforce` ou `sap`. Hoje `fake`, `gcp` e `salesforce` têm conector (as configs estão em `docs/operations/conectores.md`); `sap` responde `422 provider_unavailable` até o ticket #38.
 - **Teste de conexão** (`POST /connectors/test` e `/connectors/{id}/test`): `{ok, message, capabilities}`. `capabilities` diz quais fontes a conta do cliente oferece (no Salesforce: `integration_log`, `apex_log`, `event_log_file`).
 
-- **Resposta** traz também `paused_reason` (`auth`, `manual` ou `api_limit`, o limite diário de API do provedor, retomado sozinho), `checkpoint` (no formato do provedor; o do GCP tem `timestamp`) e `last_sync_records`, os registros da última Sincronização terminada (`null` antes da primeira).
+- **Resposta** traz também `paused_reason` (`auth`, `manual` ou `api_limit`: o limite diário de API do provedor, só para mostrar por que o Conector espera; o status continua o mesmo), `checkpoint` (no formato do provedor; o do GCP tem `timestamp`) e `last_sync_records`, os registros da última Sincronização terminada (`null` antes da primeira).
 - **Teste do GCP** é também a prévia do assistente: a `message` diz quantos registros da última hora atendem aos filtros.
 
 Status e política de falhas estão em [`docs/operations/conectores.md`](../operations/conectores.md).

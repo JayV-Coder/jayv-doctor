@@ -25,7 +25,7 @@ Se o worker cair no meio, a próxima Sincronização retoma do último Checkpoin
 | Erro inesperado (bug, banco, credencial ausente) | conta como falha | como as falhas acima |
 | 1ª e 2ª falha seguida | `active` | em 1 min |
 | 3ª falha seguida em diante | `failing` | backoff de 5 min, dobrando até 1 h |
-| Limite diário de API do provedor em 80% (`api_limit`, #37) | `paused` com `paused_reason = 'api_limit'`, sem contar falha | o agendador retoma sozinho depois de 1 h e confere de novo |
+| Limite diário de API do provedor em 80% (`api_limit`, #37) | mantém o status, sem contar falha; `paused_reason = 'api_limit'` mostra o motivo na tela (uma pausa manual feita durante a Sincronização continua valendo) | depois de 1 h; trocar a credencial não encurta a janela |
 | Cota de Eventos da Organização esgotada (`quota`, #31) | mantém, sem contar falha | de hora em hora |
 
 Dentro de uma Sincronização, timeout, 429 e erro temporário são repetidos até 5 vezes, com backoff. O `Retry-After` do provedor é respeitado até 60 s. Autenticação, configuração inválida e Checkpoint que não avança ou volta a um valor já visto (paginação quebrada) não são repetidos. Pausa ou desativação feitas durante a Sincronização continuam valendo no fim dela.
@@ -92,8 +92,8 @@ O Conector lê objetos de log de integração do cliente (`*__c`), `ApexLog` e, 
   - `LIMIT` obrigatório, de 1 a 2.000;
   - não existe SOQL livre na config nem na tela.
 - **Checkpoint por fonte:** `(SystemModstamp, Id)`, com desempate pelo `Id` no mesmo instante, para não perder nem repetir registros. O `event_id` é estável (UUIDv7 do `Id`).
-- **Limites:** o Conector lê o `Sforce-Limit-Info` de toda resposta. Com 80% do limite diário usado, ou com `REQUEST_LIMIT_EXCEEDED`, a Sincronização para com `api_limit`. O Conector fica pausado, com o motivo na tela, e o agendador retoma depois de 1 h, porque o limite do Salesforce é uma janela móvel de 24 h.
-- **Capacidades:** o teste de conexão lê a lista de objetos (`describeGlobal`) e diz quais fontes a edição tem, por exemplo "EventLogFile indisponível nesta edição". Uma fonte indisponível fica de fora, e as outras seguem.
+- **Limites:** o Conector lê o `Sforce-Limit-Info` de toda resposta. Com 80% do limite diário usado, ou com `REQUEST_LIMIT_EXCEEDED`, a Sincronização para com `api_limit`, e a próxima fica para 1 h depois (o limite do Salesforce é uma janela móvel de 24 h). O motivo aparece na tela até uma Sincronização dar certo.
+- **Capacidades:** o teste de conexão lê a lista de objetos (`describeGlobal`) e diz quais fontes a edição tem, por exemplo "EventLogFile indisponível nesta edição". A Sincronização não repete essa chamada: uma fonte que responde `INVALID_TYPE` (não existe nesta org) ou `INSUFFICIENT_ACCESS` (o usuário não lê o objeto) fica de fora, com aviso no log, e as outras seguem. Campo inexistente (`INVALID_FIELD`, `MALFORMED_QUERY`) é erro de configuração, sem novas tentativas.
 - **Enriquecimento** (status de `Order` e `Account` por Referência): fica para o ticket #40.
 
 ## Google Cloud Logging (`gcp`)

@@ -22,4 +22,4 @@ A credencial vai para o cofre (Vault) e não volta para a tela. O Doctor só con
 
 ## Limite de API
 
-O Salesforce conta as chamadas de API por dia. Quando o uso da org chega a **80% do limite diário**, a coleta pausa sozinha ("Pausado: o limite diário da API do provedor chegou a 80%"), deixando o restante para os sistemas do cliente, e volta na janela seguinte, sem precisar de ninguém.
+O Salesforce conta as chamadas de API por dia. Quando o uso da org chega a **80% do limite diário**, a coleta espera sozinha ("Aguardando: o limite diário da API do provedor chegou a 80%"), deixando o restante para os sistemas do cliente, e volta na janela seguinte, sem precisar de ninguém. Trocar a credencial não antecipa a volta.

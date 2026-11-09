@@ -9221,6 +9221,13 @@
           "message": {
             "type": "string",
             "title": "Message"
+          },
+          "capabilities": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object",
+            "title": "Capabilities"
           }
         },
         "type": "object",

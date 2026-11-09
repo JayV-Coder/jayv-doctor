@@ -72,6 +72,8 @@ class FakeSalesforce:
     ) -> None:
         self.objects = objects
         self.used = used
+        self.denied: set[str] = set()
+        self.bad_fields: set[str] = set()
         self.queries: list[str] = []
         self.tokens: list[Mapping[str, list[str]]] = []
         # Três registros, dois no mesmo segundo (desempate pelo Id).
@@ -95,6 +97,15 @@ class FakeSalesforce:
         if request.url.path.endswith("/query"):
             query = unquote(parse_qs(urlparse(str(request.url)).query)["q"][0])
             self.queries.append(query)
+            target = query.split(" FROM ")[1].split(" ")[0]
+            if target.lower() not in {o.lower() for o in self.objects}:
+                return httpx.Response(400, json=[{"errorCode": "INVALID_TYPE"}], headers=headers)
+            if target in self.denied:
+                return httpx.Response(
+                    403, json=[{"errorCode": "INSUFFICIENT_ACCESS"}], headers=headers
+                )
+            if target in self.bad_fields:
+                return httpx.Response(400, json=[{"errorCode": "INVALID_FIELD"}], headers=headers)
             if "FROM Integration_Log__c" in query:
                 rows = self.records
                 if "Id > '" in query:
@@ -192,8 +203,10 @@ def test_org_sem_event_monitoring_informa_e_segue_com_as_outras_fontes() -> None
         "event_log_file": False,
     }
     batches = collect(fake)
-    assert batches
-    assert not any("EventLogFile" in q for q in fake.queries)
+    services = {e["source"]["service"] for b in batches for e in b.events}
+    assert services == {"Integration_Log__c", "ApexLog"}
+    # Sem describeGlobal na Sincronização: a fonte que falta responde INVALID_TYPE e fica de fora.
+    assert not any("sobjects" in q for q in fake.queries)
 
 
 def test_80_por_cento_do_limite_diario_pausa_ate_a_janela_seguinte() -> None:
@@ -203,7 +216,7 @@ def test_80_por_cento_do_limite_diario_pausa_ate_a_janela_seguinte() -> None:
     assert raised.value.kind == "api_limit"
     assert raised.value.retry_after == 3600
     assert "80%" in raised.value.message
-    assert fake.queries == []
+    assert len(fake.queries) == 1
 
 
 def test_nenhuma_consulta_fora_da_allowlist() -> None:
@@ -274,3 +287,58 @@ def test_web_server_flow_usa_o_refresh_token() -> None:
     asyncio.run(run())
     assert fake.tokens[0]["grant_type"] == ["refresh_token"]
     assert fake.tokens[0]["refresh_token"] == ["r"]
+
+
+def test_fonte_sem_permissao_fica_de_fora_e_as_outras_seguem() -> None:
+    fake = FakeSalesforce()
+    fake.denied.add("ApexLog")
+    services = {e["source"]["service"] for b in collect(fake) for e in b.events}
+    assert services == {"Integration_Log__c"}
+
+
+def test_campo_inexistente_e_erro_de_config_sem_repetir() -> None:
+    fake = FakeSalesforce()
+    fake.bad_fields.add("Integration_Log__c")
+    with pytest.raises(ConnectorError) as raised:
+        collect(fake)
+    assert raised.value.kind == "invalid"
+    assert "INVALID_FIELD" in raised.value.message
+
+
+def test_objeto_de_log_sem_diferenciar_maiusculas() -> None:
+    fake = FakeSalesforce()
+    config = {
+        **CONFIG,
+        "integration_log": {**CONFIG["integration_log"], "object": "integration_log__c"},
+    }
+    result = asyncio.run(connector(fake).test_connection(Secret(SECRET), config))
+    assert result.capabilities["integration_log"] is True
+
+
+def test_filtro_com_operador_ou_valor_fora_da_regra_e_recusado_ao_salvar() -> None:
+    sf = SalesforceConnector()
+    like = {
+        **CONFIG,
+        "integration_log": {
+            **CONFIG["integration_log"],
+            "filters": [{"field": "Level__c", "operator": "LIKE", "value": "x"}],
+        },
+    }
+    assert "integration_log" in sf.validate_config(like)
+    newline = {
+        **CONFIG,
+        "integration_log": {
+            **CONFIG["integration_log"],
+            "filters": [{"field": "Level__c", "value": "a\nb"}],
+        },
+    }
+    assert "integration_log" in sf.validate_config(newline)
+
+
+def test_loopback_com_usuario_na_url_nao_passa() -> None:
+    from aid_connectors.common import is_loopback
+
+    assert is_loopback("http://127.0.0.1:8095/sf")
+    assert not is_loopback("http://127.0.0.1:1@evil.com/sf")
+    assert not is_loopback("https://127.0.0.1:8095")
+    assert not is_loopback("http://localhost")

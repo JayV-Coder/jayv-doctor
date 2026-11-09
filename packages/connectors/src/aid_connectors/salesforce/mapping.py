@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from aid_connectors.base import stable_uuid7
+from aid_connectors.common import STATUS_CATEGORIES
 from aid_connectors.salesforce.soql import Source
 
 SEVERITIES = {
@@ -16,18 +17,6 @@ SEVERITIES = {
     "error": "ERROR",
     "fatal": "CRITICAL",
     "critical": "CRITICAL",
-}
-CATEGORIES = {
-    401: "AUTH",
-    403: "AUTH",
-    408: "TIMEOUT",
-    504: "TIMEOUT",
-    429: "RATE_LIMIT",
-    400: "VALIDATION",
-    422: "VALIDATION",
-    409: "DUPLICATE",
-    502: "CONNECTIVITY",
-    503: "CONNECTIVITY",
 }
 
 
@@ -85,7 +74,7 @@ def to_event(
         event["execution_id"] = str(execution)[:256]
     if severity in ("ERROR", "CRITICAL") or code:
         event["error"] = {
-            "category": CATEGORIES.get(code or 0, "UNKNOWN"),
+            "category": STATUS_CATEGORIES.get(code or 0, "UNKNOWN"),
             **({"http_status": code} if code else {}),
             **({"message": message} if message else {}),
         }

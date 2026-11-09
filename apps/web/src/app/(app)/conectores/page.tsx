@@ -106,7 +106,9 @@ function ConnectorCard({
           {connector.last_error}
         </p>
       )}
-      {paused && <p className="alert">{pauseText(connector.paused_reason)}</p>}
+      {(paused || connector.paused_reason === "api_limit") && (
+        <p className="alert">{pauseText(connector.paused_reason)}</p>
+      )}
       <dl className="kv">
         <dt>última sync</dt>
         <dd>{lastSyncText(connector, now)}</dd>

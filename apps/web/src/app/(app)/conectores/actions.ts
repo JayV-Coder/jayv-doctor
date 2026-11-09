@@ -1,5 +1,7 @@
 "use server";
 
+import type { ApiComponents } from "@aid/contracts";
+
 import { revalidatePath } from "next/cache";
 import { apiFetch } from "@/lib/api";
 
@@ -16,12 +18,8 @@ const MESSAGES: Record<string, string> = {
 const GENERIC = "Não foi possível concluir agora. Tente de novo.";
 const OFFLINE = "Sem conexão. Tente de novo.";
 
-export type TestOutcome = {
-  ok: boolean;
-  message: string;
-  // Fontes disponíveis na conta do cliente (Salesforce, #37).
-  capabilities?: Record<string, boolean>;
-};
+// Gerado do OpenAPI: `capabilities` são as fontes da conta do cliente (Salesforce, #37).
+export type TestOutcome = ApiComponents["schemas"]["TestResult"];
 
 async function failure(response: Response): Promise<string> {
   const { code, title } = (await response.json().catch(() => ({}))) as {

@@ -18,9 +18,9 @@ import httpx
 import jwt
 
 from aid_connectors.base import ConnectorError, Secret
+from aid_connectors.common import is_loopback
 
 SCOPE = "https://www.googleapis.com/auth/logging.read"
-LOOPBACK = ("http://127.0.0.1:", "http://localhost:")
 
 
 @dataclass(frozen=True)
@@ -45,7 +45,7 @@ class Endpoints:
             if environ.get(variable)
         }
         for value in overrides.values():
-            if not value.startswith(LOOPBACK):
+            if not is_loopback(value):
                 raise ValueError("endpoint do GCP trocado só pode ser loopback (E2E)")
         return cls(**overrides)
 

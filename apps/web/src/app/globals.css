@@ -1534,3 +1534,18 @@ p {
 .usage-warning {
   color: var(--stop);
 }
+
+/* Tela 19: pré-visualização do Relatório técnico, como a folha do mockup. */
+.report-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.report-preview .hl {
+  background: var(--ac);
+  color: #161616;
+  padding: 0 3px;
+}

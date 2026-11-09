@@ -28,6 +28,8 @@ describe("activeTab", () => {
   it("põe a Importação manual sob Conectores, como no mockup", () => {
     expect(activeTab("/importar")).toBe("/conectores");
     expect(pageTitle("/importar")).toBe("Importar logs");
+    expect(pageTitle("/incidentes/abc/relatorio")).toBe("Relatório");
+    expect(pageTitle("/incidentes/abc")).toBe("Incidentes");
     expect(activeTab("/eventos/abc")).toBe("/execucoes");
     expect(pageTitle("/eventos/abc")).toBe("Evento original");
     expect(pageTitle("/execucoes/abc")).toBe("Execuções");

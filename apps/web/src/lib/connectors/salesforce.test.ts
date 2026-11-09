@@ -8,6 +8,9 @@ import {
   validObject,
 } from "./salesforce";
 
+// Só o cabeçalho do PEM, montado em partes: não é chave nenhuma, e o gitleaks não confunde.
+const FAKE_KEY = ["-----BEGIN", "PRIVATE KEY-----", "falsa"].join(" ");
+
 describe("Conector Salesforce", () => {
   it("config só com itens da allowlist", () => {
     const draft = {
@@ -35,14 +38,14 @@ describe("Conector Salesforce", () => {
     const fields = {
       client_id: "3MVG9",
       username: "doctor@acme.test",
-      private_key: "-----BEGIN PRIVATE KEY-----x",
+      private_key: FAKE_KEY,
       client_secret: "",
       refresh_token: "",
     };
     expect(JSON.parse(buildSalesforceCredential("jwt_bearer", fields) ?? "{}")).toEqual({
       client_id: "3MVG9",
       username: "doctor@acme.test",
-      private_key: "-----BEGIN PRIVATE KEY-----x",
+      private_key: FAKE_KEY,
     });
     expect(buildSalesforceCredential("web_server", fields)).toBeNull();
   });

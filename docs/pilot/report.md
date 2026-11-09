@@ -13,7 +13,7 @@
 | MTTR de referência (4 semanas antes) | a informar | cliente |
 | Redução de MTTR | a medir | |
 | Tempo até a revisão humana | a medir | |
-| Vazamentos entre Organizações | a medir | meta 0 |
+| Evidências sem registro da própria Organização (vazamento) | a medir | meta 0 |
 | Correções automáticas | a medir | meta 0 |
 | SUS (usabilidade) | a medir | ≥ 5 usuários |
 

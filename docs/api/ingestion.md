@@ -96,15 +96,25 @@ def uuid7() -> str:
     return str(uuid.UUID(int=value))
 
 
+def wait(response: httpx.Response | None, attempt: int) -> float:
+    """Retry-After em segundos quando vier; senão espera crescente (1, 2, 4… s)."""
+    header = response.headers.get("Retry-After", "") if response is not None else ""
+    return float(header) if header.isdigit() else float(2**attempt)
+
+
 def send(events: list[dict], attempts: int = 5) -> dict:
     for attempt in range(attempts):
-        response = httpx.post(URL, json={"events": events}, headers=HEADERS, timeout=30)
-        if response.status_code == 202:
-            return response.json()  # {"accepted": n, "rejected": [{"index", "reason"}]}
-        if response.status_code == 429 or response.status_code >= 500:
-            time.sleep(float(response.headers.get("Retry-After", 2**attempt)))
-            continue
-        response.raise_for_status()  # 4xx: lote inválido, não adianta repetir
+        try:
+            response = httpx.post(URL, json={"events": events}, headers=HEADERS, timeout=30)
+        except httpx.TransportError:
+            response = None  # rede ou timeout: tente de novo, o event_id evita duplicar
+        else:
+            if response.status_code == 202:
+                return response.json()  # {"accepted": n, "rejected": [{"index", "reason"}]}
+            if response.status_code != 429 and response.status_code < 500:
+                response.raise_for_status()  # 4xx: lote inválido, não adianta repetir
+        if attempt < attempts - 1:
+            time.sleep(wait(response, attempt))
     raise RuntimeError("ingestão indisponível")
 ```
 
@@ -117,21 +127,29 @@ const URL = "https://api.<domínio>/api/v1/ingestion/events";
 
 export async function send(events, attempts = 5) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const response = await fetch(URL, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${process.env.AID_INGESTION_TOKEN}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ events }),
-    });
-    if (response.status === 202) return response.json(); // { accepted, rejected }
-    if (response.status === 429 || response.status >= 500) {
-      const wait = Number(response.headers.get("retry-after") ?? 2 ** attempt);
-      await new Promise((resolve) => setTimeout(resolve, wait * 1000));
-      continue;
+    let response = null;
+    try {
+      response = await fetch(URL, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${process.env.AID_INGESTION_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ events }),
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch {
+      // Rede ou timeout: tente de novo; o event_id evita duplicar.
     }
-    throw new Error(`lote recusado: ${response.status}`); // 4xx: não repita igual
+    if (response?.status === 202) return response.json(); // { accepted, rejected }
+    if (response && response.status !== 429 && response.status < 500) {
+      throw new Error(`lote recusado: ${response.status}`); // 4xx: não repita igual
+    }
+    if (attempt < attempts - 1) {
+      const header = response?.headers.get("retry-after") ?? "";
+      const seconds = /^\d+$/.test(header) ? Number(header) : 2 ** attempt;
+      await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+    }
   }
   throw new Error("ingestão indisponível");
 }

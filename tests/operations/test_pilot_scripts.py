@@ -55,6 +55,11 @@ def test_precisao_de_categoria_e_de_causa_pela_revisao() -> None:
     assert pilot.precision([]) == (None, None)
 
 
+def test_datas_do_comando_em_utc() -> None:
+    assert pilot.utc("2026-11-10").tzinfo is not None
+    assert pilot.utc("2026-11-10T00:00:00-03:00").utcoffset().total_seconds() == -3 * 3600
+
+
 @pytest.mark.skipif(URL is None, reason="sem INTEGRATION_DB_URL")
 @pytest.mark.asyncio
 async def test_relatorio_do_piloto_contra_o_banco() -> None:
@@ -102,11 +107,12 @@ async def test_relatorio_do_piloto_contra_o_banco() -> None:
         assert found["baseline"] == 120
         assert found["leaks"] == 0
         assert found["automatic"] == 0
-        report = pilot.render(tenant, now, now, found, 80.0)
+        report = pilot.render(tenant, now, now, found, 80.0, 6)
         assert "| Precisão de categoria | 100,0% |" in report
         assert "| Redução de MTTR | 75,0% |" in report
         assert "| Diagnósticos com Evidência rastreável | 0,0% |" in report
-        assert "| SUS (usabilidade) | 80,0 |" in report
+        assert "| SUS (usabilidade) | 80,0 | 6 respondentes (mínimo 5) |" in report
+        assert found["review_times"] == [600.0]
     finally:
         async with engine.begin() as connection:
             await connection.execute(

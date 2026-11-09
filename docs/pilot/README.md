@@ -17,14 +17,15 @@ Ticket #35. Roteiro da implantação piloto e da medição. O relatório final �
 
 | O quê | Como |
 |---|---|
-| MTTR no piloto contra a linha de base | Dashboard e `scripts/pilot_report.py` |
+| MTTR no piloto contra a linha de base | Dashboard e `scripts/pilot_report.py` (só Incidentes que começaram no piloto: o histórico importado fica de fora) |
 | Tempo até a revisão | `diagnosis_feedback.time_to_review_s` (#26) |
 | Precisão de categoria e de causa | revisões do piloto (`pilot_report.py`) e a avaliação do #30 sobre os incidentes do piloto |
-| Diagnósticos com Evidência rastreável | `pilot_report.py` |
+| Diagnósticos com Evidência rastreável | `pilot_report.py`: publicados com Evidência num registro da própria Organização (a Base global não conta) |
 | Vazamentos (meta 0) e correções automáticas (meta 0) | `pilot_report.py`, mais a suíte de isolamento do CI (#27) |
 | Usabilidade (SUS) com ≥ 5 usuários, incluindo o celular | questionário [sus.md](sus.md) e `scripts/sus_score.py` |
 
 ```bash
+# datas em UTC
 SUPABASE_DB_URL=… uv run python scripts/pilot_report.py <tenant_id> \
   --since 2026-11-10 --until 2026-12-08 --sus respostas-sus.csv > numeros.md
 ```

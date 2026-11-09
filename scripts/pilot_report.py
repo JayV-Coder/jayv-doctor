@@ -24,7 +24,7 @@ import os
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from statistics import median
 from typing import Any
@@ -42,6 +42,7 @@ class Review:
     verdict: str
     corrected_category: bool
     corrected_cause: bool
+    seconds_to_review: float | None = None
 
 
 def precision(reviews: Sequence[Review]) -> tuple[float | None, float | None]:
@@ -59,6 +60,12 @@ def precision(reviews: Sequence[Review]) -> tuple[float | None, float | None]:
         if r.verdict == "accepted" or (r.verdict == "corrected" and not r.corrected_cause)
     )
     return category / len(reviews), cause / len(reviews)
+
+
+def utc(value: str) -> datetime:
+    """Data do comando em UTC: sem fuso, o asyncpg usaria o da máquina e deslocaria o período."""
+    moment = datetime.fromisoformat(value)
+    return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
 
 
 def percent(value: float | None) -> str:
@@ -79,13 +86,18 @@ async def measure(url: str, tenant: str, since: datetime, until: datetime) -> di
             await connection.execute(text("set local transaction read only"))
             # A revisão mais recente de cada Diagnóstico revisado no período.
             reviews = [
-                Review(row.verdict, bool(row.category), bool(row.cause))
+                Review(
+                    row.verdict,
+                    bool(row.category),
+                    bool(row.cause),
+                    None if row.took is None else float(row.took),
+                )
                 for row in await connection.execute(
                     text(
                         "select distinct on (f.diagnosis_id) f.verdict,"
                         " f.correct_category is not null and f.correct_category <> coalesce("
                         "   d.classification, '') as category,"
-                        " f.correct_cause is not null as cause"
+                        " f.correct_cause is not null as cause, f.time_to_review_s as took"
                         " from doctor.diagnosis_feedback f join doctor.diagnoses d"
                         " on d.tenant_id = f.tenant_id and d.id = f.diagnosis_id"
                         " where f.tenant_id = cast(:t as uuid)"
@@ -101,10 +113,12 @@ async def measure(url: str, tenant: str, since: datetime, until: datetime) -> di
                         "select count(*), count(*) filter (where exists ("
                         "   select 1 from doctor.diagnosis_evidence e"
                         "   where e.tenant_id = d.tenant_id and e.diagnosis_id = d.id"
+                        # Registro da própria Organização; a Base global não conta.
                         "   and coalesce(e.event_id, e.raw_log_object_id, e.chunk_id,"
-                        "   e.global_chunk_id, e.rule_match_id) is not null))"
+                        "   e.rule_match_id) is not null))"
                         " from doctor.diagnoses d where d.tenant_id = cast(:t as uuid)"
-                        " and d.status in ('published', 'inconclusive', 'failed_llm')"
+                        # Inconclusivo e falha do LLM podem não ter Evidência de propósito.
+                        " and d.status = 'published'"
                         " and d.published_at >= :since and d.published_at < :until"
                     ),
                     params,
@@ -117,6 +131,8 @@ async def measure(url: str, tenant: str, since: datetime, until: datetime) -> di
                         " count(*) from doctor.incidents where tenant_id = cast(:t as uuid)"
                         " and status = 'resolved' and resolved_at >= :since"
                         " and resolved_at < :until"
+                        # Só os que começaram no piloto: o histórico importado puxaria a média.
+                        " and first_seen_at >= :since"
                     ),
                     params,
                 )
@@ -127,24 +143,15 @@ async def measure(url: str, tenant: str, since: datetime, until: datetime) -> di
                 ),
                 params,
             )
-            review_times = [
-                float(value)
-                for value in (
-                    await connection.execute(
-                        text(
-                            "select time_to_review_s from doctor.diagnosis_feedback"
-                            " where tenant_id = cast(:t as uuid) and time_to_review_s is not null"
-                            " and created_at >= :since and created_at < :until"
-                        ),
-                        params,
-                    )
-                ).scalars()
-            ]
+            # Evidência de Evento sem o Evento na própria Organização (pela chave, com índice).
+            # A FK composta impede o vazamento; o número comprova sem varrer outros tenants.
             leaks = await connection.scalar(
                 text(
-                    "select count(*) from doctor.diagnosis_evidence e join doctor.events v"
-                    " on v.id = e.event_id and v.timestamp = e.event_timestamp"
-                    " where e.tenant_id = cast(:t as uuid) and v.tenant_id <> e.tenant_id"
+                    "select count(*) from doctor.diagnosis_evidence e"
+                    " where e.tenant_id = cast(:t as uuid) and e.event_id is not null"
+                    " and not exists (select 1 from doctor.events v"
+                    "   where v.tenant_id = e.tenant_id and v.id = e.event_id"
+                    "   and v.timestamp = e.event_timestamp)"
                 ),
                 params,
             )
@@ -152,6 +159,7 @@ async def measure(url: str, tenant: str, since: datetime, until: datetime) -> di
                 text(
                     "select count(*) from doctor.audit_logs where tenant_id = cast(:t as uuid)"
                     " and occurred_at >= :since and occurred_at < :until"
+                    " and actor_type in ('system', 'worker')"
                     " and (resource_type = 'recommendation' or action like '%.executed')"
                 ),
                 params,
@@ -165,14 +173,20 @@ async def measure(url: str, tenant: str, since: datetime, until: datetime) -> di
         "mttr": None if mttr is None else float(mttr),
         "resolved": int(resolved),
         "baseline": None if baseline is None else float(baseline),
-        "review_times": review_times,
+        # Uma revisão por Diagnóstico (a mais recente), a mesma base da precisão.
+        "review_times": [r.seconds_to_review for r in reviews if r.seconds_to_review is not None],
         "leaks": int(leaks or 0),
         "automatic": int(automatic or 0),
     }
 
 
 def render(
-    tenant: str, since: datetime, until: datetime, found: dict[str, Any], sus: float | None
+    tenant: str,
+    since: datetime,
+    until: datetime,
+    found: dict[str, Any],
+    sus: float | None,
+    respondents: int = 0,
 ) -> str:
     category, cause = precision(found["reviews"])
     traceable = found["traceable"] / found["published"] if found["published"] else None
@@ -204,12 +218,12 @@ def render(
         ),
         ("Redução de MTTR", percent(reduction), "meta da v0.1"),
         ("Tempo até a revisão humana", review, f"{len(times)} revisões"),
-        ("Vazamentos entre Organizações", str(found["leaks"]), "meta: 0"),
+        ("Evidências sem registro da própria Organização", str(found["leaks"]), "meta: 0"),
         ("Correções automáticas", str(found["automatic"]), "meta: 0 (Recomendações são humanas)"),
         (
             "SUS (usabilidade)",
             "—" if sus is None else f"{sus:.1f}".replace(".", ","),
-            "≥ 5 usuários",
+            f"{respondents} respondentes (mínimo 5)",
         ),
     ]
     lines = [
@@ -228,13 +242,14 @@ def render(
 def main(argv: Sequence[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("tenant")
-    parser.add_argument("--since", required=True, type=datetime.fromisoformat)
-    parser.add_argument("--until", required=True, type=datetime.fromisoformat)
+    parser.add_argument("--since", required=True, type=utc)
+    parser.add_argument("--until", required=True, type=utc)
     parser.add_argument("--sus", type=Path)
     args = parser.parse_args(argv)
     found = asyncio.run(measure(os.environ["SUPABASE_DB_URL"], args.tenant, args.since, args.until))
-    sus = mean_score(read_answers(args.sus.read_text())) if args.sus else None
-    sys.stdout.write(render(args.tenant, args.since, args.until, found, sus))
+    answers = read_answers(args.sus.read_text()) if args.sus else []
+    sus = mean_score(answers)
+    sys.stdout.write(render(args.tenant, args.since, args.until, found, sus, len(answers)))
     # Vazamento ou correção automática reprovam o piloto.
     return 1 if found["leaks"] or found["automatic"] else 0
 

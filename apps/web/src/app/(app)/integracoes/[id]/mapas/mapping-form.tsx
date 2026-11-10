@@ -42,7 +42,11 @@ export function MappingForm({
       <form
         ref={formRef}
         className="stack"
-        action={(form) => {
+        onSubmit={(event) => {
+          // `onSubmit`, não `action`: o `action` limpa o formulário, e depois de um erro a
+          // pessoa perderia o que digitou.
+          event.preventDefault();
+          const form = new FormData(event.currentTarget);
           startTransition(async () => {
             const outcome = await createMapping(integration, form, key.current);
             if (outcome.ok || !outcome.offline) key.current = crypto.randomUUID();

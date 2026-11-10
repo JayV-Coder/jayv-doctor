@@ -39,6 +39,8 @@ test("Owner mapeia a chave do pedido entre Salesforce, middleware e SAP", async 
   await sheet.getByLabel("Campo do Evento").nth(0).fill("payload.inteiro");
   await sheet.getByRole("button", { name: "Salvar mapa" }).click();
   await expect(sheet.getByRole("alert")).toContainText("keys[0].field");
+  // Depois do erro, o que foi digitado continua lá.
+  await expect(sheet.getByLabel("Nome")).toHaveValue("Ruim");
   await page.keyboard.press("Escape");
 
   await mapping.getByRole("button", { name: "Remover Pedido de venda" }).click();

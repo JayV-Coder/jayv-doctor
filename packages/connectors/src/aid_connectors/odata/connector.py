@@ -78,9 +78,18 @@ class PublicOnlyBackend(httpcore.AsyncNetworkBackend):
             raise httpcore.ConnectError(f"nome não resolveu: {host}") from exc
         if not all_public(addresses):
             raise httpcore.ConnectError("endereço não público")
-        return await self.inner.connect_tcp(
-            addresses[0], port, timeout, local_address, socket_options
-        )
+        # IPv4 primeiro (o Cloud Run sai por IPv4) e, se um endereço não conectar, o próximo:
+        # todos já foram conferidos como públicos.
+        ordered = sorted(addresses, key=lambda a: ipaddress.ip_address(a).version)
+        failure: Exception | None = None
+        for address in ordered:
+            try:
+                return await self.inner.connect_tcp(
+                    address, port, timeout, local_address, socket_options
+                )
+            except (httpcore.ConnectError, httpcore.ConnectTimeout, OSError) as exc:
+                failure = exc
+        raise httpcore.ConnectError("nenhum endereço do host conectou") from failure
 
     async def connect_unix_socket(
         self, path: str, timeout: float | None = None, socket_options: Any = None

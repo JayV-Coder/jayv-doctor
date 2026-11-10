@@ -137,3 +137,22 @@ def test_a_conexao_so_vai_para_o_endereco_conferido(address: str) -> None:
     backend = PublicOnlyBackend(public(address))
     with pytest.raises(httpcore.ConnectError):
         asyncio.run(backend.connect_tcp("s4.acme.com.br", 443))
+
+
+def test_conecta_por_ipv4_antes_e_cai_para_o_proximo_endereco() -> None:
+    import httpcore
+
+    tried: list[str] = []
+
+    class Fake:
+        async def connect_tcp(self, host: str, *_: object) -> str:
+            tried.append(host)
+            if host == "52.1.2.3":
+                raise httpcore.ConnectError("recusado")
+            return f"conectado em {host}"
+
+    backend = PublicOnlyBackend(public("2600:1f18::1", "52.1.2.3", "54.9.8.7"))
+    backend.inner = Fake()  # type: ignore[assignment]
+    connected: object = asyncio.run(backend.connect_tcp("s4.acme.com.br", 443))
+    assert connected == "conectado em 54.9.8.7"
+    assert tried == ["52.1.2.3", "54.9.8.7"]

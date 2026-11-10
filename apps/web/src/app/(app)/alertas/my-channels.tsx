@@ -5,7 +5,7 @@ import { FormMessage } from "@/components/auth-shell";
 import { Chip } from "@/components/ui/chip";
 import { applicationServerKey, quietText, type Quiet } from "@/lib/alerts/labels";
 import { saveQuiet, subscribePush, unsubscribePush } from "./actions";
-import { useIdempotencyKey } from "./use-key";
+import { useIdempotencyKey } from "@/lib/forms/use-idempotency-key";
 
 type Subscription = { id: string; endpoint: string };
 type State = "unsupported" | "unknown" | "denied" | "on" | "off";

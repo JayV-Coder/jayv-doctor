@@ -7,7 +7,7 @@ import type { Webhook, WebhookDelivery } from "@/lib/api";
 import { deliveryState, eventsText, webhookState } from "@/lib/webhooks/labels";
 import { deleteWebhook, resendDelivery, rotateSecret, toggleWebhook } from "./actions";
 import { SecretOnce } from "./secret-once";
-import { useIdempotencyKey } from "./use-key";
+import { useIdempotencyKey } from "@/lib/forms/use-idempotency-key";
 
 function when(iso: string): string {
   return new Date(iso).toISOString().slice(0, 16).replace("T", " ") + " UTC";
@@ -24,7 +24,10 @@ export function WebhookCard({
   const [secret, setSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, startTransition] = useTransition();
-  const [key, settle] = useIdempotencyKey();
+  // Uma chave por ação: um "Reenviar" sem resposta não contamina o "Remover".
+  const [toggleKey, settleToggle] = useIdempotencyKey();
+  const [rotateKey, settleRotate] = useIdempotencyKey();
+  const [deleteKey, settleDelete] = useIdempotencyKey();
   const state = webhookState({ ...hook, enabled: on });
   const heading = `hook-${hook.id}`;
 
@@ -45,8 +48,8 @@ export function WebhookCard({
               const next = event.currentTarget.checked;
               setOn(next);
               startTransition(async () => {
-                const outcome = await toggleWebhook(hook.id, next, key());
-                settle(outcome);
+                const outcome = await toggleWebhook(hook.id, next, toggleKey());
+                settleToggle(outcome);
                 setError(outcome.ok ? null : outcome.message);
                 if (!outcome.ok) setOn(!next);
               });
@@ -76,8 +79,8 @@ export function WebhookCard({
           disabled={busy}
           onClick={() => {
             startTransition(async () => {
-              const outcome = await rotateSecret(hook.id, key());
-              settle(outcome);
+              const outcome = await rotateSecret(hook.id, rotateKey());
+              settleRotate(outcome);
               setError(outcome.ok ? null : outcome.message);
               if (outcome.ok) setSecret(outcome.value.secret);
             });
@@ -92,8 +95,8 @@ export function WebhookCard({
           aria-label={`Remover ${hook.name}`}
           onClick={() => {
             startTransition(async () => {
-              const outcome = await deleteWebhook(hook.id, key());
-              settle(outcome);
+              const outcome = await deleteWebhook(hook.id, deleteKey());
+              settleDelete(outcome);
               setError(outcome.ok ? null : outcome.message);
             });
           }}
@@ -127,8 +130,8 @@ export function WebhookCard({
                   aria-label={`Reenviar a entrega de ${when(delivery.created_at)}`}
                   onClick={() => {
                     startTransition(async () => {
-                      const outcome = await resendDelivery(delivery.id, key());
-                      settle(outcome);
+                      // Cada clique é um reenvio novo.
+                      const outcome = await resendDelivery(delivery.id, crypto.randomUUID());
                       setError(outcome.ok ? null : outcome.message);
                     });
                   }}

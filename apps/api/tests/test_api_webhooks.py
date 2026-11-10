@@ -97,17 +97,33 @@ async def test_cadastro_recusa_metadados_e_segredo_aparece_uma_vez(
                     json={"name": "Ruim", "url": unsafe, "events": ["incident.opened"]},
                 )
                 assert (refused.status_code, refused.json()["code"]) == (422, "unsafe_url"), unsafe
+            body = {
+                "name": "ITSM",
+                "url": "https://itsm.acme.com.br/aid",
+                "events": ["incident.opened", "incident.resolved"],
+            }
             created = await client.post(
-                "/api/v1/webhooks",
-                json={
-                    "name": "ITSM",
-                    "url": "https://itsm.acme.com.br/aid",
-                    "events": ["incident.opened", "incident.resolved"],
-                },
+                "/api/v1/webhooks", json=body, headers={"Idempotency-Key": "criar-itsm"}
             )
             assert created.status_code == 201, created.text
             secret = created.json()["secret"]
             assert secret.startswith("whsec_")
+            # A repetição devolve a máscara: o segredo não fica guardado na idempotência.
+            replay = await client.post(
+                "/api/v1/webhooks", json=body, headers={"Idempotency-Key": "criar-itsm"}
+            )
+            assert (replay.json()["id"], replay.json()["secret"]) == (
+                created.json()["id"],
+                "[exibido uma vez]",
+            )
+            async with engine.begin() as connection:
+                stored = await connection.scalar(
+                    text(
+                        "select count(*) from doctor.idempotency_keys"
+                        " where response_body like '%whsec_%'"
+                    )
+                )
+            assert stored == 0
             listed = await client.get("/api/v1/webhooks")
             assert secret not in listed.text
             assert listed.json()[0]["events"] == ["incident.opened", "incident.resolved"]

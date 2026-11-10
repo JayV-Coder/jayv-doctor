@@ -47,7 +47,8 @@ create table doctor.webhook_deliveries (
   tenant_id uuid not null references doctor.tenants (id) on delete cascade,
   webhook_id uuid not null,
   event text not null,
-  -- O que o evento trata: `{"incident_id"}` ou `{"diagnosis_id"}`.
+  -- O que o evento trata, com o retrato da hora do evento (`incident`, `diagnosis`, `review`):
+  -- o Incidente resolvido logo depois não faz o `incident.opened` chegar como resolvido.
   subject jsonb not null check (jsonb_typeof(subject) = 'object'),
   body jsonb,
   status text not null default 'pending'
@@ -239,6 +240,34 @@ begin
 end;
 $$;
 
+create function doctor.incident_snapshot(incident doctor.incidents)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'id', incident.id, 'number', incident.number, 'title', incident.title,
+    'severity', incident.severity, 'status', incident.status, 'category', incident.category,
+    'environment', g.environment, 'integration', jsonb_build_object('id', g.id, 'name', g.name))
+  from doctor.integrations g where g.tenant_id = incident.tenant_id and g.id = incident.integration_id
+$$;
+
+create function doctor.diagnosis_snapshot(target uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'id', d.id, 'incident_id', d.incident_id, 'version', d.version, 'status', d.status,
+    'classification', d.classification, 'confidence_heuristic', d.confidence,
+    'requires_human_review', d.requires_human_review)
+  from doctor.diagnoses d where d.id = target
+$$;
+
 -- Incidente: aberto, resolvido e atualizado em status, severidade, responsável ou título. A
 -- contagem de Execuções muda a cada Execução nova e não conta: 37 Execuções não viram 37 POSTs.
 create function doctor.webhook_from_incident()
@@ -248,7 +277,7 @@ security definer
 set search_path = ''
 as $$
 declare
-  subject jsonb := jsonb_build_object('incident_id', new.id);
+  subject jsonb := jsonb_build_object('incident_id', new.id, 'incident', doctor.incident_snapshot(new));
 begin
   if tg_op = 'INSERT' then
     perform doctor.queue_webhooks(new.tenant_id, 'incident.opened', subject);
@@ -275,7 +304,8 @@ begin
   if new.status in ('published', 'inconclusive', 'failed_llm')
       and old.status is distinct from new.status then
     perform doctor.queue_webhooks(new.tenant_id, 'diagnosis.published',
-      jsonb_build_object('diagnosis_id', new.id, 'incident_id', new.incident_id));
+      jsonb_build_object('diagnosis_id', new.id, 'incident_id', new.incident_id,
+        'diagnosis', doctor.diagnosis_snapshot(new.id)));
   end if;
   return new;
 end;
@@ -292,7 +322,9 @@ set search_path = ''
 as $$
 begin
   perform doctor.queue_webhooks(new.tenant_id, 'diagnosis.reviewed',
-    jsonb_build_object('diagnosis_id', new.diagnosis_id, 'feedback_id', new.id));
+    jsonb_build_object('diagnosis_id', new.diagnosis_id, 'feedback_id', new.id,
+      'diagnosis', doctor.diagnosis_snapshot(new.diagnosis_id),
+      'review', jsonb_build_object('verdict', new.verdict)));
   return new;
 end;
 $$;
@@ -307,6 +339,8 @@ revoke all on function doctor.delete_webhook(uuid) from public, anon, service_ro
 revoke all on function doctor.resend_webhook_delivery(uuid) from public, anon, service_role;
 revoke all on function doctor.get_webhook_secret(uuid) from public, anon, authenticated;
 revoke all on function doctor.queue_webhooks(uuid, text, jsonb) from public, anon, authenticated;
+revoke all on function doctor.incident_snapshot(doctor.incidents) from public, anon, authenticated;
+revoke all on function doctor.diagnosis_snapshot(uuid) from public, anon, authenticated;
 revoke all on function doctor.webhook_from_incident() from public, anon, authenticated;
 revoke all on function doctor.webhook_from_diagnosis() from public, anon, authenticated;
 revoke all on function doctor.webhook_from_review() from public, anon, authenticated;

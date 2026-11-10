@@ -38,6 +38,7 @@ using (tenant_id = (select doctor.current_tenant_id()))
 
 - `core` é a plataforma (auth, `tenant_tx`, erros, idempotência, rate limit, telemetria); cada módulo tem `router.py`, `service.py` e `repo.py` e só importa `core`. `uv run lint-imports` barra o resto.
 - Novo módulo: crie o pacote em `aid_api/`, inclua no contrato de `pyproject.toml` e use `route_class=IdempotentRoute` com as dependências `rate_limit` e `idempotency`.
+- Resposta com segredo exibido uma vez: use um dos nomes de `SECRET_FIELDS` (`secret`, `token`, `registration_token`, `install_command`) em `aid_api.core.idempotency`. A resposta guardada para a repetição sai com eles mascarados.
 
 ## Migrações
 

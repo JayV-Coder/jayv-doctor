@@ -63,3 +63,20 @@ def test_assinatura_confere_e_recusa_corpo_alterado_ou_vencido() -> None:
     assert not verify("whsec_outro", header, body, now=1_800_000_100)
     assert not verify(secret, header, body, now=1_800_000_301)
     assert not verify(secret, "v1=abc", body)
+
+
+def test_conecta_por_ipv4_antes_e_cai_para_o_proximo_endereco() -> None:
+    tried: list[str] = []
+
+    class Fake:
+        async def connect_tcp(self, host: str, *_: object) -> str:
+            tried.append(host)
+            if host == "52.1.2.3":
+                raise httpcore.ConnectError("recusado")
+            return f"conectado em {host}"
+
+    backend = PublicOnlyBackend(resolving("2600:1f18::1", "52.1.2.3", "54.9.8.7"))
+    backend.inner = Fake()  # type: ignore[assignment]
+    connected: object = asyncio.run(backend.connect_tcp("hooks.acme.com.br", 443))
+    assert connected == "conectado em 54.9.8.7"
+    assert tried == ["52.1.2.3", "54.9.8.7"]

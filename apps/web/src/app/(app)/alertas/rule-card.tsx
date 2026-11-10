@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { FormMessage } from "@/components/auth-shell";
 import { deleteRule, toggleRule } from "./actions";
-import { useIdempotencyKey } from "./use-key";
+import { useIdempotencyKey } from "@/lib/forms/use-idempotency-key";
 
 export function RuleCard({
   id,

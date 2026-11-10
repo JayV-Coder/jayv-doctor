@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { FormMessage } from "@/components/auth-shell";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { createChannel, deleteChannel } from "./actions";
-import { useIdempotencyKey } from "./use-key";
+import { useIdempotencyKey } from "@/lib/forms/use-idempotency-key";
 
 const KINDS: Record<string, string> = {
   webpush: "Push",
@@ -76,12 +76,17 @@ export function Channels({
             // `onSubmit`, não `action`: o `action` limpa o formulário, e depois de um erro a
             // pessoa perderia o que digitou.
             event.preventDefault();
-            const form = new FormData(event.currentTarget);
+            const element = event.currentTarget;
+            const form = new FormData(element);
             startTransition(async () => {
               const outcome = await createChannel(form, key());
               settle(outcome);
               setError(outcome.ok ? null : outcome.message);
-              if (outcome.ok) formRef.current?.closest("dialog")?.close();
+              if (outcome.ok) {
+                // Sem o reset do `action`: limpa à mão (o webhook não fica no formulário).
+                element.reset();
+                formRef.current?.closest("dialog")?.close();
+              }
             });
           }}
         >

@@ -2,7 +2,8 @@
 
 import { useRef } from "react";
 
-// Chave idempotente por intenção: repete-se sem resposta; com resposta, a próxima é nova.
+// Chave idempotente por intenção: repete-se quando não houve resposta (rede caiu, clique
+// duplo); com resposta da API, a próxima tentativa usa outra.
 export function useIdempotencyKey(): [
   () => string,
   (outcome: { ok: boolean; offline?: boolean }) => void,

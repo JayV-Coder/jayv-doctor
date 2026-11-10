@@ -6,7 +6,7 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { EVENTS } from "@/lib/webhooks/labels";
 import { createWebhook } from "./actions";
 import { SecretOnce } from "./secret-once";
-import { useIdempotencyKey } from "./use-key";
+import { useIdempotencyKey } from "@/lib/forms/use-idempotency-key";
 
 export function NewWebhook() {
   const [error, setError] = useState<string | null>(null);

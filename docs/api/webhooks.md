@@ -5,7 +5,7 @@ Ticket #42. Só Owner e Admin com `aal2`. Exigem `Authorization: Bearer <JWT do 
 | Rota | Efeito |
 |---|---|
 | `GET /api/v1/webhooks` | Webhooks da Organização, sem o segredo |
-| `POST /api/v1/webhooks` | `{ name, url, events }` → `201 { id, secret }` (o segredo aparece só aqui) |
+| `POST /api/v1/webhooks` | `{ name, url, events }` → `201 { id, secret }` (o segredo aparece só aqui; a repetição com a mesma `Idempotency-Key` devolve `"[exibido uma vez]"`) |
 | `PATCH /api/v1/webhooks/{id}` | `url`, `events` e/ou `enabled` (religar zera as falhas) |
 | `POST /api/v1/webhooks/{id}/rotate-secret` | Segredo novo → `{ id, secret }`; o anterior deixa de valer na hora |
 | `DELETE /api/v1/webhooks/{id}` | Remove o webhook e o segredo do Vault → `204` |
@@ -14,11 +14,11 @@ Ticket #42. Só Owner e Admin com `aal2`. Exigem `Authorization: Bearer <JWT do 
 
 - **Eventos**: `incident.opened`, `incident.updated` (status, severidade, responsável ou título; a contagem de Execuções não conta), `incident.resolved`, `diagnosis.published`, `diagnosis.reviewed`.
 - **Endereço** (`422 unsafe_url`): só HTTPS, sem usuário na URL; o host não pode ser IP privado, local ou de metadados (`169.254.169.254`), nem nome de rede interna (`localhost`, `*.internal`, `metadata…`), nem resolver para um deles. Na entrega, a conexão vai para o endereço conferido naquela hora, sem seguir redirecionamento.
-- **Entrega**: 2xx em até 10 s é sucesso. O resto tenta de novo com espera de 1, 2, 4… até 60 min, por até 24 h; depois, `abandoned`. Com 50 falhas seguidas, o webhook desliga e os Owners e Admins recebem um e-mail.
+- **Entrega**: 2xx em até 15 s (prazo total; só o primeiro 1 KB da resposta é lido) é sucesso. O resto tenta de novo com espera de 1, 2, 4… até 60 min, por até 24 h; depois, `abandoned`. Com 50 falhas seguidas, o webhook desliga e os Owners e Admins recebem um e-mail.
 
 ## Payload `webhook.v1`
 
-Só ids, títulos e links, nunca Eventos brutos nem dados de log.
+Só ids, títulos e links, nunca Eventos brutos nem dados de log. O conteúdo é o retrato da hora do evento: um Incidente resolvido logo depois de aberto chega no `incident.opened` como aberto.
 
 ```json
 {

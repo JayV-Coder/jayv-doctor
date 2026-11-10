@@ -553,11 +553,6 @@ async def test_falha_tenta_de_novo_depois_e_reenviar_usa_o_mesmo_corpo(
     assert (
         await deliver(engine, pending["id"], Fake().senders(), receiver.transport()) == "abandoned"
     )
-    await run(
-        engine,
-        "select doctor.queue_webhooks(cast(:t as uuid), 'incident.opened', '{}')",
-        t=org["tenant"],
-    )
     original = (await deliveries(engine, org))[0]
     await run(
         engine,
@@ -605,3 +600,68 @@ async def test_50_falhas_seguidas_desligam_e_avisam_os_admins(
     [(to, subject, _)] = fake.emails
     assert to == [f"plantao-{org['admin'][:8]}@acme.test"]
     assert subject == "Webhook desligado após 50 falhas seguidas"
+
+
+@pytest.mark.asyncio
+async def test_corpo_e_o_retrato_da_hora_do_evento(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    """Resolvido antes da primeira tentativa: o `incident.opened` chega como aberto."""
+    await webhook(engine, org, ["incident.opened"])
+    found = await incident(engine, org, "high")
+    await run(
+        engine,
+        "update doctor.incidents set status = 'resolved', resolved_at = now(),"
+        " resolution_note = 'ajustado' where id = :i",
+        i=found,
+    )
+    [pending] = await deliveries(engine, org)
+    receiver = Receiver()
+    assert (
+        await deliver(engine, pending["id"], Fake().senders(), receiver.transport()) == "succeeded"
+    )
+    body = json.loads(receiver.requests[0].content)
+    assert body["data"]["incident"]["status"] == "open"
+
+
+@pytest.mark.asyncio
+async def test_resposta_com_nul_e_gigante_nao_trava_a_entrega(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    await webhook(engine, org, ["incident.opened"])
+    await incident(engine, org, "high")
+    [pending] = await deliveries(engine, org)
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"ok\x00" + b"x" * 5_000_000)
+
+    status = await deliver(engine, pending["id"], Fake().senders(), httpx.MockTransport(handle))
+    assert status == "succeeded"
+    [done] = await rows(
+        engine,
+        "select status, char_length(response_excerpt) as size from doctor.webhook_deliveries"
+        " where id = cast(:d as uuid)",
+        d=pending["id"],
+    )
+    assert done["status"] == "succeeded"
+    assert done["size"] <= 1024
+
+
+@pytest.mark.asyncio
+async def test_segredo_sumido_conta_como_falha_e_nao_fica_preso(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    hook = await webhook(engine, org, ["incident.opened"])
+    await incident(engine, org, "high")
+    await run(
+        engine,
+        "delete from vault.secrets where id = (select secret_id from doctor.webhooks"
+        " where id = cast(:w as uuid))",
+        w=hook,
+    )
+    [pending] = await deliveries(engine, org)
+    assert (
+        await deliver(engine, pending["id"], Fake().senders(), Receiver().transport()) == "pending"
+    )
+    [retry] = await deliveries(engine, org)
+    assert (retry["attempts"], retry["error"]) == (1, "falha interna na entrega")

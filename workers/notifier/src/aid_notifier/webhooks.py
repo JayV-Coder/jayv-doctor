@@ -11,6 +11,7 @@ venceram. Cada tentativa:
    24 h. Com 50 falhas seguidas, o webhook desliga e os Admins recebem um e-mail.
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -35,6 +36,8 @@ MAX_FAILURES = 50
 BATCH = 50
 EXCERPT = 1024
 USER_AGENT = "IntegrationAIDoctor-Webhooks/1"
+TOTAL_SECONDS = 15
+PARALLEL = 10
 
 
 def backoff(attempts: int) -> timedelta:
@@ -58,72 +61,26 @@ async def claim(connection: AsyncConnection, delivery: str) -> Any:
     ).first()
 
 
-async def incident_data(connection: AsyncConnection, incident: str) -> dict[str, Any] | None:
-    row = (
-        await connection.execute(
-            text(
-                "select i.id::text, i.number, i.title, i.severity, i.status, i.category,"
-                " g.id::text as integration_id, g.name as integration, g.environment"
-                " from doctor.incidents i join doctor.integrations g"
-                " on g.tenant_id = i.tenant_id and g.id = i.integration_id"
-                " where i.id = cast(:i as uuid)"
-            ),
-            {"i": incident},
-        )
-    ).first()
-    if row is None:
-        return None
-    return {
-        "id": row.id,
-        "number": row.number,
-        "title": row.title,
-        "severity": row.severity,
-        "status": row.status,
-        "category": row.category,
-        "environment": row.environment,
-        "integration": {"id": row.integration_id, "name": row.integration},
-        "url": f"{app_url()}/incidentes/{row.id}",
-    }
+def with_link(snapshot: Mapping[str, Any], incident: str) -> dict[str, Any]:
+    return {**snapshot, "url": f"{app_url()}/incidentes/{incident}"}
 
 
 async def build_body(connection: AsyncConnection, row: Any) -> dict[str, Any] | None:
+    """`webhook.v1` a partir do retrato gravado na hora do evento (o estado de agora poderia
+    contradizer o evento); só os links são montados aqui."""
     subject: Mapping[str, Any] = row.subject or {}
     data: dict[str, Any] = {}
-    if subject.get("incident_id"):
-        incident = await incident_data(connection, str(subject["incident_id"]))
-        if incident is None:
-            return None
-        data["incident"] = incident
-    if subject.get("diagnosis_id"):
-        found = (
-            await connection.execute(
-                text(
-                    "select d.id::text, d.incident_id::text, d.version, d.status,"
-                    " d.classification, d.confidence::float, d.requires_human_review"
-                    " from doctor.diagnoses d where d.id = cast(:d as uuid)"
-                ),
-                {"d": str(subject["diagnosis_id"])},
-            )
-        ).first()
-        if found is None:
-            return None
-        data["diagnosis"] = {
-            "id": found.id,
-            "incident_id": found.incident_id,
-            "version": found.version,
-            "status": found.status,
-            "classification": found.classification,
-            # Confiança é sempre heurística (não calibrada).
-            "confidence_heuristic": found.confidence,
-            "requires_human_review": found.requires_human_review,
-            "url": f"{app_url()}/incidentes/{found.incident_id}",
-        }
-    if subject.get("feedback_id"):
-        verdict = await connection.scalar(
-            text("select verdict from doctor.diagnosis_feedback where id = cast(:f as uuid)"),
-            {"f": str(subject["feedback_id"])},
-        )
-        data["review"] = {"verdict": verdict}
+    incident = subject.get("incident")
+    if isinstance(incident, Mapping):
+        data["incident"] = with_link(incident, str(incident["id"]))
+    diagnosis = subject.get("diagnosis")
+    if isinstance(diagnosis, Mapping):
+        data["diagnosis"] = with_link(diagnosis, str(diagnosis["incident_id"]))
+    review = subject.get("review")
+    if isinstance(review, Mapping):
+        data["review"] = dict(review)
+    if not data:
+        return None
     return {
         "version": "webhook.v1",
         "id": row.id,
@@ -156,13 +113,14 @@ async def finish(
                 " latency_ms = :l, response_excerpt = :x, error = :e,"
                 " delivered_at = case when :ok then now() end,"
                 " next_attempt_at = case when :o = 'pending' then now() + make_interval(secs => :b)"
-                " end where id = cast(:d as uuid)"
+                # Só a entrega ainda em aberto: o desligamento do webhook já pode tê-la encerrado.
+                " end where id = cast(:d as uuid) and status = 'pending'"
             ),
             {
                 "o": outcome,
                 "s": status,
                 "l": latency_ms,
-                "x": excerpt[:EXCERPT] if excerpt else None,
+                "x": printable(excerpt) if excerpt else None,
                 "e": error[:500] if error else None,
                 "ok": ok,
                 "b": backoff(row.attempts).total_seconds(),
@@ -177,15 +135,22 @@ async def finish(
             ),
             {"s": status, "ok": ok, "w": row.webhook_id},
         )
-        disable = not ok and failures is not None and failures >= MAX_FAILURES
-        if disable:
-            await connection.execute(
+        # Só quem desliga avisa: entregas em voo que falham depois não repetem o e-mail.
+        disable = (
+            not ok
+            and failures is not None
+            and failures >= MAX_FAILURES
+            and await connection.scalar(
                 text(
                     "update doctor.webhooks set enabled = false,"
-                    " disabled_reason = '50 falhas seguidas' where id = cast(:w as uuid)"
+                    " disabled_reason = '50 falhas seguidas'"
+                    " where id = cast(:w as uuid) and enabled returning id"
                 ),
                 {"w": row.webhook_id},
             )
+            is not None
+        )
+        if disable:
             await connection.execute(
                 text(
                     "update doctor.webhook_deliveries set status = 'abandoned',"
@@ -220,40 +185,43 @@ async def finish(
     return outcome
 
 
-async def deliver(
-    engine: AsyncEngine,
-    delivery: str,
-    senders: Senders,
-    transport: httpx.AsyncBaseTransport | None = None,
-) -> str:
-    """Uma tentativa de entrega; devolve o status ('skipped' se não era a vez dela)."""
+def printable(text_value: str) -> str:
+    """O trecho da resposta como o Postgres aceita: sem NUL nem controles, até 1 KB."""
+    return "".join(c for c in text_value if c.isprintable() or c in "\n\t")[:EXCERPT]
+
+
+async def post(
+    url: str, content: bytes, headers: dict[str, str], transport: httpx.AsyncBaseTransport | None
+) -> tuple[int, str]:
+    """(status, primeiro 1 KB da resposta), com prazo total de 15 s: um receptor que pinga um
+    byte a cada 9 s ou devolve gigabytes não segura o worker."""
+    async with asyncio.timeout(TOTAL_SECONDS):
+        async with (
+            httpx.AsyncClient(
+                transport=transport or public_transport(),
+                timeout=httpx.Timeout(10.0),
+                follow_redirects=False,
+            ) as client,
+            client.stream("POST", url, content=content, headers=headers) as response,
+        ):
+            chunks = bytearray()
+            async for chunk in response.aiter_bytes():
+                chunks += chunk
+                if len(chunks) >= EXCERPT:
+                    break
+            return response.status_code, chunks[:EXCERPT].decode("utf-8", "replace")
+
+
+async def prepare(engine: AsyncEngine, row: Any) -> tuple[dict[str, Any] | None, str | None]:
+    """O corpo (montado na primeira tentativa e guardado) e o segredo; corpo nulo = o
+    registro do evento sumiu."""
     async with engine.begin() as connection:
         await platform_role(connection)
-        row = await claim(connection, delivery)
-        if row is None:
-            return "skipped"
-        if not row.enabled:
-            await connection.execute(
-                text(
-                    "update doctor.webhook_deliveries set status = 'abandoned',"
-                    " error = 'webhook desligado' where id = cast(:d as uuid)"
-                ),
-                {"d": row.id},
-            )
-            return "abandoned"
         body = row.body
         if body is None:
             body = await build_body(connection, row)
             if body is None:
-                await connection.execute(
-                    text(
-                        "update doctor.webhook_deliveries set status = 'abandoned',"
-                        " error = 'o registro do evento não existe mais'"
-                        " where id = cast(:d as uuid)"
-                    ),
-                    {"d": row.id},
-                )
-                return "abandoned"
+                return None, None
             await connection.execute(
                 text(
                     "update doctor.webhook_deliveries set body = cast(:b as jsonb)"
@@ -264,25 +232,56 @@ async def deliver(
         secret = await connection.scalar(
             text("select doctor.get_webhook_secret(cast(:w as uuid))"), {"w": row.webhook_id}
         )
-    content = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode()
-    headers = {
-        "content-type": "application/json",
-        "user-agent": USER_AGENT,
-        "x-aid-event": row.event,
-        "x-aid-delivery": row.id,
-        "x-aid-signature": sign(str(secret), content),
-    }
+    return dict(body), str(secret)
+
+
+async def abandon(engine: AsyncEngine, row: Any, reason: str) -> str:
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        await connection.execute(
+            text(
+                "update doctor.webhook_deliveries set status = 'abandoned', error = :e"
+                " where id = cast(:d as uuid) and status = 'pending'"
+            ),
+            {"e": reason, "d": row.id},
+        )
+    return "abandoned"
+
+
+async def deliver(
+    engine: AsyncEngine,
+    delivery: str,
+    senders: Senders,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> str:
+    """Uma tentativa de entrega; devolve o status ('skipped' se não era a vez dela). A reserva
+    sai numa transação própria; qualquer falha depois dela conta como tentativa falha (com a
+    janela de 24 h e a contagem de falhas), e nada fica `pending` para sempre."""
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        row = await claim(connection, delivery)
+    if row is None:
+        return "skipped"
+    if not row.enabled:
+        return await abandon(engine, row, "webhook desligado")
     started = time.monotonic()
     try:
+        body, secret = await prepare(engine, row)
+        if body is None or secret is None:
+            return await abandon(engine, row, "o registro do evento não existe mais")
+        content = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode()
+        headers = {
+            "content-type": "application/json",
+            "user-agent": USER_AGENT,
+            "x-aid-event": row.event,
+            "x-aid-delivery": row.id,
+            "x-aid-signature": sign(secret, content),
+        }
         shape(row.url)
         if transport is None:
             await check_url(row.url)
-        async with httpx.AsyncClient(
-            transport=transport or public_transport(),
-            timeout=httpx.Timeout(10.0),
-            follow_redirects=False,
-        ) as client:
-            response = await client.post(row.url, content=content, headers=headers)
+        started = time.monotonic()
+        status, excerpt = await post(row.url, content, headers, transport)
     except UnsafeUrlError as exc:
         return await finish(
             engine,
@@ -294,7 +293,7 @@ async def deliver(
             error=f"endereço recusado: {exc}",
             senders=senders,
         )
-    except httpx.HTTPError:
+    except (httpx.HTTPError, TimeoutError):
         return await finish(
             engine,
             row,
@@ -305,16 +304,27 @@ async def deliver(
             error="sem resposta (conexão, TLS ou tempo esgotado)",
             senders=senders,
         )
-    latency = int((time.monotonic() - started) * 1000)
-    ok = 200 <= response.status_code < 300
+    except Exception:
+        log.exception("tentativa de entrega %s falhou", row.id)
+        return await finish(
+            engine,
+            row,
+            ok=False,
+            status=None,
+            latency_ms=None,
+            excerpt=None,
+            error="falha interna na entrega",
+            senders=senders,
+        )
+    ok = 200 <= status < 300
     return await finish(
         engine,
         row,
         ok=ok,
-        status=response.status_code,
-        latency_ms=latency,
-        excerpt=response.text[:EXCERPT],
-        error=None if ok else f"HTTP {response.status_code}",
+        status=status,
+        latency_ms=int((time.monotonic() - started) * 1000),
+        excerpt=excerpt,
+        error=None if ok else f"HTTP {status}",
         senders=senders,
     )
 
@@ -333,7 +343,11 @@ async def due(engine: AsyncEngine, senders: Senders) -> int:
                 {"n": BATCH},
             )
         ]
-    done = 0
-    for delivery in ids:
-        done += await deliver(engine, delivery, senders) == "succeeded"
-    return done
+    # Até 10 ao mesmo tempo: 50 receptores lentos (15 s cada) cabem na rodada de 1 min.
+    gate = asyncio.Semaphore(PARALLEL)
+
+    async def one(delivery: str) -> bool:
+        async with gate:
+            return await deliver(engine, delivery, senders) == "succeeded"
+
+    return sum(await asyncio.gather(*(one(delivery) for delivery in ids)))

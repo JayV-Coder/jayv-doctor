@@ -949,9 +949,9 @@ isOneToOne: false
                   ]
                 },"incidents": {
                   Row: {
-                    "assignee_id": string | null,"category": string,"created_at": string,"execution_count": number,"first_seen_at": string,"id": string,"integration_id": string,"last_seen_at": string,"number": number,"resolution_note": string | null,"resolved_at": string | null,"rule_code": string,"rule_version": string,"severity": string,"status": string,"tenant_id": string,"title": string,"updated_at": string
+                    "assignee_id": string | null,"category": string,"created_at": string,"execution_count": number,"first_seen_at": string,"id": string,"integration_id": string,"last_seen_at": string,"number": number,"resolution_note": string | null,"resolved_at": string | null,"rule_code": string,"rule_version": string,"severity": string,"status": string,"tenant_id": string,"title": string,"updated_at": string,"incident_snapshot": Json | null
                   }
-                  ComputedFields: never
+                  ComputedFields: "incident_snapshot"
                   Insert: {
                     "assignee_id"?: string | null,"category": string,"created_at"?: string,"execution_count"?: number,"first_seen_at": string,"id"?: string,"integration_id": string,"last_seen_at": string,"number": number,"resolution_note"?: string | null,"resolved_at"?: string | null,"rule_code": string,"rule_version": string,"severity": string,"status"?: string,"tenant_id": string,"title": string,"updated_at"?: string
                   }
@@ -1725,6 +1725,9 @@ isOneToOne: false
 "diagnosis_is_final":
 { Args: { "status": string }; Returns: boolean
                            },
+"diagnosis_snapshot":
+{ Args: { "target": string }; Returns: Json
+                           },
 "drop_expired_partitions":
 { Args: Record<PropertyKey, never>; Returns: (string)[]
                            },
@@ -1796,6 +1799,9 @@ isOneToOne: false
                            },
 "imported_before":
 { Args: { "integration": string,"sha": string,"tenant": string }; Returns: string
+                           },
+"incident_snapshot":
+{ Args: { "incident": Omit<Database["doctor"]['Tables']["incidents"]['Row'], Database["doctor"]['Tables']["incidents"]['ComputedFields']> }; Returns: Json
                            },
 "increment_usage":
 { Args: { "amount": number,"resource": string,"tenant": string }; Returns: number

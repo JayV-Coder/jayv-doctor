@@ -10,7 +10,8 @@ from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aid_notifier.channels import Senders
-from aid_notifier.jira import create_ticket, maintain, post_comment, sync
+from aid_notifier.itsm import create_ticket, maintain, sync
+from aid_notifier.jira import post_comment
 from aid_notifier.notify import evaluate, scan
 from aid_notifier.webhooks import deliver, due
 
@@ -60,5 +61,5 @@ async def alerts_scan() -> dict[str, int]:
     return {
         "sent": await scan(engine(), Senders()),
         "webhooks": await due(engine(), Senders()),
-        "jira": await maintain(engine()),
+        "itsm": await maintain(engine()),
     }

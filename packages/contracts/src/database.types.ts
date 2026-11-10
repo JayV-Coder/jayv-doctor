@@ -1019,14 +1019,14 @@ isOneToOne: false
                   ]
                 },"incident_tickets": {
                   Row: {
-                    "claimed_at": string | null,"comments_synced_at": string | null,"created_at": string,"error": string | null,"external_id": string | null,"external_key": string | null,"external_status": string | null,"id": string,"incident_id": string,"last_synced_at": string | null,"provider": string,"requested_by": string | null,"rule_id": string | null,"status": string,"tenant_id": string,"updated_at": string,"url": string | null
+                    "assignment_group": string | null,"claimed_at": string | null,"comments_synced_at": string | null,"created_at": string,"error": string | null,"external_id": string | null,"external_key": string | null,"external_status": string | null,"id": string,"incident_id": string,"last_synced_at": string | null,"provider": string,"requested_by": string | null,"rule_id": string | null,"status": string,"tenant_id": string,"updated_at": string,"url": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "claimed_at"?: string | null,"comments_synced_at"?: string | null,"created_at"?: string,"error"?: string | null,"external_id"?: string | null,"external_key"?: string | null,"external_status"?: string | null,"id"?: string,"incident_id": string,"last_synced_at"?: string | null,"provider"?: string,"requested_by"?: string | null,"rule_id"?: string | null,"status"?: string,"tenant_id": string,"updated_at"?: string,"url"?: string | null
+                    "assignment_group"?: string | null,"claimed_at"?: string | null,"comments_synced_at"?: string | null,"created_at"?: string,"error"?: string | null,"external_id"?: string | null,"external_key"?: string | null,"external_status"?: string | null,"id"?: string,"incident_id": string,"last_synced_at"?: string | null,"provider"?: string,"requested_by"?: string | null,"rule_id"?: string | null,"status"?: string,"tenant_id": string,"updated_at"?: string,"url"?: string | null
                   }
                   Update: {
-                    "claimed_at"?: string | null,"comments_synced_at"?: string | null,"created_at"?: string,"error"?: string | null,"external_id"?: string | null,"external_key"?: string | null,"external_status"?: string | null,"id"?: string,"incident_id"?: string,"last_synced_at"?: string | null,"provider"?: string,"requested_by"?: string | null,"rule_id"?: string | null,"status"?: string,"tenant_id"?: string,"updated_at"?: string,"url"?: string | null
+                    "assignment_group"?: string | null,"claimed_at"?: string | null,"comments_synced_at"?: string | null,"created_at"?: string,"error"?: string | null,"external_id"?: string | null,"external_key"?: string | null,"external_status"?: string | null,"id"?: string,"incident_id"?: string,"last_synced_at"?: string | null,"provider"?: string,"requested_by"?: string | null,"rule_id"?: string | null,"status"?: string,"tenant_id"?: string,"updated_at"?: string,"url"?: string | null
                   }
                   Relationships: [
                     {
@@ -1193,14 +1193,14 @@ isOneToOne: false
                   ]
                 },"itsm_connections": {
                   Row: {
-                    "cloud_id": string | null,"created_at": string,"created_by": string | null,"custom_fields": NonNullable<Json>,"hook_token_hash": string | null,"id": string,"issue_type": string | null,"jira_webhook_expires_at": string | null,"jira_webhook_id": number | null,"last_error": string | null,"priority_map": NonNullable<Json>,"project_key": string | null,"provider": string,"secret_id": string | null,"site_url": string | null,"sites": NonNullable<Json>,"status": string,"sync_status": boolean,"tenant_id": string,"updated_at": string
+                    "assignment_groups": NonNullable<Json>,"client_id": string | null,"cloud_id": string | null,"created_at": string,"created_by": string | null,"custom_fields": NonNullable<Json>,"default_group": string | null,"hook_token_hash": string | null,"id": string,"impact_map": NonNullable<Json>,"instance_url": string | null,"issue_type": string | null,"jira_webhook_expires_at": string | null,"jira_webhook_id": number | null,"last_error": string | null,"priority_map": NonNullable<Json>,"project_key": string | null,"provider": string,"secret_id": string | null,"site_url": string | null,"sites": NonNullable<Json>,"status": string,"sync_status": boolean,"tenant_id": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "cloud_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"custom_fields"?: NonNullable<Json>,"hook_token_hash"?: string | null,"id"?: string,"issue_type"?: string | null,"jira_webhook_expires_at"?: string | null,"jira_webhook_id"?: number | null,"last_error"?: string | null,"priority_map"?: NonNullable<Json>,"project_key"?: string | null,"provider"?: string,"secret_id"?: string | null,"site_url"?: string | null,"sites"?: NonNullable<Json>,"status"?: string,"sync_status"?: boolean,"tenant_id": string,"updated_at"?: string
+                    "assignment_groups"?: NonNullable<Json>,"client_id"?: string | null,"cloud_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"custom_fields"?: NonNullable<Json>,"default_group"?: string | null,"hook_token_hash"?: string | null,"id"?: string,"impact_map"?: NonNullable<Json>,"instance_url"?: string | null,"issue_type"?: string | null,"jira_webhook_expires_at"?: string | null,"jira_webhook_id"?: number | null,"last_error"?: string | null,"priority_map"?: NonNullable<Json>,"project_key"?: string | null,"provider"?: string,"secret_id"?: string | null,"site_url"?: string | null,"sites"?: NonNullable<Json>,"status"?: string,"sync_status"?: boolean,"tenant_id": string,"updated_at"?: string
                   }
                   Update: {
-                    "cloud_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"custom_fields"?: NonNullable<Json>,"hook_token_hash"?: string | null,"id"?: string,"issue_type"?: string | null,"jira_webhook_expires_at"?: string | null,"jira_webhook_id"?: number | null,"last_error"?: string | null,"priority_map"?: NonNullable<Json>,"project_key"?: string | null,"provider"?: string,"secret_id"?: string | null,"site_url"?: string | null,"sites"?: NonNullable<Json>,"status"?: string,"sync_status"?: boolean,"tenant_id"?: string,"updated_at"?: string
+                    "assignment_groups"?: NonNullable<Json>,"client_id"?: string | null,"cloud_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"custom_fields"?: NonNullable<Json>,"default_group"?: string | null,"hook_token_hash"?: string | null,"id"?: string,"impact_map"?: NonNullable<Json>,"instance_url"?: string | null,"issue_type"?: string | null,"jira_webhook_expires_at"?: string | null,"jira_webhook_id"?: number | null,"last_error"?: string | null,"priority_map"?: NonNullable<Json>,"project_key"?: string | null,"provider"?: string,"secret_id"?: string | null,"site_url"?: string | null,"sites"?: NonNullable<Json>,"status"?: string,"sync_status"?: boolean,"tenant_id"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -1813,6 +1813,9 @@ isOneToOne: false
 "configure_jira":
 { Args: { "cloud_id": string,"custom_fields": Json,"hook_token": string,"issue_type": string,"priority_map": Json,"project_key": string,"sync_status": boolean }; Returns: undefined
                            },
+"configure_servicenow":
+{ Args: { "assignment_groups": Json,"client_id": string,"client_secret": string,"default_group": string,"hook_token": string,"impact_map": Json,"instance_url": string,"sync_status": boolean }; Returns: string
+                           },
 "create_agent":
 { Args: { "config": Json,"integration_id": string,"name": string,"token_hash": string }; Returns: string
                            },
@@ -1877,6 +1880,9 @@ isOneToOne: false
 { Args: { "target": string }; Returns: Json
                            },
 "disconnect_jira":
+{ Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"disconnect_servicenow":
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
 "drop_expired_partitions":
@@ -2081,7 +2087,7 @@ isOneToOne: false
 { Args: { "target": string,"tokens": string }; Returns: undefined
                            },
 "queue_ticket":
-{ Args: { "incident": string,"requester": string,"rule": string,"tenant": string }; Returns: string
+{ Args: { "incident": string,"provider"?: string,"requester": string,"rule": string,"tenant": string }; Returns: string
                            },
 "queue_webhooks":
 { Args: { "event": string,"subject": Json,"tenant": string }; Returns: undefined
@@ -2136,7 +2142,7 @@ isOneToOne: false
 { Args: { "confirmation": string }; Returns: string
                            },
 "request_ticket":
-{ Args: { "target": string }; Returns: string
+{ Args: { "provider"?: string,"target": string }; Returns: string
                            },
 "require_manager":
 { Args: Record<PropertyKey, never>; Returns: string
@@ -2193,6 +2199,9 @@ isOneToOne: false
                            },
 "rotate_webhook_secret":
 { Args: { "secret": string,"target": string }; Returns: undefined
+                           },
+"servicenow_hook":
+{ Args: { "number": string,"token_hash": string }; Returns: boolean
                            },
 "set_auto_diagnosis":
 { Args: { "enabled": boolean }; Returns: undefined

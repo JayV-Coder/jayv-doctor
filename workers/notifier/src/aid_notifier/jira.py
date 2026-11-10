@@ -326,7 +326,7 @@ async def create_ticket(
             await db.execute(
                 text(
                     "update doctor.incident_tickets set claimed_at = now()"
-                    " where id = cast(:t as uuid) and status = 'creating'"
+                    " where id = cast(:t as uuid) and status = 'creating' and provider = 'jira'"
                     " and (claimed_at is null or claimed_at < now() - cast(:claim as interval))"
                     " returning id::text, tenant_id::text, incident_id::text"
                 ),
@@ -537,7 +537,10 @@ async def sync(
     async with engine.begin() as db:
         await platform_role(db)
         tenant = await db.scalar(
-            text("select tenant_id::text from doctor.itsm_connections where id = cast(:c as uuid)"),
+            text(
+                "select tenant_id::text from doctor.itsm_connections"
+                " where id = cast(:c as uuid) and provider = 'jira'"
+            ),
             {"c": str(payload["connection_id"])},
         )
         connection = await connection_of(db, str(tenant)) if tenant else None
@@ -547,7 +550,7 @@ async def sync(
                     text(
                         "select id::text, incident_id::text, external_key, external_status"
                         " from doctor.incident_tickets where tenant_id = cast(:t as uuid)"
-                        " and external_key is not null and ("
+                        " and provider = 'jira' and external_key is not null and ("
                         "  (cast(:k as text) is null and status = 'open')"
                         "  or (external_key = cast(:k as text) and status in ('open', 'done')))"
                         " order by last_synced_at nulls first limit :n"
@@ -597,6 +600,7 @@ async def post_comment(
                     " doctor.comment_author_name(c.id) as author"
                     " from doctor.incident_comments c join doctor.incident_tickets t"
                     " on t.tenant_id = c.tenant_id and t.incident_id = c.incident_id"
+                    " and t.provider = 'jira'"
                     " where c.id = cast(:c as uuid) and t.external_key is not null"
                 ),
                 {"c": str(payload["comment_id"])},
@@ -629,6 +633,7 @@ async def maintain(engine: AsyncEngine, transport: httpx.AsyncBaseTransport | No
             for found in await db.execute(
                 text(
                     "select id::text from doctor.incident_tickets where status = 'creating'"
+                    " and provider = 'jira'"
                     " and coalesce(claimed_at, created_at) < now() - cast(:claim as interval)"
                     " limit 20"
                 ),
@@ -641,11 +646,13 @@ async def maintain(engine: AsyncEngine, transport: httpx.AsyncBaseTransport | No
                     "select c.id::text, c.tenant_id::text,"
                     " c.jira_webhook_id is not null and c.jira_webhook_expires_at"
                     "  < now() + interval '5 days' as renew"
-                    " from doctor.itsm_connections c where c.status = 'active' and ("
+                    " from doctor.itsm_connections c where c.status = 'active'"
+                    " and c.provider = 'jira' and ("
                     " (c.jira_webhook_id is not null"
                     "  and c.jira_webhook_expires_at < now() + interval '5 days')"
                     " or exists (select 1 from doctor.incident_tickets t"
-                    "  where t.tenant_id = c.tenant_id and t.status = 'open'"
+                    "  where t.tenant_id = c.tenant_id and t.provider = 'jira'"
+                    "  and t.status = 'open'"
                     "  and (t.last_synced_at is null"
                     "  or t.last_synced_at < now() - cast(:every as interval))))"
                     " limit 5"

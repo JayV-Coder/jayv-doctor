@@ -49,3 +49,12 @@ export function fieldsText(fields: Record<string, unknown>): string {
     .map(([name, value]) => `${name}=${String(value)}`)
     .join("\n");
 }
+
+export function serviceNowState(connection: { status: string } | null): Label {
+  if (!connection) return { label: "Não conectado", tone: "neutral" };
+  if (connection.status === "needs_reauth")
+    return { label: "Confira as credenciais", tone: "danger" };
+  return { label: "Conectado", tone: "success" };
+}
+
+export const PROVIDERS: Record<string, string> = { jira: "Jira", servicenow: "ServiceNow" };

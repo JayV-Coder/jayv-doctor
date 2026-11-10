@@ -26,6 +26,8 @@ export type PushSubscriptionInfo = Schemas["PushSubscription"];
 export type Webhook = Schemas["Webhook"];
 export type JiraConnection = Schemas["JiraConnection"];
 export type IncidentTicket = Schemas["Ticket"];
+export type ServiceNowConnection = Schemas["ServiceNowConnection"];
+export type ServiceNowSaved = Schemas["ServiceNowSaved"];
 export type WebhookSecret = Schemas["WebhookSecret"];
 export type WebhookDelivery = Schemas["Delivery"];
 export type CorrelationMapping = Schemas["CorrelationMapping"];
@@ -111,6 +113,13 @@ export async function getJira(): Promise<JiraConnection | null | undefined> {
   const response = await apiFetch("/itsm/jira").catch(() => null);
   if (!response?.ok) return undefined;
   return (await response.json()) as JiraConnection | null;
+}
+
+// ServiceNow (#44): a conexão (nula sem conexão), sem o secret.
+export async function getServiceNow(): Promise<ServiceNowConnection | null | undefined> {
+  const response = await apiFetch("/itsm/servicenow").catch(() => null);
+  if (!response?.ok) return undefined;
+  return (await response.json()) as ServiceNowConnection | null;
 }
 
 export async function listTickets(incident: string): Promise<IncidentTicket[] | null> {

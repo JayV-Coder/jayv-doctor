@@ -12,6 +12,7 @@ const KINDS: Record<string, string> = {
   slack: "Slack",
   teams: "Microsoft Teams",
   jira: "Jira (abre o chamado)",
+  servicenow: "ServiceNow (abre o incident)",
 };
 
 // Canais da Organização (gestores): o webhook do Slack ou do Teams vai para o Vault e não volta.
@@ -127,9 +128,10 @@ export function Channels({
                 }
               />
             </label>
-          ) : type === "jira" ? (
+          ) : type === "jira" || type === "servicenow" ? (
             <p className="muted small">
-              Abre um chamado por Incidente no projeto configurado em Chamados (ITSM).
+              Abre um chamado por Incidente no {type === "jira" ? "Jira" : "ServiceNow"} configurado
+              em Chamados (ITSM).
             </p>
           ) : (
             <label className="field">

@@ -178,7 +178,7 @@ def reserving(endpoint: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitabl
 # Campos que aparecem uma vez (segredo de webhook, token de registro do agente e de ingestão):
 # a resposta guardada para a repetição sai com eles mascarados. A repetição devolve a máscara,
 # nunca o segredo, que só existe no Vault (ou como hash).
-SECRET_FIELDS = frozenset({"secret", "token", "registration_token", "install_command"})
+SECRET_FIELDS = frozenset({"secret", "token", "registration_token", "install_command", "hook_url"})
 REDACTED = "[exibido uma vez]"
 
 

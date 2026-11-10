@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fieldsText, jiraState, parseFields, ticketText } from "./labels";
+import { fieldsText, jiraState, parseFields, serviceNowState, ticketText } from "./labels";
 
 describe("chamados (ITSM)", () => {
   it("estado da conexão", () => {
@@ -12,6 +12,12 @@ describe("chamados (ITSM)", () => {
     expect(jiraState({ status: "needs_reauth", project_key: "SUST" }).label).toBe(
       "Conecte de novo",
     );
+  });
+
+  it("estado do ServiceNow", () => {
+    expect(serviceNowState(null).label).toBe("Não conectado");
+    expect(serviceNowState({ status: "active" })).toEqual({ label: "Conectado", tone: "success" });
+    expect(serviceNowState({ status: "needs_reauth" }).label).toBe("Confira as credenciais");
   });
 
   it("campos fixos: uma linha customfield_<n>=valor", () => {

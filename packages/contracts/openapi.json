@@ -4138,7 +4138,7 @@
       "post": {
         "tags": ["itsm"],
         "summary": "Request Ticket",
-        "description": "Abre o chamado no Jira (uma vez por Incidente); a chave aparece quando o Jira responde.",
+        "description": "Abre o chamado no ITSM (uma vez por Incidente e provedor); a chave aparece quando o ITSM\nresponde.",
         "operationId": "request_ticket_api_v1_incidents__target__tickets_post",
         "parameters": [
           {
@@ -4149,6 +4149,17 @@
               "type": "string",
               "format": "uuid",
               "title": "Target"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": ["jira", "servicenow"],
+              "type": "string",
+              "default": "jira",
+              "title": "Provider"
             }
           },
           {
@@ -4200,6 +4211,191 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/itsm/servicenow": {
+      "get": {
+        "tags": ["itsm"],
+        "summary": "Servicenow",
+        "operationId": "servicenow_api_v1_itsm_servicenow_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ServiceNowConnection"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Servicenow Api V1 Itsm Servicenow Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["itsm"],
+        "summary": "Configure Servicenow",
+        "description": "Instância, app OAuth (client credentials) e a regra de grupos. O endereço do webhook\npara a Business Rule volta só na primeira vez ou com `rotate_hook`.",
+        "operationId": "configure_servicenow_api_v1_itsm_servicenow_put",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceNowConfig"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceNowSaved"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["itsm"],
+        "summary": "Disconnect Servicenow",
+        "operationId": "disconnect_servicenow_api_v1_itsm_servicenow_delete",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -8078,7 +8274,7 @@
           },
           "type": {
             "type": "string",
-            "enum": ["email", "slack", "teams", "webpush", "jira"],
+            "enum": ["email", "slack", "teams", "webpush", "jira", "servicenow"],
             "title": "Type"
           },
           "name": {
@@ -8104,7 +8300,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["email", "slack", "teams", "webpush", "jira"],
+            "enum": ["email", "slack", "teams", "webpush", "jira", "servicenow"],
             "title": "Type"
           },
           "name": {
@@ -13026,6 +13222,184 @@
         "required": ["rule_code", "rule_version", "category", "description", "matched_event_ids"],
         "title": "RuleHit"
       },
+      "ServiceNowConfig": {
+        "properties": {
+          "instance_url": {
+            "type": "string",
+            "pattern": "^https://[a-z0-9][a-z0-9-]{0,62}\\.service-now\\.com$",
+            "title": "Instance Url"
+          },
+          "client_id": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          },
+          "impact_map": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Weights"
+            },
+            "propertyNames": {
+              "enum": ["low", "medium", "high", "critical"]
+            },
+            "type": "object",
+            "title": "Impact Map"
+          },
+          "assignment_groups": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "enum": ["sap", "salesforce", "gcp", "other"]
+            },
+            "type": "object",
+            "title": "Assignment Groups"
+          },
+          "default_group": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Group"
+          },
+          "sync_status": {
+            "type": "boolean",
+            "title": "Sync Status",
+            "default": true
+          },
+          "rotate_hook": {
+            "type": "boolean",
+            "title": "Rotate Hook",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["instance_url", "client_id"],
+        "title": "ServiceNowConfig"
+      },
+      "ServiceNowConnection": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["pending", "active", "needs_reauth"],
+            "title": "Status"
+          },
+          "instance_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance Url"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "impact_map": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Weights"
+            },
+            "type": "object",
+            "title": "Impact Map"
+          },
+          "assignment_groups": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Assignment Groups"
+          },
+          "default_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Group"
+          },
+          "sync_status": {
+            "type": "boolean",
+            "title": "Sync Status"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "instance_url",
+          "client_id",
+          "impact_map",
+          "assignment_groups",
+          "default_group",
+          "sync_status",
+          "last_error"
+        ],
+        "title": "ServiceNowConnection"
+      },
+      "ServiceNowSaved": {
+        "properties": {
+          "connection": {
+            "$ref": "#/components/schemas/ServiceNowConnection"
+          },
+          "hook_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hook Url"
+          }
+        },
+        "type": "object",
+        "required": ["connection", "hook_url"],
+        "title": "ServiceNowSaved"
+      },
       "SharedReportRequest": {
         "properties": {
           "token": {
@@ -13130,6 +13504,7 @@
           },
           "provider": {
             "type": "string",
+            "enum": ["jira", "servicenow"],
             "title": "Provider"
           },
           "status": {
@@ -13181,6 +13556,17 @@
             ],
             "title": "Error"
           },
+          "assignment_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignment Group"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -13208,6 +13594,7 @@
           "url",
           "external_status",
           "error",
+          "assignment_group",
           "created_at",
           "last_synced_at"
         ],
@@ -13576,6 +13963,26 @@
         "type": "object",
         "required": ["id", "secret"],
         "title": "WebhookSecret"
+      },
+      "Weights": {
+        "properties": {
+          "impact": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Impact"
+          },
+          "urgency": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Urgency"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["impact", "urgency"],
+        "title": "Weights"
       }
     }
   }

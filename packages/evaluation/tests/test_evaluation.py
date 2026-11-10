@@ -169,11 +169,26 @@ def test_compara_perfis_com_diferenca_de_qualidade_e_custo() -> None:
 def test_recomendacao_pelo_criterio_de_custo_e_precisao() -> None:
     from aid_evaluation.compare import recommend
 
-    base = {"cases": 100, "category_accuracy": 0.90, "cause_accuracy": 0.80, "cost_usd": 2.0}
+    base = {
+        "cases": 100,
+        "category_accuracy": 0.90,
+        "cause_accuracy": 0.80,
+        "cost_usd": 2.0,
+        "llm_failures": 1,
+        "judge": "anthropic",
+    }
     cheaper = {**base, "category_accuracy": 0.89, "cost_usd": 1.2}
     assert recommend(base, cheaper).startswith("adotar")
+    # Exatamente 2 p.p. e exatamente 30% ainda passam (sem o erro de ponto flutuante).
+    edge = {**base, "category_accuracy": 0.88, "cost_usd": 1.4}
+    assert recommend(base, edge).startswith("adotar")
     worse = {**base, "cause_accuracy": 0.77, "cost_usd": 1.0}
     assert recommend(base, worse).startswith("não adotar: perda acima de 2 p.p.")
     small_saving = {**base, "cost_usd": 1.8}
     assert recommend(base, small_saving).startswith("não adotar: economia abaixo de 30%")
+    flaky = {**base, "cost_usd": 1.0, "llm_failures": 35}
+    assert recommend(base, flaky).startswith("não adotar: mais falhas do LLM")
     assert "prices.json" in recommend(base, {**base, "cost_usd": None})
+    assert "Causa provável" in recommend(base, {**base, "cause_accuracy": None})
+    assert "juízes diferentes" in recommend(base, {**base, "judge": "vertex"})
+    assert "datasets diferentes" in recommend(base, {**base, "cases": 10})

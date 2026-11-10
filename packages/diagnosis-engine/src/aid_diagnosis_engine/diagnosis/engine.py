@@ -5,6 +5,8 @@ esgotada e a falha do LLM caem nele também, com a nota e, na falha, o status `f
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Literal
 
+from pydantic import BaseModel, Field
+
 from aid_diagnosis_engine.diagnosis.enrichment import apply_enrichment
 from aid_diagnosis_engine.diagnosis.model import (
     DiagnosisDraft,
@@ -35,10 +37,20 @@ async def _nothing(stage: Stage) -> None:
 
 
 # Roteamento por complexidade (#47): `fixed` usa sempre o modelo maior (o padrão até a avaliação
-# decidir), `fast` sempre o menor, e `by_complexity` o menor quando as Regras já explicam o caso
-# e o maior quando a confiança delas é baixa.
-Routing = Literal["fixed", "fast", "by_complexity"]
+# decidir), `fast` sempre o menor, `by_complexity` o menor quando as Regras já explicam o caso, e
+# `classify_first` pede a classificação ao menor e só manda a interpretação ao maior quando a
+# confiança dele é baixa ou ele discorda das Regras.
+Routing = Literal["fixed", "fast", "by_complexity", "classify_first"]
 SIMPLE_EVENTS = 30
+CLASSIFY_TOKENS = 200
+CLASSIFIER_CONFIDENCE = 0.7
+
+
+class Classification(BaseModel):
+    """O que o modelo menor responde no `classify_first`: a categoria e a confiança heurística."""
+
+    classification: str = Field(max_length=60)
+    confidence: float = Field(ge=0, le=1)
 
 
 def choose_tier(
@@ -47,20 +59,27 @@ def choose_tier(
     events: Sequence[EventItem],
     rules: Sequence[RuleItem],
 ) -> Tier:
-    """Caso simples: uma categoria só entre as Regras que dispararam, categoria conhecida e
-    poucos Eventos. O resto (sem Regra, categorias em conflito, muito Evento) vai ao maior."""
-    if routing == "fixed":
+    """Caso simples: as Regras que dispararam têm uma categoria só, conhecida e igual à do
+    Incidente, com poucos Eventos. O resto (sem Regra, categorias em conflito entre as Regras ou
+    com o Incidente, muito Evento) vai ao maior. `classify_first` decide depois da classificação
+    do menor (`after_classification`)."""
+    if routing in ("fixed", "classify_first"):
         return "reasoning"
     if routing == "fast":
         return "fast"
     categories = {rule.category for rule in rules}
     simple = (
-        len(categories) == 1
-        and "UNKNOWN" not in categories
+        categories == {incident.category}
         and incident.category not in (None, "UNKNOWN")
         and len(events) <= SIMPLE_EVENTS
     )
     return "fast" if simple else "reasoning"
+
+
+def after_classification(found: Classification, incident: IncidentInfo) -> Tier:
+    """O menor concordou com a categoria do Incidente, com confiança: ele mesmo interpreta."""
+    agreed = found.classification.strip().upper() == (incident.category or "").upper()
+    return "fast" if agreed and found.confidence >= CLASSIFIER_CONFIDENCE else "reasoning"
 
 
 class DiagnosisEngine:
@@ -129,6 +148,21 @@ class DiagnosisEngine:
 
         await on_stage("llm")
         assert self.llm is not None  # noqa: S101 - garantido pelo modo acima
+        tier = choose_tier(self.routing, incident, events, rules)
+        if self.routing == "classify_first":
+            try:
+                found = await self.llm.structured(
+                    scope=self.scope,
+                    system=SYSTEM,
+                    instructions="Classifique a falha (categoria) e dê a confiança de 0 a 1.",
+                    untrusted=untrusted(rules, events, knowledge, enrichment),
+                    schema=Classification,
+                    tier="fast",
+                    max_tokens=CLASSIFY_TOKENS,
+                )
+                tier = after_classification(found.output, incident)
+            except LLMError:
+                tier = "reasoning"
         try:
             result = await self.llm.structured(
                 scope=self.scope,
@@ -136,7 +170,7 @@ class DiagnosisEngine:
                 instructions=instructions(incident),
                 untrusted=untrusted(rules, events, knowledge, enrichment),
                 schema=LLMDiagnosis,
-                tier=choose_tier(self.routing, incident, events, rules),
+                tier=tier,
                 max_tokens=MAX_TOKENS,
             )
         except LLMError:

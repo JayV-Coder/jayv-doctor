@@ -462,3 +462,30 @@ async def test_motor_com_roteamento_usa_o_modelo_menor_no_caso_simples() -> None
     fixed = await DiagnosisEngine(llm, scope="t2").run(Loader(), mode="hybrid")
     assert [r["tier"] for r in provider.requests] == ["fast", "reasoning"]
     assert (routed.model, fixed.model) == ("fake-fast", "fake-reasoning")
+
+
+def test_regra_que_discorda_do_incidente_vai_ao_modelo_maior() -> None:
+    from aid_diagnosis_engine.diagnosis.engine import choose_tier
+    from aid_diagnosis_engine.diagnosis.model import IncidentInfo, RuleItem
+
+    incident = IncidentInfo.__new__(IncidentInfo)
+    object.__setattr__(incident, "category", "TIMEOUT")
+    auth = RuleItem.__new__(RuleItem)
+    object.__setattr__(auth, "category", "AUTH")
+    assert choose_tier("by_complexity", incident, [], [auth]) == "reasoning"
+
+
+@pytest.mark.asyncio
+async def test_classifica_primeiro_no_menor_e_interpreta_no_maior_se_discordar() -> None:
+    """`classify_first`: o menor classifica; concordou com confiança, ele interpreta."""
+    agree = json.dumps({"classification": "TIMEOUT", "confidence": 0.9})
+    disagree = json.dumps({"classification": "AUTH", "confidence": 0.9})
+    provider = FakeProvider([agree, answer(), disagree, answer()])
+    llm = GuardedLLM(
+        provider, breaker=CircuitBreaker(), policy=RetryPolicy(attempts=1, base_seconds=0)
+    )
+    for scope in ("t1", "t2"):
+        await DiagnosisEngine(llm, scope=scope, routing="classify_first").run(
+            Loader(), mode="hybrid"
+        )
+    assert [r["tier"] for r in provider.requests] == ["fast", "fast", "fast", "reasoning"]

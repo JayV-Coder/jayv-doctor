@@ -47,24 +47,36 @@ TOLERANCE = 0.02
 GUARDED = ("category_accuracy", "cause_accuracy")
 
 
+def failure_rate(metrics: dict[str, Any]) -> float:
+    cases = metrics.get("cases") or 0
+    return float(metrics.get("llm_failures") or 0) / cases if cases else 0.0
+
+
 def recommend(base: dict[str, Any], candidate: dict[str, Any]) -> str:
-    """Adotar ou não, com o motivo, pelo critério do #47."""
-    losses = [
-        (key, float(base[key]) - float(candidate[key]))
-        for key in GUARDED
-        if base.get(key) is not None and candidate.get(key) is not None
-    ]
-    if not losses:
-        return "sem precisão medida nos dois: rode com o mesmo dataset (e o mesmo juiz)"
+    """Adotar ou não, com o motivo, pelo critério do #47: as duas precisões (categoria e Causa
+    provável, com o mesmo juiz), no mesmo dataset, sem mais falhas do LLM, e o custo."""
+    if base.get("cases") != candidate.get("cases"):
+        return "datasets diferentes: rode as duas variantes nos mesmos casos"
+    if base.get("judge") != candidate.get("judge"):
+        return "juízes diferentes: rode as duas com o mesmo --judge-provider"
+    if any(base.get(key) is None or candidate.get(key) is None for key in GUARDED):
+        return "sem Causa provável medida nas duas: rode com --judge e o mesmo --judge-provider"
+    losses = [(key, float(base[key]) - float(candidate[key])) for key in GUARDED]
     worst_key, worst = max(losses, key=lambda item: item[1])
     base_cost, cost = per_case(base), per_case(candidate)
     if base_cost is None or cost is None or base_cost == 0:
-        return "sem custo medido nos dois: preencha tests/evaluation/prices.json"
+        return (
+            "sem custo medido nas duas: preencha tests/evaluation/prices.json"
+            " (open-weights: o custo do servidor por milhão de tokens)"
+        )
     saving = 1 - cost / base_cost
     detail = f"custo {change(cost, base_cost)}, pior perda {points(-worst, 0.0)} em {worst_key}"
-    if worst > TOLERANCE:
+    # Arredondado: 0,90 - 0,88 é 0,020000000000000018 em ponto flutuante.
+    if round(failure_rate(candidate) - failure_rate(base), 6) > TOLERANCE:
+        return f"não adotar: mais falhas do LLM ({detail})"
+    if round(worst, 6) > TOLERANCE:
         return f"não adotar: perda acima de 2 p.p. ({detail})"
-    if saving < SAVING:
+    if round(saving, 6) < SAVING:
         return f"não adotar: economia abaixo de 30% ({detail})"
     return f"adotar ({detail})"
 

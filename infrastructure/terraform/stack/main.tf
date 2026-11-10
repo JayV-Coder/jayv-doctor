@@ -224,7 +224,7 @@ module "workers" {
     each.key == "diagnosis" ? {
       BACKUP_BUCKET = google_storage_bucket.storage_backup.name
       # Roteamento de modelo por complexidade (#47): muda com a recomendação da avaliação.
-      AID_LLM_ROUTING = var.llm_routing
+      AID_LLM_ROUTING = jsonencode(var.llm_routing)
     } : {},
     # Os links das notificações levam ao app (#41).
     each.key == "notifier" ? {

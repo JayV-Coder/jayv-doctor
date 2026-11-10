@@ -48,7 +48,7 @@ class Hypothesis(BaseModel):
 
 class Evidence(BaseModel):
     rank: int
-    kind: Literal["event", "raw_log", "chunk", "global_chunk", "rule_match"]
+    kind: Literal["event", "raw_log", "chunk", "global_chunk", "rule_match", "enrichment"]
     # Nulo quando a retenção já apagou o registro apontado; `label` guarda o que ele era.
     ref_id: str | None
     # Instante do Evento a abrir (o próprio, ou o primeiro da Regra).

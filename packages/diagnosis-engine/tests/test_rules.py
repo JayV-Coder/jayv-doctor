@@ -293,7 +293,7 @@ def test_regra_nao_dispara(code: str, events: list[EventView]) -> None:
 
 
 def test_catalogo_versionado_com_metadados() -> None:
-    assert RULESET_VERSION == "2026.11.1"
+    assert RULESET_VERSION == "2026.11.2"
     assert [r.code for r in RULES] == [f"INT-{n:03d}" for n in range(1, 13)]
     for item in RULES:
         assert item.version == RULESET_VERSION
@@ -321,7 +321,7 @@ def test_match_traz_versao_e_so_os_eventos_que_provam() -> None:
     found = rule("INT-003").evaluate(execution(), events)
     assert found is not None
     assert found.matched_event_ids == ("e-1", "e-3")
-    assert found.rule_version == "2026.11.1"
+    assert found.rule_version == "2026.11.2"
     assert found.category == "TIMEOUT"
 
 
@@ -374,3 +374,22 @@ def test_regras_sap_vencem_as_genericas_no_http_400_e_403() -> None:
     assert not matches("INT-001", denied)
     # 403 comum continua INT-001.
     assert matches("INT-001", ev(error={"category": "UNKNOWN", "http_status": 403}))
+
+
+def test_int_008_chave_do_mapa_que_nao_chegou_ao_destino() -> None:
+    """#40: com `reconcile` no Mapa, o pedido visto na origem e ausente no destino diverge; a
+    Evidência são os Eventos da origem."""
+    events = [ev(1, severity="INFO"), ev(2, severity="INFO", minutes=1)]
+    view = ExecutionView(
+        id="x-1",
+        integration_id="i-1",
+        status="success",
+        first_event_at=T0,
+        last_event_at=T0,
+        evaluated_at=T0 + timedelta(minutes=10),
+        unreconciled=("e-1",),
+    )
+    found = rule("INT-008").evaluate(view, events)
+    assert found is not None
+    assert found.matched_event_ids == ("e-1",)
+    assert rule("INT-008").evaluate(execution(), events) is None

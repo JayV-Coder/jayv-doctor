@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
-Provider = Literal["fake", "gcp", "salesforce", "sap"]
+Provider = Literal["fake", "gcp", "salesforce", "sap", "odata"]
 # SecretStr: a credencial não aparece em repr, log nem mensagem de validação.
 Credential = SecretStr
 Interval = Field(default=None, ge=60, le=86400)

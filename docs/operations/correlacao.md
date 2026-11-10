@@ -11,6 +11,26 @@ O worker `correlation` (mesma imagem dos workers, `WORKER_NAME=correlation`) tra
 
 Um lock por Integração (`pg_advisory_xact_lock`) serializa mensagens da mesma Integração. Mensagem repetida não acha pendentes e termina sem efeito.
 
+## Correlação entre sistemas (ticket #40)
+
+Um pedido criado no Salesforce, processado no Cloud Run e com timeout no SAP tem um id forte diferente em cada sistema. O **Mapa de identificadores** da Integração (`doctor.correlation_mappings`, API em [docs/api/correlation.md](../api/correlation.md)) diz onde cada sistema guarda a mesma chave de negócio e como normalizá-la:
+
+```json
+[
+  { "system": "salesforce", "field": "execution_id" },
+  { "system": "gcp", "field": "attributes.sf_order", "transforms": [{ "op": "strip_prefix", "value": "SF-" }] },
+  { "system": "sap", "field": "attributes.bstkd", "transforms": [{ "op": "strip_leading_zeros" }] }
+]
+```
+
+- `system` é o `source.provider` do Evento; `field` é `execution_id`, `trace_id` ou `attributes.<nome>` (até dois níveis): só campos que identificam um registro. Operação, recurso e código de erro se repetem entre pedidos e juntariam Execuções sem relação.
+- Transformações, em ordem: `trim`, `upper`, `lower`, `strip_leading_zeros`, `strip_prefix` e `strip_suffix` (com `value`).
+- O worker calcula as chaves dos pendentes (`<id do Mapa>:<valor>`), grava em `events.cross_keys` (índice GIN) e busca os vizinhos já correlacionados com a mesma chave na janela do Mapa (`window_minutes`, padrão 60). A janela é fixa a partir do primeiro Evento com a chave: uma chave que se repete a cada 50 min não encadeia Execuções de um dia. Evento com a chave e sem par continua solto, e a Referência ou a proximidade ainda podem prendê-lo.
+- A estratégia `cross_system` fica entre `trace_id` e a Referência de negócio. Ela junta grupos com ids fortes diferentes, porque o Mapa é a Organização dizendo que são o mesmo fluxo. Evento com id forte continua marcado pelo id forte; só o que entrou pela chave fica `cross_system`.
+- Mudar um Mapa vale para os Eventos que chegarem depois: os já correlacionados guardam as chaves calculadas na hora.
+- A Timeline mostra uma raia por sistema quando a Execução passa por mais de um.
+- **Tela:** Integrações → **Mapa entre sistemas**. Todo Papel vê; Owner e Admin com MFA cadastram (até três chaves, com prefixo, zeros à esquerda e maiúsculas, janela, divergência e a consulta no destino) e removem.
+
 ## Fechamento
 
 O Cloud Scheduler chama `POST /close` a cada minuto (`aid-correlation-close`). Execução sem mudança há 5 min fecha:

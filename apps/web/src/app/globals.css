@@ -1214,6 +1214,47 @@ p {
   border-left: 1px solid var(--bd);
 }
 
+/* Raias por sistema (#40): uma coluna estreita por sistema; o ponto do Evento fica na dele. */
+.lanes-head {
+  display: grid;
+  grid-template-columns: repeat(var(--lanes), 24px) 1fr;
+  padding-left: 2px;
+  color: var(--mu);
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.timeline.lanes .it::before {
+  display: none;
+}
+
+.lane-rail {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(var(--lanes), 24px);
+}
+
+.lane-cell {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.lane-cell::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  border-left: 1px dashed var(--bd);
+}
+
+.lane-cell > .dot {
+  position: relative;
+  margin: 18px 0 0;
+}
+
 .timeline .it > .dot {
   position: relative;
   margin-top: 18px;

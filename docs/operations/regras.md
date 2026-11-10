@@ -4,7 +4,7 @@ Etapa 3 do motor (ADR-0003): Regras determinísticas, em código Python puro (`p
 
 ## Versões
 
-O pacote tem versão de calendário (hoje `rules@2026.11.1`). Cada versão de cada Regra está em `doctor.rule_definitions`, um catálogo global e só de leitura, semeado pela migração. Regra nova ou alterada ganha versão nova (migração + `RULESET_VERSION`). O match guarda `rule_code` e `rule_version`, e a FK impede apagar uma versão que já gerou match: o match antigo continua rastreável. O teste do worker confere que o catálogo do banco é o do código.
+O pacote tem versão de calendário (hoje `rules@2026.11.2`). Cada versão de cada Regra está em `doctor.rule_definitions`, um catálogo global e só de leitura, semeado pela migração. Regra nova ou alterada ganha versão nova (migração + `RULESET_VERSION`). O match guarda `rule_code` e `rule_version`, e a FK impede apagar uma versão que já gerou match: o match antigo continua rastreável. O teste do worker confere que o catálogo do banco é o do código.
 
 ## Catálogo `2026.10.1`
 
@@ -63,3 +63,7 @@ Uma linha de CSV com o cabeçalho de uma exportação ALV conhecida (em inglês 
 | SM58 (tRFC) | Function Module, Transaction ID, Target System, Date, Time, Status Text | ERROR; operação = módulo de função; Execução = Transaction ID |
 | SLG1 (log de aplicação) | Object, Subobject, External ID, Message Type, Message Class, Message Number, Message Text | severidade pelo tipo (A/E/W/I/S); `error.code` = classe e número; Execução = External ID |
 | Status de IDoc | IDoc number, Status, Status text, Message Type, Created on, Time created | ERROR nos status 51, 56, 63, 65, 66, 69 (`error.code = "IDOC <status>"`); Execução = número do IDoc |
+
+## Catálogo `2026.11.2` (ticket #40)
+
+As doze Regras na versão nova. Muda só a INT-008: além de `attributes.reconciliation`, ela dispara quando um Mapa de identificadores com `reconcile` ([docs/api/correlation.md](../api/correlation.md)) tem a chave num Evento da **origem** da Integração e em nenhum Evento do **destino** da mesma Execução. A Evidência são os Eventos da origem. Só conta o Evento da origem mais antigo que a janela do Mapa: no fechamento (5 min sem novidade) o destino ainda pode estar a caminho. A varredura do `POST /close` (worker de correlação) pede a avaliação de novo, uma vez, quando a maior janela dos Mapas passa desde o último Evento. Se o destino aparecer depois, a Execução reabre e a avaliação refaz o match. Integração com origem e destino iguais, ou `other`, não é reconciliada.

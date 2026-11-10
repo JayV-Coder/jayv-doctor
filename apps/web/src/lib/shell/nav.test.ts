@@ -33,6 +33,7 @@ describe("activeTab", () => {
     expect(activeTab("/eventos/abc")).toBe("/execucoes");
     expect(pageTitle("/eventos/abc")).toBe("Evento original");
     expect(pageTitle("/execucoes/abc")).toBe("Execuções");
+    expect(pageTitle("/integracoes/abc/mapas")).toBe("Mapa entre sistemas");
     expect(pageTitle("/conectores/novo")).toBe("Novo conector");
     expect(activeTab("/conectores/novo")).toBe("/conectores");
     expect(pageTitle("/conectores/agentes")).toBe("Agentes locais");

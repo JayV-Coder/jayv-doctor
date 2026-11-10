@@ -19,6 +19,7 @@ export type ExecutionDetail = Schemas["ExecutionDetail"];
 export type EventDetail = Schemas["EventDetail"];
 export type ExecutionSearch = Schemas["ExecutionSearch"];
 export type Connector = Schemas["Connector"];
+export type CorrelationMapping = Schemas["CorrelationMapping"];
 export type Agent = Schemas["Agent"];
 export type RegistrationToken = Schemas["RegistrationToken"];
 export type ConnectorSync = Schemas["ConnectorSync"];
@@ -89,6 +90,15 @@ async function getOne<T>(path: string): Promise<T | "not_found" | null> {
   const response = await apiFetch(path).catch(() => null);
   if (response?.status === 404 || response?.status === 422) return "not_found";
   return response?.ok ? ((await response.json()) as T) : null;
+}
+
+// Mapas de identificadores da Integração (#40).
+export async function listMappings(
+  integration: string,
+): Promise<CorrelationMapping[] | "not_found" | null> {
+  return getOne<CorrelationMapping[]>(
+    `/integrations/${encodeURIComponent(integration)}/correlation-mappings`,
+  );
 }
 
 export async function getExecution(id: string): Promise<ExecutionDetail | "not_found" | null> {

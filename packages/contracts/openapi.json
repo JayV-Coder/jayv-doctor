@@ -1065,6 +1065,301 @@
         }
       }
     },
+    "/api/v1/integrations/{target}/correlation-mappings": {
+      "get": {
+        "tags": ["correlation"],
+        "summary": "List Mappings",
+        "operationId": "list_mappings_api_v1_integrations__target__correlation_mappings_get",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CorrelationMapping"
+                  },
+                  "title": "Response List Mappings Api V1 Integrations  Target  Correlation Mappings Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["correlation"],
+        "summary": "Create Mapping",
+        "operationId": "create_mapping_api_v1_integrations__target__correlation_mappings_post",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MappingIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationMapping"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/correlation-mappings/{target}": {
+      "patch": {
+        "tags": ["correlation"],
+        "summary": "Update Mapping",
+        "operationId": "update_mapping_api_v1_correlation_mappings__target__patch",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MappingChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationMapping"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["correlation"],
+        "summary": "Delete Mapping",
+        "operationId": "delete_mapping_api_v1_correlation_mappings__target__delete",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/imports": {
       "get": {
         "tags": ["imports"],
@@ -6089,6 +6384,73 @@
         "required": ["id", "started_at", "finished_at", "status", "records", "error"],
         "title": "ConnectorSync"
       },
+      "CorrelationMapping": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "integration_id": {
+            "type": "string",
+            "title": "Integration Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "keys": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Keys"
+          },
+          "window_minutes": {
+            "type": "integer",
+            "title": "Window Minutes"
+          },
+          "reconcile": {
+            "type": "boolean",
+            "title": "Reconcile"
+          },
+          "lookup": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lookup"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "integration_id",
+          "name",
+          "keys",
+          "window_minutes",
+          "reconcile",
+          "lookup",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CorrelationMapping"
+      },
       "CreatedImport": {
         "properties": {
           "id": {
@@ -6880,7 +7242,7 @@
           },
           "kind": {
             "type": "string",
-            "enum": ["event", "raw_log", "chunk", "global_chunk", "rule_match"],
+            "enum": ["event", "raw_log", "chunk", "global_chunk", "rule_match", "enrichment"],
             "title": "Kind"
           },
           "ref_id": {
@@ -8807,6 +9169,179 @@
         "required": ["input_tokens", "output_tokens", "cost_estimate"],
         "title": "LlmUsage"
       },
+      "Lookup": {
+        "properties": {
+          "connector_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Connector Id"
+          },
+          "entity": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,79}$",
+            "title": "Entity"
+          },
+          "field": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,79}$",
+            "title": "Field"
+          },
+          "status_field": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_]{0,79}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Field"
+          },
+          "id_field": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_]{0,79}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Field"
+          },
+          "pad_left": {
+            "type": "integer",
+            "maximum": 35.0,
+            "minimum": 0.0,
+            "title": "Pad Left",
+            "default": 0
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["connector_id", "entity", "field"],
+        "title": "Lookup",
+        "description": "Consulta de leitura no destino, feita pelo Conector na hora do Diagnóstico: o registro\ncom `field` igual à chave existe? (ex.: `Order.OrderNumber` no Salesforce, `A_SalesOrder.\nPurchaseOrderByCustomer` num serviço OData do SAP)."
+      },
+      "MappingChange": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keys"
+          },
+          "window_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1440.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Minutes"
+          },
+          "reconcile": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconcile"
+          },
+          "lookup": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Lookup"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clear_lookup": {
+            "type": "boolean",
+            "title": "Clear Lookup",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MappingChange"
+      },
+      "MappingIn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 2,
+            "title": "Name"
+          },
+          "keys": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Keys"
+          },
+          "window_minutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "Window Minutes",
+            "default": 60
+          },
+          "reconcile": {
+            "type": "boolean",
+            "title": "Reconcile",
+            "default": false
+          },
+          "lookup": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Lookup"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["name", "keys"],
+        "title": "MappingIn"
+      },
       "Me": {
         "properties": {
           "id": {
@@ -8980,7 +9515,7 @@
           },
           "provider": {
             "type": "string",
-            "enum": ["fake", "gcp", "salesforce", "sap"],
+            "enum": ["fake", "gcp", "salesforce", "sap", "odata"],
             "title": "Provider"
           },
           "config": {
@@ -9004,7 +9539,7 @@
           },
           "provider": {
             "type": "string",
-            "enum": ["fake", "gcp", "salesforce", "sap"],
+            "enum": ["fake", "gcp", "salesforce", "sap", "odata"],
             "title": "Provider"
           },
           "name": {

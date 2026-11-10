@@ -6,8 +6,10 @@ proponha ação automática é bloqueada (Recomendações são sempre ações hu
 import re
 from collections.abc import Sequence
 
+from aid_diagnosis_engine.diagnosis.enrichment import enrichment_evidence
 from aid_diagnosis_engine.diagnosis.model import (
     DiagnosisDraft,
+    EnrichmentItem,
     EventItem,
     EvidenceDraft,
     HypothesisDraft,
@@ -43,8 +45,10 @@ def verify(
     events: Sequence[EventItem],
     rules: Sequence[RuleItem],
     knowledge: Sequence[KnowledgeItem],
+    enrichment: Sequence[EnrichmentItem] = (),
 ) -> DiagnosisDraft:
     notes: list[str] = []
+    by_enrichment = {item.id: item for item in enrichment if item.outcome != "failed"}
     by_event = {item.view.id: item for item in events}
     by_rule = {rule.id: rule for rule in rules}
     by_chunk = {chunk.id: chunk for chunk in knowledge}
@@ -64,6 +68,9 @@ def verify(
         elif ref in by_event:
             evidence.append(event_evidence(by_event[ref], cited.finding))
             strong = strong or by_event[ref].strong
+        elif ref in by_enrichment:
+            evidence.append(enrichment_evidence(by_enrichment[ref], cited.finding))
+            strong = True
         elif ref in by_chunk:
             chunk = by_chunk[ref]
             evidence.append(

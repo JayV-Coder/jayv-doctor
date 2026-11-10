@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { Chip } from "@/components/ui/chip";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -69,6 +70,9 @@ export default async function IntegrationsPage() {
             )}
           </dl>
           {integration.description && <p className="small">{integration.description}</p>}
+          <Link className="btn" href={`/integracoes/${integration.id}/mapas`}>
+            Mapa entre sistemas
+          </Link>
           {manager && <ArchiveButton id={integration.id} name={integration.name} />}
         </article>
       ))}

@@ -24,6 +24,7 @@ run "topicos_tem_push_autenticado_e_dlq_apos_5_tentativas" {
       "ingestion.raw", "ingestion.normalized", "correlation.requested", "diagnosis.requested", "connector.sync",
       "rules.evaluate", "incident.opened", "incident.updated", "knowledge.index", "diagnosis.published", "usage.threshold", "report.requested",
       "alert.evaluate", "webhook.deliver",
+      "enrichment.requested",
     ])
     error_message = "Os cinco tópicos do ticket precisam existir."
   }

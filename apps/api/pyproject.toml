@@ -9,6 +9,7 @@ dependencies = [
     "aid-knowledge",
     "aid-connectors",
     "aid-contracts",
+    "aid-correlation",
     "aid-db",
     "aid-security",
     "fastapi>=0.162",
@@ -29,6 +30,7 @@ aid-observability = { workspace = true }
 aid-knowledge = { workspace = true }
 aid-connectors = { workspace = true }
 aid-contracts = { workspace = true }
+aid-correlation = { workspace = true }
 aid-db = { workspace = true }
 aid-security = { workspace = true }
 

@@ -10,7 +10,7 @@ from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aid_correlation_worker.audit import import_auth_events
-from aid_correlation_worker.close import close_idle
+from aid_correlation_worker.close import close_idle, reconcile_due
 from aid_correlation_worker.correlate import correlate_integration
 from aid_correlation_worker.stats import refresh_stats, rollup_usage
 
@@ -34,7 +34,8 @@ router = APIRouter()
 
 @router.post("/close")
 async def close() -> dict[str, int]:
-    return {"closed": await close_idle(engine())}
+    # No mesmo agendamento: a reavaliação da divergência pelo Mapa (INT-008, #40).
+    return {"closed": await close_idle(engine()), "reconciled": await reconcile_due(engine())}
 
 
 @router.post("/stats")

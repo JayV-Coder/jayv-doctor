@@ -178,7 +178,11 @@ export function DiagnosisEvidence({ diagnosis }: Props) {
             const href = evidenceHref(item);
             const body = (
               <>
-                <Chip tone={item.kind === "rule_match" ? "info" : "neutral"}>
+                <Chip
+                  tone={
+                    item.kind === "rule_match" || item.kind === "enrichment" ? "info" : "neutral"
+                  }
+                >
                   {evidenceChip(item)}
                 </Chip>
                 <span className="li-text">

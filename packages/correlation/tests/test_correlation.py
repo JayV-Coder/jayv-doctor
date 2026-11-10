@@ -51,6 +51,7 @@ def test_os_seis_eventos_do_mockup_fora_de_ordem_formam_uma_execucao_falha() -> 
     assert group.keys == {
         "execution_id": ["exec-123"],
         "trace_id": ["trace-abc"],
+        "cross_system": [],
         "business_reference": [],
     }
 
@@ -241,3 +242,80 @@ def test_cada_execucao_do_gabarito_fica_quase_toda_num_grupo_so() -> None:
             placed.setdefault(TRUTH[event_id], []).append(index)
     kept = sum(found.count(max(set(found), key=found.count)) for found in placed.values())
     assert kept / len(SYNTHETIC) >= 0.98, kept / len(SYNTHETIC)
+
+
+# Ticket #40: Salesforce → middleware GCP → SAP, cada um com o próprio id forte, ligados pelo Mapa
+# de identificadores (chave `<mapa>:<valor normalizado>`).
+MAP = "00000000-0000-4000-8000-00000000ma01"
+PEDIDO = f"{MAP}:801XX0001"
+
+
+def test_mapa_une_os_tres_sistemas_numa_execucao() -> None:
+    events = [
+        event(1, 0, execution_id="sf-req-1", cross_keys=(PEDIDO,), operation="Order.create"),
+        event(2, 900, trace_id="trace-gcp-9", cross_keys=(PEDIDO,), operation="order-router"),
+        event(3, 31_000, "ERROR", execution_id="IDOC-77", cross_keys=(PEDIDO,), operation="BAPI"),
+    ]
+    (group,) = Correlator().correlate(TENANT, events).groups
+    assert len(group.event_ids) == 3
+    assert group.keys["cross_system"] == [PEDIDO]
+    assert not group.low_confidence
+    assert execution_status(group, closed=True) == "failed"
+
+
+def test_chave_so_no_evento_marca_cross_system_e_ids_fortes_tem_prioridade() -> None:
+    events = [
+        event(1, 0, execution_id="sf-req-1", cross_keys=(PEDIDO,)),
+        event(2, 500, cross_keys=(PEDIDO,)),
+    ]
+    (group,) = Correlator().correlate(TENANT, events).groups
+    assert group.correlated_by[events[0].id] == "execution_id"
+    assert group.correlated_by[events[1].id] == "cross_system"
+
+
+def test_mesma_chave_fora_da_janela_do_mapa_nao_une() -> None:
+    settings = Settings(cross_windows={MAP: timedelta(minutes=10)})
+    events = [
+        event(1, 0, execution_id="sf-1", cross_keys=(PEDIDO,)),
+        event(2, 11 * 60_000, execution_id="IDOC-1", cross_keys=(PEDIDO,)),
+    ]
+    assert len(Correlator(settings).correlate(TENANT, events).groups) == 2
+    assert len(Correlator().correlate(TENANT, events).groups) == 1  # padrão: 60 min
+
+
+def test_chave_igual_em_outra_organizacao_nao_une() -> None:
+    events = [
+        event(1, 0, execution_id="sf-1", cross_keys=(PEDIDO,)),
+        event(2, 100, execution_id="IDOC-1", cross_keys=(PEDIDO,), tenant=OTHER_TENANT),
+    ]
+    (group,) = Correlator().correlate(TENANT, events).groups
+    assert group.event_ids == (events[0].id,)
+
+
+def test_referencia_de_negocio_prende_evento_solto_ao_grupo_do_mapa() -> None:
+    events = [
+        event(1, 0, execution_id="sf-1", cross_keys=(PEDIDO,), business_reference="hmac:1"),
+        event(2, 400, business_reference="hmac:1"),
+    ]
+    (group,) = Correlator().correlate(TENANT, events).groups
+    assert group.correlated_by[events[1].id] == "business_reference"
+
+
+def test_chave_que_se_repete_nao_encadeia_execucoes() -> None:
+    """Janelas fixas: a mesma chave a cada 50 min, com janela de 60, não vira um dia inteiro."""
+    events = [
+        event(n, n * 50 * 60_000, execution_id=f"exec-{n}", cross_keys=(PEDIDO,))
+        for n in range(1, 6)
+    ]
+    groups = Correlator().correlate(TENANT, events).groups
+    assert [len(group.event_ids) for group in groups] == [2, 2, 1]
+
+
+def test_chave_sem_par_continua_solta_e_a_referencia_ainda_prende() -> None:
+    """Configurar um Mapa não tira o que a Referência já juntava."""
+    events = [
+        event(1, 0, execution_id="exec-mw", business_reference="hmac:801"),
+        event(2, 500, business_reference="hmac:801", cross_keys=(PEDIDO,)),
+    ]
+    (group,) = Correlator().correlate(TENANT, events).groups
+    assert group.correlated_by[events[1].id] == "business_reference"

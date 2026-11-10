@@ -26,6 +26,7 @@ export type PushSubscriptionInfo = Schemas["PushSubscription"];
 export type Webhook = Schemas["Webhook"];
 export type WebhookSecret = Schemas["WebhookSecret"];
 export type WebhookDelivery = Schemas["Delivery"];
+export type CorrelationMapping = Schemas["CorrelationMapping"];
 export type Agent = Schemas["Agent"];
 export type RegistrationToken = Schemas["RegistrationToken"];
 export type ConnectorSync = Schemas["ConnectorSync"];
@@ -135,6 +136,15 @@ export async function getAlerts(): Promise<{
     quiet: toQuiet(preferences.quiet_hours),
     pushKey: key?.public_key ?? null,
   };
+}
+
+// Mapas de identificadores da Integração (#40).
+export async function listMappings(
+  integration: string,
+): Promise<CorrelationMapping[] | "not_found" | null> {
+  return getOne<CorrelationMapping[]>(
+    `/integrations/${encodeURIComponent(integration)}/correlation-mappings`,
+  );
 }
 
 export async function getExecution(id: string): Promise<ExecutionDetail | "not_found" | null> {

@@ -64,7 +64,7 @@ async def main(organization: str, viewer: bool) -> None:
     for diagnosis in targets:
         provider = FakeProvider([INCONCLUSIVE])
 
-        def scripted(_: str, chosen: FakeProvider = provider) -> FakeProvider:
+        def scripted(_: str, _project: str | None, chosen: FakeProvider = provider) -> FakeProvider:
             return chosen
 
         await diagnose(engine, {"diagnosis_id": diagnosis}, scripted)

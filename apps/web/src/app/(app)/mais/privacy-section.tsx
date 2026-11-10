@@ -5,8 +5,15 @@ import { useState, useTransition } from "react";
 import { FormMessage } from "@/components/auth-shell";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import type { PrivacySettings } from "@/lib/privacy/api";
-import { classLabel, daysText, deletionText } from "@/lib/privacy/labels";
-import { cancelDeletion, requestDeletion, setLlm, setRetention } from "./actions";
+import {
+  AI_PROFILES,
+  checkText,
+  classLabel,
+  daysText,
+  deletionText,
+  reindexText,
+} from "@/lib/privacy/labels";
+import { cancelDeletion, requestDeletion, setAiProfile, setLlm, setRetention } from "./actions";
 
 type Props = {
   settings: PrivacySettings;
@@ -41,6 +48,7 @@ export function PrivacySection({ settings, manager, owner, slug }: Props) {
 
       <h2 className="label">LGPD e IA</h2>
       <LlmToggle enabled={settings.llm_enabled} manager={manager} />
+      <AiProfile settings={settings} owner={owner} />
       <ul className="list">
         <li>
           <Link className="li" href="/subprocessadores">
@@ -153,6 +161,65 @@ function LlmToggle({ enabled, manager }: { enabled: boolean; manager: boolean })
       </label>
       <FormMessage error={error} />
     </div>
+  );
+}
+
+// Perfil de IA (#45): o Owner com MFA troca entre o padrão e o Brasil; o dedicado é contratado.
+function AiProfile({ settings, owner }: { settings: PrivacySettings; owner: boolean }) {
+  const [chosen, setChosen] = useState(settings.ai_profile);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, startTransition] = useTransition();
+  const check = checkText(settings.ai_check);
+  const reindex = reindexText(settings.reindex);
+  const options =
+    settings.ai_profile === "dedicated"
+      ? (["dedicated", "standard", "br_region"] as const)
+      : (["standard", "br_region"] as const);
+  return (
+    <fieldset className="stack" aria-label="Perfil de IA">
+      <legend className="label">Perfil de IA</legend>
+      {options.map((profile) => (
+        <label key={profile} className="option">
+          <input
+            type="radio"
+            name="ai-profile"
+            value={profile}
+            checked={chosen === profile}
+            disabled={!owner || busy || profile === "dedicated"}
+            onChange={() => {
+              const previous = chosen;
+              setChosen(profile);
+              startTransition(async () => {
+                const failure = await setAiProfile(profile).catch(
+                  () => "Sem conexão. Tente de novo.",
+                );
+                setError(failure);
+                if (failure !== null) setChosen(previous);
+              });
+            }}
+          />
+          <span>
+            <strong>{AI_PROFILES[profile]?.title}</strong>
+            <span className="muted small">{AI_PROFILES[profile]?.detail}</span>
+          </span>
+        </label>
+      ))}
+      {check && (
+        <p className={check.ok ? "muted small" : "alert"} role="status">
+          {check.text}
+        </p>
+      )}
+      {reindex && (
+        <p className="note" role="status">
+          {reindex}
+        </p>
+      )}
+      {!owner && <p className="muted small">Só o Owner com MFA troca o perfil de IA.</p>}
+      {settings.ai_profile !== "dedicated" && (
+        <p className="muted small">Capacidade dedicada: fale com o suporte da plataforma.</p>
+      )}
+      <FormMessage error={error} />
+    </fieldset>
   );
 }
 

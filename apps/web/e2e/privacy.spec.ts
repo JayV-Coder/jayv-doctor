@@ -34,6 +34,24 @@ test("retenção, envio ao LLM, subprocessadores, titular e exclusão total", as
   await expect(list).toContainText("Estados Unidos");
   await expect(page.getByText("O envio de evidências ao LLM está desligado")).toBeVisible();
 
+  // Perfil de IA (#45): o Owner com MFA passa para o Brasil; subprocessadores e DPA mudam junto.
+  await page.goto("/mais");
+  const profile = page.getByRole("group", { name: "Perfil de IA" });
+  await expect(profile.getByRole("radio", { name: /Padrão/ })).toBeChecked();
+  await expect(profile.getByRole("radio", { name: /Dedicado/ })).toHaveCount(0);
+  const changed = page.waitForResponse((response) => response.request().method() === "POST");
+  await profile.getByRole("radio", { name: /Brasil/ }).check();
+  await changed;
+  await expectNoHorizontalScroll(page);
+  await page.reload();
+  await expect(
+    page.getByRole("group", { name: "Perfil de IA" }).getByRole("radio", { name: /Brasil/ }),
+  ).toBeChecked();
+  await page.getByRole("link", { name: "Subprocessadores" }).click();
+  await expect(list).toContainText("Google Vertex AI");
+  await expect(list).not.toContainText("Anthropic");
+  await expect(page.getByRole("note")).toContainText("sem transferência internacional");
+
   await page.goto("/titular");
   await page.getByLabel("Referência de negócio do titular").fill("4500012345");
   await page.getByRole("button", { name: "Localizar" }).click();

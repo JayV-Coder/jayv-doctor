@@ -9,6 +9,7 @@ const MESSAGES: Record<string, string> = {
   retention_out_of_bounds: "Retenção fora dos limites permitidos.",
   confirmation_mismatch: "Digite o identificador (slug) da Organização para confirmar.",
   hmac_unavailable: "A busca por Referência não está configurada.",
+  dedicated_by_contract: "O perfil dedicado é contratado com a plataforma.",
 };
 const GENERIC = "Não foi possível concluir agora. Tente de novo.";
 
@@ -28,6 +29,10 @@ export async function setRetention(dataClass: string, days: number): Promise<str
     method: "PUT",
     body: JSON.stringify({ data_class: dataClass, days }),
   });
+}
+
+export async function setAiProfile(profile: string): Promise<string | null> {
+  return send("/privacy/ai-profile", { method: "PUT", body: JSON.stringify({ profile }) });
 }
 
 export async function setLlm(enabled: boolean): Promise<string | null> {

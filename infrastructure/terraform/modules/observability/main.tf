@@ -316,11 +316,44 @@ resource "google_monitoring_dashboard" "platform" {
   depends_on = [google_monitoring_metric_descriptor.custom]
 }
 
+# Perfis de IA (#45, ADR-0018): o provedor do Brasil registrou host fora dele, recusou um, ou a
+# verificação diária divergiu. Alerta por log (cada ocorrência), sem esperar métrica.
+resource "google_monitoring_alert_policy" "ai_region" {
+  project               = var.project_id
+  display_name          = "IA fora da região do perfil"
+  combiner              = "OR"
+  notification_channels = local.channels
+
+  conditions {
+    display_name = "IA fora da região do perfil"
+    condition_matched_log {
+      filter = join(" OR ", [
+        "jsonPayload.message=\"ai.profile_divergence\"",
+        "jsonPayload.message=\"ai.egress_blocked\"",
+        "(jsonPayload.message=\"ai.egress\" AND jsonPayload.provider=~\"^vertex\" AND NOT jsonPayload.region=(\"southamerica-east1\" OR \"local\"))",
+      ])
+    }
+  }
+
+  documentation {
+    content   = "Runbook: ${var.runbook_base_url}/docs/operations/runbooks/ia-regiao.md"
+    mime_type = "text/markdown"
+  }
+
+  alert_strategy {
+    notification_rate_limit {
+      period = "300s"
+    }
+    auto_close = "1800s"
+  }
+}
+
 output "alerts" {
   value = merge(
     { for key, policy in google_monitoring_alert_policy.threshold : key => policy.documentation[0].content },
     { api_errors = google_monitoring_alert_policy.api_errors.documentation[0].content },
     { metrics_absent = google_monitoring_alert_policy.metrics_absent.documentation[0].content },
+    { ai_region = google_monitoring_alert_policy.ai_region.documentation[0].content },
   )
 }
 

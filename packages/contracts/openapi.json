@@ -6031,7 +6031,7 @@
       "post": {
         "tags": ["knowledge"],
         "summary": "Search Knowledge",
-        "description": "Híbrida (vetor + texto, RRF) com o embedding do provedor da Organização; com o provedor\nfora, só o texto, em vez de falhar. O provedor sai numa transação curta e o embedding é\ngerado fora dela: nenhuma conexão do banco fica presa esperando a API de IA.",
+        "description": "Híbrida (vetor + texto, RRF) com o embedding do provedor da Organização; com o provedor\nfora, só o texto, em vez de falhar. Perfil de IA trocado: até o reindex terminar, os índices\nantigos que o perfil permite também entram (ADR-0018). O provedor sai numa transação curta e\no embedding é gerado fora dela: nenhuma conexão do banco fica presa esperando a API de IA.",
         "operationId": "search_knowledge_api_v1_knowledge_search_post",
         "parameters": [
           {
@@ -6769,6 +6769,75 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RetentionChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/privacy/ai-profile": {
+      "put": {
+        "tags": ["privacy"],
+        "summary": "Put Ai Profile",
+        "description": "Perfil de IA (ADR-0018): Owner com MFA troca entre o padrão e o Brasil.",
+        "operationId": "put_ai_profile_api_v1_privacy_ai_profile_put",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiProfileChange"
               }
             }
           }
@@ -7790,6 +7859,65 @@
         "type": "object",
         "required": ["version", "url", "sha256", "signature"],
         "title": "AgentUpdate"
+      },
+      "AiCheck": {
+        "properties": {
+          "checked_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Checked At"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "hosts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Hosts"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": ["checked_at", "ok", "hosts", "region", "detail"],
+        "title": "AiCheck",
+        "description": "Última verificação diária do perfil (ADR-0018): os hosts e a região efetivos."
+      },
+      "AiProfileChange": {
+        "properties": {
+          "profile": {
+            "type": "string",
+            "enum": ["standard", "br_region", "dedicated"],
+            "title": "Profile"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["profile"],
+        "title": "AiProfileChange"
       },
       "AlertRule": {
         "properties": {
@@ -12384,8 +12512,37 @@
           },
           "llm_provider": {
             "type": "string",
-            "enum": ["anthropic", "vertex"],
+            "enum": ["anthropic", "vertex", "vertex_dedicated"],
             "title": "Llm Provider"
+          },
+          "ai_profile": {
+            "type": "string",
+            "enum": ["standard", "br_region", "dedicated"],
+            "title": "Ai Profile"
+          },
+          "ai_project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Project"
+          },
+          "ai_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AiCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reindex": {
+            "$ref": "#/components/schemas/Reindex"
           },
           "deletion": {
             "anyOf": [
@@ -12399,7 +12556,16 @@
           }
         },
         "type": "object",
-        "required": ["retention", "llm_enabled", "llm_provider", "deletion"],
+        "required": [
+          "retention",
+          "llm_enabled",
+          "llm_provider",
+          "ai_profile",
+          "ai_project",
+          "ai_check",
+          "reindex",
+          "deletion"
+        ],
         "title": "PrivacySettings"
       },
       "Profile": {
@@ -12647,6 +12813,26 @@
         "type": "object",
         "required": ["id", "registration_token", "expires_in_hours", "install_command"],
         "title": "RegistrationToken"
+      },
+      "Reindex": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "current": {
+            "type": "integer",
+            "title": "Current"
+          }
+        },
+        "type": "object",
+        "required": ["model", "total", "current"],
+        "title": "Reindex",
+        "description": "Documentos prontos da Base e quantos já estão no modelo de embedding do perfil."
       },
       "RejectedEvent": {
         "properties": {

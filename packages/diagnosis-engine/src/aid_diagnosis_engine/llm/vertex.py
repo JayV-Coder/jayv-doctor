@@ -1,6 +1,10 @@
-"""Gemini no Vertex AI, em southamerica-east1 (provedor alternativo, ADR-0007): para quem
-precisa que os dados não saiam da região. Autenticação pela conta de serviço do Cloud Run
-(servidor de metadados); saída em JSON com `responseJsonSchema`, validada de novo pelo Pydantic.
+"""Gemini no Vertex AI, em southamerica-east1 (perfis `br_region` e `dedicated`, ADR-0018): para
+quem precisa que os dados não saiam do Brasil. Só a região do Brasil é aceita, e o cliente HTTP
+só fala com o endpoint regional e com o servidor de metadados (outro host é recusado). No
+dedicado, a geração usa só a capacidade provisionada (Provisioned Throughput, sem transbordo
+para a compartilhada), no projeto da plataforma ou do cliente. Autenticação pela conta de
+serviço do Cloud Run (servidor de metadados); saída em JSON com `responseJsonSchema`, validada de
+novo pelo Pydantic.
 Embeddings `text-embedding-005` (768 dimensões).
 """
 
@@ -11,6 +15,7 @@ from typing import Any
 
 import httpx
 
+from aid_diagnosis_engine.llm import egress
 from aid_diagnosis_engine.llm.base import (
     InputType,
     LLMInvalidOutputError,
@@ -43,7 +48,6 @@ REFUSALS = {"SAFETY", "RECITATION", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "
 
 
 class VertexProvider:
-    name = "vertex"
     embedding_dimensions = DIMENSIONS
     embedding_model = EMBEDDING_MODEL
 
@@ -52,10 +56,17 @@ class VertexProvider:
         project: str | None = None,
         region: str = REGION,
         transport: httpx.AsyncBaseTransport | None = None,
+        *,
+        dedicated: bool = False,
     ) -> None:
+        if region != egress.BR_REGION:
+            raise ValueError(f"o Vertex do Doctor roda só em {egress.BR_REGION}, não em {region}")
         self.project = project or os.environ.get("GCP_PROJECT_ID", "")
         self.region = region
         self.transport = transport
+        self.dedicated = dedicated
+        self.name = "vertex_dedicated" if dedicated else "vertex"
+        self.hosts = {f"{region}-aiplatform.googleapis.com", egress.METADATA_HOST}
         self.token: tuple[str, float] | None = None
         self._client: httpx.AsyncClient | None = None
 
@@ -64,7 +75,11 @@ class VertexProvider:
         """Um cliente por instância (e o registro guarda uma instância por processo): a conexão
         TLS é reaproveitada."""
         if self._client is None:
-            self._client = httpx.AsyncClient(transport=self.transport, timeout=httpx.Timeout(90.0))
+            self._client = httpx.AsyncClient(
+                transport=self.transport,
+                timeout=httpx.Timeout(90.0),
+                event_hooks={"request": [egress.hook(self.name, self.hosts)]},
+            )
         return self._client
 
     def base(self, model: str) -> str:
@@ -90,14 +105,18 @@ class VertexProvider:
             self.token = (str(body["access_token"]), time.monotonic() + float(body["expires_in"]))
         return self.token[0]
 
-    async def post(self, url: str, body: dict[str, Any]) -> dict[str, Any]:
+    async def post(
+        self, url: str, body: dict[str, Any], *, generate: bool = False
+    ) -> dict[str, Any]:
         if not self.project:
             raise LLMUnavailableError("GCP_PROJECT_ID não configurado para o Vertex AI.")
         token = await self.bearer()
+        headers = {"authorization": f"Bearer {token}"}
+        if self.dedicated and generate:
+            # Só a capacidade provisionada: sem ela, 429 (o Diagnóstico degrada para rules_only).
+            headers["x-vertex-ai-llm-request-type"] = "dedicated"
         try:
-            response = await self.client.post(
-                url, json=body, headers={"authorization": f"Bearer {token}"}
-            )
+            response = await self.client.post(url, json=body, headers=headers)
         except httpx.HTTPError as exc:
             raise LLMTransientError("Vertex AI não respondeu.") from exc
         if response.status_code == 429 or response.status_code >= 500:
@@ -135,7 +154,7 @@ class VertexProvider:
                 "thinkingConfig": {"thinkingBudget": thinking},
             },
         }
-        found = await self.post(f"{self.base(model)}:generateContent", body)
+        found = await self.post(f"{self.base(model)}:generateContent", body, generate=True)
         metadata = found.get("usageMetadata", {})
         usage = Usage(
             provider=self.name,

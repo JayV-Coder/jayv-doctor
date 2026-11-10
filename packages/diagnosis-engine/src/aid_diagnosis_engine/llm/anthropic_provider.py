@@ -15,6 +15,7 @@ import anthropic
 from anthropic.types import MessageParam
 from pydantic import BaseModel, ValidationError
 
+from aid_diagnosis_engine.llm import egress
 from aid_diagnosis_engine.llm.base import (
     InputType,
     LLMInvalidOutputError,
@@ -54,7 +55,13 @@ class AnthropicProvider:
         client: anthropic.AsyncAnthropic | None = None,
         embeddings: VoyageEmbeddings | None = None,
     ) -> None:
-        self.client = client or anthropic.AsyncAnthropic(max_retries=0)
+        # Cada pedido registra o egress (`ai.egress`, ADR-0018): host e região, sem conteúdo.
+        self.client = client or anthropic.AsyncAnthropic(
+            max_retries=0,
+            http_client=anthropic.DefaultAsyncHttpxClient(
+                event_hooks={"request": [egress.hook(self.name)]}
+            ),
+        )
         self.embeddings = embeddings or VoyageEmbeddings()
 
     @property

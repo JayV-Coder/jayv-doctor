@@ -13,6 +13,7 @@ from aid_observability.metrics import MonitoringWriter
 from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from aid_diagnosis_worker.ai_verify import verify_profiles
 from aid_diagnosis_worker.backup import GcsTarget, StorageSource, backup_storage
 from aid_diagnosis_worker.diagnose import diagnose, expire_enrichment, open_automatic
 from aid_diagnosis_worker.evaluate import evaluate_execution
@@ -93,6 +94,12 @@ async def reindex() -> dict[str, int]:
 @router.post("/enrichment/expire")
 async def enrichment_expire() -> dict[str, int]:
     return {"resumed": await expire_enrichment(engine())}
+
+
+# Diário (Cloud Scheduler): o endpoint e a região efetivos de cada perfil de IA em uso (#45).
+@router.post("/ai/verify")
+async def ai_verify() -> dict[str, Any]:
+    return {"checks": await verify_profiles(engine(), provider_for)}
 
 
 @router.post("/retention/run")

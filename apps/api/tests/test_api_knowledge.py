@@ -4,7 +4,7 @@ import pytest
 from aid_api.core.auth import Claims, get_claims
 from aid_api.core.errors import ApiError
 from aid_api.core.storage import Storage, get_storage
-from aid_api.knowledge.repo import KnowledgeRepository, get_knowledge_repository
+from aid_api.knowledge.repo import AiChoice, KnowledgeRepository, get_knowledge_repository
 from aid_api.knowledge.router import get_provider_for
 from aid_api.knowledge.schemas import KnowledgeHit, NewKnowledgeDocument
 from aid_api.main import create_app
@@ -27,17 +27,29 @@ class FakeRepository(KnowledgeRepository):
     async def delete(self, claims: Claims, target: str) -> None:
         self.calls.append(("delete", target))
 
-    def __init__(self, enabled: bool = True) -> None:
+    def __init__(
+        self, enabled: bool = True, profile: str = "standard", models: list[str] | None = None
+    ) -> None:
         self.calls: list[tuple[str, Any]] = []
         self.enabled = enabled
+        self.profile = profile
+        self.models = models or []
+        self.previous: list[str] = []
 
-    async def llm_provider(self, claims: Claims) -> str | None:
-        return "anthropic" if self.enabled else None
+    async def ai(self, claims: Claims) -> AiChoice:
+        return AiChoice("anthropic" if self.enabled else None, None, self.profile, self.models)
 
     async def search(
-        self, claims: Claims, query: str, k: int, embedding: Any, model: str | None
+        self,
+        claims: Claims,
+        query: str,
+        k: int,
+        embedding: Any,
+        model: str | None,
+        previous: Any = (),
     ) -> list[KnowledgeHit]:
         self.calls.append(("search", (query, embedding is not None, model)))
+        self.previous = [m for _, m in previous]
         return []
 
 
@@ -73,7 +85,7 @@ def client(
     app.dependency_overrides[get_knowledge_repository] = lambda: repository
     app.dependency_overrides[get_storage] = lambda: storage or FakeStorage()
     chosen = provider or FakeProvider()
-    app.dependency_overrides[get_provider_for] = lambda: lambda name: chosen
+    app.dependency_overrides[get_provider_for] = lambda: lambda name, project: chosen
     return TestClient(app, headers={"authorization": "Bearer jwt"})
 
 
@@ -166,3 +178,14 @@ def test_envio_ao_llm_desligado_busca_so_pelo_texto_sem_embedding() -> None:
     )
     assert response.json()["mode"] == "text"
     assert provider.embeds == []
+
+
+def test_indice_antigo_entra_so_se_o_perfil_permite() -> None:
+    """ADR-0018: até o reindex terminar, a busca usa o índice antigo que o perfil permite."""
+    standard = FakeRepository(profile="standard", models=["text-embedding-005"])
+    client(standard).post("/api/v1/knowledge/search", json={"q": "VL10 bloqueado"})
+    assert standard.previous == ["text-embedding-005"]
+    # Quem passou para o Brasil não manda a pergunta ao Voyage.
+    brazil = FakeRepository(profile="br_region", models=["voyage-3"])
+    client(brazil).post("/api/v1/knowledge/search", json={"q": "VL10 bloqueado"})
+    assert brazil.previous == []

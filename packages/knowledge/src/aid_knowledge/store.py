@@ -70,7 +70,10 @@ async def search(
     embedding: Sequence[float] | None,
     model: str | None,
     k: int = 5,
+    previous: Sequence[tuple[Sequence[float], str]] = (),
 ) -> list[Hit]:
+    """`previous`: vetores da pergunta nos índices antigos da Organização (perfil de IA trocado e
+    reindex em andamento, ADR-0018); entram como mais listas do RRF até o reindex terminar."""
     tenant_scope = " and c.tenant_id = cast(:t as uuid) and d.status = 'ready'"
     params: dict[str, Any] = {"t": tenant_id, "q": query, "n": CANDIDATES}
     rankings: list[list[tuple[str, str]]] = []
@@ -95,6 +98,16 @@ async def search(
     for origin, sql in lists:
         found = await connection.execute(text(sql), params)
         rankings.append([(origin, row[0]) for row in found])
+    for vector, old_model in previous:
+        if not vector_usable(vector, old_model) or old_model == model:
+            continue
+        await connection.execute(text("set local hnsw.iterative_scan = relaxed_order"))
+        dim = DIMENSIONS[old_model]
+        found = await connection.execute(
+            text(_vector_sql("knowledge_chunks", "knowledge_documents", tenant_scope, dim)),
+            {**params, "model": old_model, "vector": vector_literal(vector)},
+        )
+        rankings.append([("tenant", row[0]) for row in found])
     chosen = rrf(rankings)[:k]
     return await _hits(connection, tenant_id, chosen)
 
@@ -168,3 +181,19 @@ async def store_chunks(
                 for item in indexed
             ],
         )
+
+
+async def previous_models(
+    connection: AsyncConnection, tenant_id: str, current: str | None
+) -> list[str]:
+    """Modelos de embedding de documentos prontos da Organização que ainda não foram
+    reindexados para o modelo atual."""
+    found = await connection.execute(
+        text(
+            "select distinct embedding_model from doctor.knowledge_documents"
+            " where tenant_id = cast(:t as uuid) and status = 'ready'"
+            " and embedding_model is not null and embedding_model is distinct from :m"
+        ),
+        {"t": tenant_id, "m": current},
+    )
+    return sorted(str(row[0]) for row in found)

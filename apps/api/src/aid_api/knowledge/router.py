@@ -5,8 +5,8 @@ from collections.abc import Callable
 from typing import Annotated
 from uuid import UUID
 
-from aid_diagnosis_engine.llm import LLMError, LLMProvider, provider_for
-from aid_knowledge.store import vector_usable
+from aid_diagnosis_engine.llm import LLMProvider, provider_for
+from aid_knowledge.vectors import query_vectors
 from fastapi import APIRouter, Depends, Response, status
 
 from aid_api.core.auth import Claims, get_bearer_token, require_role
@@ -40,11 +40,11 @@ StorageDep = Annotated[Storage, Depends(get_storage)]
 Token = Annotated[str, Depends(get_bearer_token)]
 
 
-def get_provider_for() -> Callable[[str], LLMProvider]:
+def get_provider_for() -> Callable[[str, str | None], LLMProvider]:
     return provider_for
 
 
-ProviderFor = Annotated[Callable[[str], LLMProvider], Depends(get_provider_for)]
+ProviderFor = Annotated[Callable[[str, str | None], LLMProvider], Depends(get_provider_for)]
 
 
 @router.get("/documents", response_model=list[KnowledgeDocument])
@@ -99,20 +99,16 @@ async def search_knowledge(
     query: KnowledgeQuery, claims: Viewer, repository: Repository, providers: ProviderFor
 ) -> KnowledgeResults:
     """Híbrida (vetor + texto, RRF) com o embedding do provedor da Organização; com o provedor
-    fora, só o texto, em vez de falhar. O provedor sai numa transação curta e o embedding é
-    gerado fora dela: nenhuma conexão do banco fica presa esperando a API de IA."""
-    name = await repository.llm_provider(claims)
+    fora, só o texto, em vez de falhar. Perfil de IA trocado: até o reindex terminar, os índices
+    antigos que o perfil permite também entram (ADR-0018). O provedor sai numa transação curta e
+    o embedding é gerado fora dela: nenhuma conexão do banco fica presa esperando a API de IA."""
+    choice = await repository.ai(claims)
     # Envio ao LLM desligado: nem o embedding da pergunta sai; a busca vai só pelo texto.
-    provider = providers(name) if name is not None else None
-    embedding: list[float] | None = None
-    if provider is not None:
-        try:
-            [embedding] = await provider.embed([query.q], input_type="query")
-        except LLMError:
-            embedding = None
-    model = provider.embedding_model if provider is not None else None
-    hybrid = vector_usable(embedding, model)
-    items = await repository.search(
-        claims, query.q, query.k, embedding if hybrid else None, model if hybrid else None
+    provider = providers(choice.provider, choice.project) if choice.provider else None
+    vectors = await query_vectors(
+        query.q, provider, choice.profile, choice.models, lambda name: providers(name, None)
     )
-    return KnowledgeResults(items=items, mode="hybrid" if hybrid else "text")
+    items = await repository.search(
+        claims, query.q, query.k, vectors.embedding, vectors.model, vectors.previous
+    )
+    return KnowledgeResults(items=items, mode="hybrid" if vectors.hybrid else "text")

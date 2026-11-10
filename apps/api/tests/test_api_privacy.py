@@ -7,6 +7,7 @@ from aid_api.privacy.repo import PrivacyRepository, get_privacy_repository
 from aid_api.privacy.schemas import (
     DeletionRequest,
     PrivacySettings,
+    Reindex,
     Retention,
     RetentionChange,
     SubjectEvents,
@@ -27,6 +28,10 @@ class FakeRepository(PrivacyRepository):
             ],
             llm_enabled=True,
             llm_provider="anthropic",
+            ai_profile="standard",
+            ai_project=None,
+            ai_check=None,
+            reindex=Reindex(model="voyage-3", total=0, current=0),
             deletion=None,
         )
 

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { classLabel, daysText, deletionText, subprocessors } from "./labels";
+import {
+  checkText,
+  classLabel,
+  daysText,
+  deletionText,
+  dpaText,
+  reindexText,
+  subprocessors,
+} from "./labels";
 
 describe("Retenção e LGPD", () => {
   it("classes e dias em português", () => {
@@ -17,6 +25,26 @@ describe("Retenção e LGPD", () => {
     const vertex = subprocessors("vertex").map((item) => item.name);
     expect(vertex).toContain("Google Vertex AI");
     expect(vertex).not.toContain("Anthropic");
+  });
+
+  it("perfil de IA: subprocessadores, DPA, verificação e reindex", () => {
+    expect(subprocessors("br_region").map((item) => item.name)).not.toContain("Voyage AI");
+    expect(subprocessors("dedicated")[2]?.purpose).toContain("capacidade dedicada");
+    expect(dpaText("standard")).toContain("Transferência internacional");
+    expect(dpaText("vertex")).toContain("sem transferência internacional");
+    expect(
+      checkText({
+        checked_at: "2026-11-10T06:00:00Z",
+        ok: true,
+        region: "southamerica-east1",
+        detail: null,
+      }),
+    ).toEqual({ text: "Verificado em 10/11: southamerica-east1", ok: true });
+    expect(
+      checkText({ checked_at: "2026-11-10T06:00:00Z", ok: false, region: null, detail: "x" })?.ok,
+    ).toBe(false);
+    expect(reindexText({ total: 10, current: 10 })).toBeNull();
+    expect(reindexText({ total: 10, current: 3 })).toContain("3 de 10 documentos");
   });
 
   it("data da exclusão agendada", () => {

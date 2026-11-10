@@ -107,7 +107,8 @@ async def test_exemplo_do_prd_e_tres_entregas_fazem_um_diagnostico(
     provider = FakeProvider([answer([found["rule_match"], found["event"]])])
 
     results = [
-        await diagnose(engine, {"diagnosis_id": diagnosis}, lambda name: provider) for _ in range(3)
+        await diagnose(engine, {"diagnosis_id": diagnosis}, lambda name, project: provider)
+        for _ in range(3)
     ]
     assert results == ["inconclusive", "ignored", "ignored"]
     [saved] = await rows(
@@ -178,9 +179,9 @@ async def test_evento_de_outra_organizacao_citado_pelo_llm_e_descartado(
         provider = FakeProvider(
             [answer([theirs["event"], found["event"]], status="IDENTIFIED", confidence=0.8)]
         )
-        assert await diagnose(engine, {"diagnosis_id": diagnosis}, lambda n: provider) == (
-            "published"
-        )
+        assert await diagnose(
+            engine, {"diagnosis_id": diagnosis}, lambda n, _project: provider
+        ) == ("published")
         [saved] = await rows(
             engine,
             "select verification_notes, confidence::float from doctor.diagnoses"
@@ -226,7 +227,10 @@ async def test_llm_fora_publica_com_as_regras_e_rules_only_nao_chama_o_llm(
     found = await incident_with_timeout(engine, tenant)
     failing = await request(engine, tenant, found["incident"], "hybrid")
     provider = FakeProvider([LLMUnavailableError("recusa")])
-    assert await diagnose(engine, {"diagnosis_id": failing}, lambda n: provider) == "failed_llm"
+    assert (
+        await diagnose(engine, {"diagnosis_id": failing}, lambda n, _project: provider)
+        == "failed_llm"
+    )
 
     rules_only = str(uuid4())
     await run(
@@ -239,7 +243,10 @@ async def test_llm_fora_publica_com_as_regras_e_rules_only_nao_chama_o_llm(
         k=f"teste:{rules_only}",
     )
     silent = FakeProvider()
-    assert await diagnose(engine, {"diagnosis_id": rules_only}, lambda n: silent) == "published"
+    assert (
+        await diagnose(engine, {"diagnosis_id": rules_only}, lambda n, _project: silent)
+        == "published"
+    )
     assert silent.requests == []
     saved = await rows(
         engine,
@@ -261,7 +268,7 @@ async def test_falha_de_infraestrutura_devolve_a_fila(
     found = await incident_with_timeout(engine, tenant)
     diagnosis = await request(engine, tenant, found["incident"], "hybrid")
 
-    def broken(name: str) -> FakeProvider:
+    def broken(name: str, project: str | None) -> FakeProvider:
         class Broken(FakeProvider):
             async def complete_structured(self, **kwargs: Any) -> Any:
                 raise RuntimeError("rede")
@@ -371,7 +378,10 @@ async def test_caso_corrigido_e_promovido_volta_no_proximo_diagnostico(
             raise AssertionError("documento de Incidente não tem arquivo")
 
     provider = FakeProvider()
-    assert await index(engine, {"document_id": document}, NoFile(), lambda n: provider) == "ready"
+    assert (
+        await index(engine, {"document_id": document}, NoFile(), lambda n, _project: provider)
+        == "ready"
+    )
     chunks = await rows(
         engine,
         "select content from doctor.knowledge_chunks where document_id = cast(:d as uuid)",
@@ -405,7 +415,10 @@ async def test_envio_ao_llm_desligado_nao_chama_o_provedor(
     found = await incident_with_timeout(engine, tenant)
     diagnosis = await request(engine, tenant, found["incident"], "hybrid")
     provider = FakeProvider()
-    assert await diagnose(engine, {"diagnosis_id": diagnosis}, lambda n: provider) == "published"
+    assert (
+        await diagnose(engine, {"diagnosis_id": diagnosis}, lambda n, _project: provider)
+        == "published"
+    )
     [saved] = await rows(
         engine,
         "select mode, verification_notes from doctor.diagnoses where id = cast(:d as uuid)",
@@ -429,7 +442,10 @@ async def test_envio_ao_llm_desligado_nao_chama_o_provedor(
         async def read(self, path: str) -> bytes | None:
             return None
 
-    assert await index(engine, {"document_id": document}, NoFile(), lambda n: provider) == "ready"
+    assert (
+        await index(engine, {"document_id": document}, NoFile(), lambda n, _project: provider)
+        == "ready"
+    )
     [chunk] = await rows(
         engine,
         "select embedding is null as plain, embedding_model from doctor.knowledge_chunks"

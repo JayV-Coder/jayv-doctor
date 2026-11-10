@@ -16,6 +16,7 @@ insert into exceptions values
   ('rule_definitions', 'catálogo global das Regras versionadas'),
   ('plan_limits', 'catálogo global de limites por plano'),
   ('platform_jobs', 'estado dos jobs de plataforma, sem dado de tenant'),
+  ('ai_profile_checks', 'verificação diária dos perfis de IA, sem dado de tenant (ADR-0018)'),
   ('schema_migrations', 'controle das migrações do Doctor (ADR-0009)');
 
 -- Sem `unique (tenant_id, id)`, com o motivo: a chave delas é outra.

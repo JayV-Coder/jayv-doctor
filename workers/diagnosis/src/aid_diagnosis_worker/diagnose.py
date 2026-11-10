@@ -24,11 +24,12 @@ from aid_diagnosis_engine.diagnosis import (
     Stage,
 )
 from aid_diagnosis_engine.diagnosis.model import Mode
-from aid_diagnosis_engine.llm.base import LLMError, LLMProvider
+from aid_diagnosis_engine.llm.base import LLMProvider
 from aid_diagnosis_engine.llm.client import GuardedLLM
 from aid_diagnosis_engine.rules.base import EventView
 from aid_diagnosis_engine.rules.catalog import RULES, RULESET_VERSION
-from aid_knowledge.store import search
+from aid_knowledge.store import previous_models, search
+from aid_knowledge.vectors import query_vectors
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -47,7 +48,8 @@ LOOKUP_WAIT = timedelta(minutes=5)
 LOOKUP_SYSTEMS = {"salesforce": "salesforce", "odata": "sap"}
 DESCRIPTIONS = {rule.code: (rule.category, rule.description_pt) for rule in RULES}
 
-ProviderFor = Callable[[str], LLMProvider]
+# (llm_provider, ai_project) → provedor; o projeto só vale para o dedicado (ADR-0018).
+ProviderFor = Callable[[str, str | None], LLMProvider]
 
 
 log = logging.getLogger(__name__)
@@ -118,6 +120,8 @@ class DbLoader:
         incident: str,
         provider: LLMProvider | None,
         diagnosis: str = "",
+        profile: str = "standard",
+        others: Callable[[str], LLMProvider] | None = None,
     ) -> None:
         self.engine, self.tenant, self.incident_id, self.provider = (
             engine,
@@ -126,6 +130,9 @@ class DbLoader:
             provider,
         )
         self.diagnosis_id = diagnosis
+        # Perfil de IA e os provedores dos índices antigos (reindex em andamento, ADR-0018).
+        self.profile = profile
+        self.others = others
         self.rule_code: str | None = None
 
     async def _rows(self, sql: str, **params: Any) -> Sequence[Any]:
@@ -296,24 +303,30 @@ class DbLoader:
 
     async def knowledge(self, query: str) -> Sequence[KnowledgeItem]:
         # Embedding fora da transação; a busca, com a claim do tenant (o RAG não cruza tenants).
-        # Sem embedding (provedor fora), a busca segue só pelo texto, como na API.
-        vector: list[float] | None = None
-        if self.provider is not None:
-            try:
-                [vector] = await self.provider.embed([query], input_type="query")
-            except LLMError:
-                vector = None
+        # Sem embedding (provedor fora), a busca segue só pelo texto, como na API. Perfil de IA
+        # trocado: os índices antigos que o perfil permite entram até o reindex terminar.
+        models: list[str] = []
+        if self.others is not None:
+            async with self.engine.begin() as connection:
+                await tenant_role(connection, self.tenant)
+                models = await previous_models(connection, self.tenant, None)
+        vectors = await query_vectors(
+            query,
+            self.provider,
+            self.profile,
+            models,
+            self.others or (lambda name: self.provider),  # type: ignore[arg-type,return-value]
+        )
         async with self.engine.begin() as connection:
             await tenant_role(connection, self.tenant)
             hits = await search(
                 connection,
                 self.tenant,
                 query,
-                embedding=vector,
-                model=self.provider.embedding_model
-                if vector is not None and self.provider is not None
-                else None,
+                embedding=vectors.embedding,
+                model=vectors.model,
                 k=KNOWLEDGE_K,
+                previous=vectors.previous,
             )
         return [
             KnowledgeItem(hit.chunk_id, hit.origin, hit.title, hit.heading, hit.content)
@@ -333,7 +346,8 @@ async def claim(engine: AsyncEngine, diagnosis_id: str) -> Any:
                     " and (d.status = 'queued' or d.status = 'running'"
                     " and d.started_at < now() - make_interval(secs => :lease))"
                     " returning d.id::text, d.tenant_id::text, d.incident_id::text,"
-                    " d.requested_mode, d.include_knowledge_base, d.attempts, t.llm_provider"
+                    " d.requested_mode, d.include_knowledge_base, d.attempts, t.llm_provider,"
+                    " t.ai_project, t.ai_profile"
                 ),
                 {"d": diagnosis_id, "lease": LEASE.total_seconds()},
             )
@@ -603,7 +617,7 @@ async def diagnose(
 
     # Tudo depois da posse fica aqui dentro: nenhuma falha deixa o Diagnóstico `running`.
     try:
-        provider = provider_for(diagnosis.llm_provider)
+        provider = provider_for(diagnosis.llm_provider, diagnosis.ai_project)
         hybrid = diagnosis.requested_mode == "hybrid"
         enabled = await llm_enabled(engine, diagnosis.tenant_id)
         allowed = hybrid and enabled and await reserve_llm(engine, diagnosis, provider.name)
@@ -620,6 +634,8 @@ async def diagnose(
             diagnosis.incident_id,
             provider if enabled else None,
             diagnosis.id,
+            profile=diagnosis.ai_profile,
+            others=lambda name: provider_for(name, None),
         )
         draft = await motor.run(
             loader,

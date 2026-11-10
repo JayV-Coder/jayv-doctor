@@ -292,7 +292,7 @@ class IncidentRepository:
                 raise not_found()
             result = await connection.execute(
                 text(
-                    "select id::text, author_id::text as author_id, body_md,"
+                    "select id::text, author_id::text as author_id, external_author, body_md,"
                     " mentions::text[] as mentions, created_at from doctor.incident_comments"
                     " where incident_id = cast(:n as uuid) order by created_at"
                 ),

@@ -113,6 +113,12 @@ begin
   values (webhook, t, 'ITSM', 'https://hooks.acme.test/aid', array['incident.opened'], gen_random_uuid());
   insert into doctor.webhook_deliveries (tenant_id, webhook_id, event, subject)
   values (t, webhook, 'incident.opened', '{}');
+  insert into doctor.itsm_connections (tenant_id, status, cloud_id, project_key)
+  values (t, 'active', 'cloud-' || left(t::text, 8), 'SUST');
+  insert into doctor.itsm_oauth_states (tenant_id, user_id, state_hash)
+  values (t, owner, encode(sha256(('state' || t::text)::bytea), 'hex'));
+  insert into doctor.incident_tickets (tenant_id, incident_id, status, external_key)
+  values (t, incident, 'open', 'SUST-1');
   insert into doctor.ingestion_tokens (tenant_id, name, integration_id, token_hash, prefix)
   values (t, 'Token', integration, md5(t::text) || md5(t::text), 'aid_test');
   insert into doctor.ingestion_batches (tenant_id, integration_id, connector_id, events, event_count)

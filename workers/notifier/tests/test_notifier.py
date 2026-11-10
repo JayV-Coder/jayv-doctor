@@ -14,6 +14,7 @@ import pytest_asyncio
 from aid_alerts import Message
 from aid_alerts.signing import verify
 from aid_notifier.channels import DeliveryError, PushTarget, Senders
+from aid_notifier.jira import create_ticket, maintain, post_comment, sync
 from aid_notifier.notify import evaluate, scan
 from aid_notifier.webhooks import deliver
 from sqlalchemy import text
@@ -124,6 +125,9 @@ async def org(engine: AsyncEngine) -> AsyncIterator[dict[str, str]]:
         "notification_deliveries",
         "webhook_deliveries",
         "webhooks",
+        "incident_comments",
+        "incident_tickets",
+        "itsm_connections",
         "alert_rules",
         "push_subscriptions",
         "alert_preferences",
@@ -665,3 +669,460 @@ async def test_segredo_sumido_conta_como_falha_e_nao_fica_preso(
     )
     [retry] = await deliveries(engine, org)
     assert (retry["attempts"], retry["error"]) == (1, "falha interna na entrega")
+
+
+class FakeJira:
+    """Atlassian falso: token, criação de issue, leitura com status e comentários, webhook."""
+
+    def __init__(self) -> None:
+        self.created: list[dict[str, Any]] = []
+        self.comments: list[dict[str, Any]] = []
+        self.refreshes = 0
+        self.webhooks: list[dict[str, Any]] = []
+        self.status = {"name": "Em atendimento", "statusCategory": {"key": "indeterminate"}}
+        self.jira_comments: list[dict[str, Any]] = []
+        self.refresh_status = 200
+        self.existing: list[dict[str, Any]] = []
+        self.deleted: list[Any] = []
+        self.reads: list[str] = []
+        self.webhook_result: dict[str, Any] = {"createdWebhookId": 7}
+        self.crash = False
+
+    def transport(self) -> httpx.MockTransport:
+        def handle(request: httpx.Request) -> httpx.Response:
+            path = request.url.path
+            if self.crash:
+                raise RuntimeError("falha inesperada")
+            if request.url.host == "auth.atlassian.com":
+                self.refreshes += 1
+                if self.refresh_status != 200:
+                    return httpx.Response(self.refresh_status, json={"error": "invalid_grant"})
+                return httpx.Response(
+                    200,
+                    json={"access_token": "novo", "refresh_token": "girado", "expires_in": 3600},
+                )
+            if path.endswith("/rest/api/3/search/jql"):
+                return httpx.Response(200, json={"issues": self.existing})
+            if path.endswith("/rest/api/3/webhook") and request.method == "DELETE":
+                self.deleted.extend(json.loads(request.content)["webhookIds"])
+                return httpx.Response(202)
+            if path.endswith("/rest/api/3/issue") and request.method == "POST":
+                self.created.append(json.loads(request.content))
+                return httpx.Response(201, json={"id": "10042", "key": "SUST-881"})
+            if path.endswith("/rest/api/3/webhook") and request.method == "POST":
+                self.webhooks.append(json.loads(request.content))
+                return httpx.Response(
+                    200, json={"webhookRegistrationResult": [self.webhook_result]}
+                )
+            if path.endswith("/comment") and request.method == "POST":
+                self.comments.append(json.loads(request.content))
+                return httpx.Response(201, json={"id": "c1"})
+            if "/rest/api/3/issue/SUST-" in path:
+                self.reads.append(path.rsplit("/", 1)[-1])
+                return httpx.Response(
+                    200,
+                    json={
+                        "fields": {
+                            "status": self.status,
+                            "comment": {"comments": self.jira_comments},
+                        }
+                    },
+                )
+            return httpx.Response(404)
+
+        return httpx.MockTransport(handle)
+
+
+async def jira_connection(
+    engine: AsyncEngine, org: dict[str, str], *, expires_in: float = 3600
+) -> str:
+    connection = str(uuid4())
+    tokens = {
+        "access_token": "valido",
+        "refresh_token": "r1",
+        "expires_at": __import__("time").time() + expires_in,
+        "hook_token": "tok",
+    }
+    await run(
+        engine,
+        "insert into doctor.itsm_connections (id, tenant_id, status, sites, cloud_id, site_url,"
+        " project_key, issue_type, secret_id) values (cast(:c as uuid), :t, 'active',"
+        " '[{\"id\": \"cloud-1\"}]', 'cloud-1', 'https://acme.atlassian.net', 'SUST',"
+        " 'Incidente', vault.create_secret(:s, 'doctor/itsm/' || cast(:c as text)))",
+        c=connection,
+        t=org["tenant"],
+        s=json.dumps(tokens),
+    )
+    return connection
+
+
+async def ticket_rows(engine: AsyncEngine, org: dict[str, str]) -> list[Any]:
+    return await rows(
+        engine,
+        "select id::text, status, external_key, url, external_status, error"
+        " from doctor.incident_tickets where tenant_id = cast(:t as uuid)",
+        t=org["tenant"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_incidente_critico_com_regra_automatica_abre_o_chamado_uma_vez(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    """Critério do #43: a Regra dispara de novo e alguém pede à mão; o chamado é um só."""
+    await jira_connection(engine, org)
+    jira_channel = await channel(engine, org, "jira")
+    await rule(engine, org, {"type": "incident", "min_severity": "critical"}, [jira_channel])
+    found = await incident(engine, org, "critical")
+    fake = Fake()
+    for source in ("incident.opened", "incident.updated", "incident.updated"):
+        await evaluate(engine, {"source": source, "incident_id": found}, fake.senders(), NOON)
+    await run(
+        engine,
+        "select doctor.queue_ticket(cast(:t as uuid), cast(:i as uuid), null, null)",
+        t=org["tenant"],
+        i=found,
+    )
+    [ticket] = await ticket_rows(engine, org)
+    assert ticket["status"] == "creating"
+    requested = await rows(
+        engine,
+        "select count(*) as n from doctor.outbox_messages where topic = 'itsm.ticket'"
+        " and tenant_id = cast(:t as uuid)",
+        t=org["tenant"],
+    )
+    assert requested[0]["n"] == 1
+    jira = FakeJira()
+    assert await create_ticket(engine, ticket["id"], jira.transport()) == "open"
+    assert await create_ticket(engine, ticket["id"], jira.transport()) == "skipped"
+    [created] = jira.created
+    fields = created["fields"]
+    assert (fields["project"], fields["priority"], fields["labels"]) == (
+        {"key": "SUST"},
+        {"name": "Highest"},
+        ["integration-ai-doctor", f"aid-{ticket['id']}"],
+    )
+    text_body = json.dumps(fields["description"], ensure_ascii=False)
+    assert f"/incidentes/{found}" in text_body
+    assert "Diagnóstico ainda não publicado." in text_body
+    [done] = await ticket_rows(engine, org)
+    assert (done["status"], done["external_key"], done["url"]) == (
+        "open",
+        "SUST-881",
+        "https://acme.atlassian.net/browse/SUST-881",
+    )
+
+
+@pytest.mark.asyncio
+async def test_corpo_leva_causa_com_confianca_heuristica_e_recomendacoes(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    await jira_connection(engine, org)
+    found = await incident(engine, org, "high")
+    diagnosis = str(uuid4())
+    await run(
+        engine,
+        "insert into doctor.diagnoses (id, tenant_id, incident_id, version, requested_mode, mode,"
+        " processing_key, status, stage, classification, probable_cause, confidence)"
+        " values (cast(:d as uuid), :t, :i, 1, 'rules_only', 'rules_only', :k, 'running',"
+        " 'verification', 'UPSTREAM_TIMEOUT', 'O SAP não respondeu a tempo.', 0.68)",
+        d=diagnosis,
+        t=org["tenant"],
+        i=found,
+        k=f"k-{diagnosis}",
+    )
+    await run(
+        engine,
+        "insert into doctor.diagnosis_recommendations (tenant_id, diagnosis_id, rank, text, kind)"
+        " values (:t, cast(:d as uuid), 1, 'Confirme no SAP se o pedido existe.', 'verify')",
+        t=org["tenant"],
+        d=diagnosis,
+    )
+    await run(
+        engine,
+        "update doctor.diagnoses set status = 'published', stage = 'done', published_at = now()"
+        " where id = cast(:d as uuid)",
+        d=diagnosis,
+    )
+    await run(
+        engine,
+        "select doctor.queue_ticket(cast(:t as uuid), cast(:i as uuid), null, null)",
+        t=org["tenant"],
+        i=found,
+    )
+    [ticket] = await ticket_rows(engine, org)
+    jira = FakeJira()
+    await create_ticket(engine, ticket["id"], jira.transport())
+    text_body = json.dumps(jira.created[0]["fields"]["description"], ensure_ascii=False)
+    assert "Confiança heurística: 0,68" in text_body
+    assert "O SAP não respondeu a tempo." in text_body
+    assert "Confirme no SAP se o pedido existe." in text_body
+
+
+@pytest.mark.asyncio
+async def test_resolvido_no_jira_e_comentario_com_prefixo_voltam_uma_vez(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    connection = await jira_connection(engine, org)
+    found = await incident(engine, org, "high")
+    await run(
+        engine,
+        "insert into doctor.incident_tickets (tenant_id, incident_id, status, external_key)"
+        " values (:t, :i, 'open', 'SUST-881')",
+        t=org["tenant"],
+        i=found,
+    )
+    jira = FakeJira()
+    jira.status = {"name": "Resolvido", "statusCategory": {"key": "done"}}
+    jira.jira_comments = [
+        {
+            "id": "9",
+            "author": {"displayName": "Ana (N1)"},
+            "body": {
+                "type": "doc",
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {"type": "text", "text": "#doctor reprocessado com o lote corrigido"}
+                        ],
+                    }
+                ],
+            },
+        },
+        {
+            "id": "10",
+            "author": {"displayName": "Bot"},
+            "body": {
+                "type": "doc",
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [{"type": "text", "text": "interno, sem prefixo"}],
+                    }
+                ],
+            },
+        },
+    ]
+    for _ in range(2):
+        await sync(engine, {"connection_id": connection}, jira.transport())
+    [ticket] = await ticket_rows(engine, org)
+    assert (ticket["status"], ticket["external_status"]) == ("done", "Resolvido")
+    comments = await rows(
+        engine,
+        "select body_md, external_author from doctor.incident_comments"
+        " where incident_id = cast(:i as uuid)",
+        i=found,
+    )
+    assert [dict(c) for c in comments] == [
+        {
+            "body_md": "Do Jira (SUST-881): reprocessado com o lote corrigido",
+            "external_author": "Ana (N1)",
+        }
+    ]
+    # O Incidente não é resolvido sozinho: a tela sugere, e uma pessoa confirma.
+    [state] = await rows(engine, "select status from doctor.incidents where id = :i", i=found)
+    assert state["status"] == "open"
+
+
+@pytest.mark.asyncio
+async def test_token_vencido_renova_e_recusado_pede_nova_conexao(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    connection = await jira_connection(engine, org, expires_in=-10)
+    found = await incident(engine, org, "high")
+    await run(
+        engine,
+        "insert into doctor.incident_tickets (tenant_id, incident_id, status, external_key)"
+        " values (:t, :i, 'open', 'SUST-881')",
+        t=org["tenant"],
+        i=found,
+    )
+    jira = FakeJira()
+    await sync(engine, {"connection_id": connection, "register": True}, jira.transport())
+    assert jira.refreshes == 1
+    assert jira.webhooks[0]["url"].endswith("/api/v1/itsm/jira/hooks/tok")
+    stored = await rows(
+        engine,
+        "select doctor.get_itsm_tokens(cast(:c as uuid)) as t, jira_webhook_id"
+        " from doctor.itsm_connections where id = cast(:c as uuid)",
+        c=connection,
+    )
+    assert json.loads(stored[0]["t"])["refresh_token"] == "girado"  # noqa: S105 - token falso
+    assert stored[0]["jira_webhook_id"] == 7
+    await run(
+        engine,
+        "select doctor.put_itsm_tokens(cast(:c as uuid), :t)",
+        c=connection,
+        t=json.dumps({"access_token": "x", "refresh_token": "y", "expires_at": 0}),
+    )
+    jira.refresh_status = 400
+    await sync(engine, {"connection_id": connection}, jira.transport())
+    [state] = await rows(
+        engine,
+        "select status from doctor.itsm_connections where id = cast(:c as uuid)",
+        c=connection,
+    )
+    assert state["status"] == "needs_reauth"
+
+
+@pytest.mark.asyncio
+async def test_comentario_com_jira_vai_para_o_chamado(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    await jira_connection(engine, org)
+    found = await incident(engine, org, "high")
+    await run(
+        engine,
+        "insert into doctor.incident_tickets (tenant_id, incident_id, status, external_key)"
+        " values (:t, :i, 'open', 'SUST-881')",
+        t=org["tenant"],
+        i=found,
+    )
+    await run(
+        engine,
+        "insert into doctor.incident_comments (tenant_id, incident_id, author_id, body_md)"
+        " values (:t, :i, :u, '#jira Timeout ajustado para 60 s no gateway.')",
+        t=org["tenant"],
+        i=found,
+        u=org["admin"],
+    )
+    [queued] = await rows(
+        engine,
+        "select payload from doctor.outbox_messages where topic = 'itsm.comment'"
+        " and tenant_id = cast(:t as uuid)",
+        t=org["tenant"],
+    )
+    jira = FakeJira()
+    assert await post_comment(engine, queued["payload"], jira.transport())
+    text_body = json.dumps(jira.comments[0], ensure_ascii=False)
+    assert "Timeout ajustado para 60 s no gateway." in text_body
+    assert "#jira" not in text_body
+
+
+async def open_ticket(engine: AsyncEngine, org: dict[str, str], incident_id: str, key: str) -> None:
+    await run(
+        engine,
+        "insert into doctor.incident_tickets (tenant_id, incident_id, status, external_key)"
+        " values (:t, :i, 'open', :k)",
+        t=org["tenant"],
+        i=incident_id,
+        k=key,
+    )
+
+
+async def creating_ticket(engine: AsyncEngine, org: dict[str, str]) -> str:
+    await jira_connection(engine, org)
+    found = await incident(engine, org, "high")
+    await run(
+        engine,
+        "select doctor.queue_ticket(cast(:t as uuid), cast(:i as uuid), null, null)",
+        t=org["tenant"],
+        i=found,
+    )
+    [ticket] = await ticket_rows(engine, org)
+    return str(ticket["id"])
+
+
+@pytest.mark.asyncio
+async def test_entrega_repetida_nao_duplica_a_issue(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    """Pub/Sub entrega duas vezes: a segunda, enquanto a primeira está no ar, não cria; e uma
+    nova tentativa depois de a issue existir adota a issue achada pelo rótulo do chamado."""
+    ticket = await creating_ticket(engine, org)
+    jira = FakeJira()
+    await run(
+        engine,
+        "update doctor.incident_tickets set claimed_at = now() where id = cast(:t as uuid)",
+        t=ticket,
+    )
+    assert await create_ticket(engine, ticket, jira.transport()) == "skipped"
+    await run(
+        engine,
+        "update doctor.incident_tickets set claimed_at = now() - interval '6 minutes'"
+        " where id = cast(:t as uuid)",
+        t=ticket,
+    )
+    jira.existing = [{"id": "10042", "key": "SUST-881"}]
+    assert await create_ticket(engine, ticket, jira.transport()) == "open"
+    assert jira.created == []
+    [row] = await ticket_rows(engine, org)
+    assert row["external_key"] == "SUST-881"
+
+
+@pytest.mark.asyncio
+async def test_falha_inesperada_nao_prende_o_chamado_e_a_varredura_retoma(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    ticket = await creating_ticket(engine, org)
+    jira = FakeJira()
+    jira.crash = True
+    assert await create_ticket(engine, ticket, jira.transport()) == "failed"
+    [row] = await ticket_rows(engine, org)
+    assert (row["status"], row["error"]) == ("failed", "falha interna ao abrir o chamado")
+    # Preso em "criando" (o worker caiu): a varredura cria depois de 5 min.
+    await run(
+        engine,
+        "update doctor.incident_tickets set status = 'creating', claimed_at = now()"
+        " - interval '6 minutes' where id = cast(:t as uuid)",
+        t=ticket,
+    )
+    jira.crash = False
+    await maintain(engine, jira.transport())
+    [row] = await ticket_rows(engine, org)
+    assert row["status"] == "open"
+    assert f"aid-{ticket}" in jira.created[0]["fields"]["labels"]
+
+
+@pytest.mark.asyncio
+async def test_registro_com_autorizacao_recusada_mantem_o_pedido_de_nova_conexao(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    connection = await jira_connection(engine, org, expires_in=-10)
+    await open_ticket(engine, org, await incident(engine, org, "high"), "SUST-881")
+    jira = FakeJira()
+    jira.refresh_status = 400
+    await sync(engine, {"connection_id": connection, "register": True}, jira.transport())
+    [state] = await rows(
+        engine,
+        "select status from doctor.itsm_connections where id = cast(:c as uuid)",
+        c=connection,
+    )
+    assert state["status"] == "needs_reauth"
+    assert jira.refreshes == 1
+
+
+@pytest.mark.asyncio
+async def test_novo_registro_tira_o_webhook_antigo_e_guarda_o_erro_do_jira(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    connection = await jira_connection(engine, org)
+    await run(
+        engine,
+        "update doctor.itsm_connections set jira_webhook_id = 3 where id = cast(:c as uuid)",
+        c=connection,
+    )
+    jira = FakeJira()
+    jira.webhook_result = {"errors": ["limite de webhooks"]}
+    await sync(engine, {"connection_id": connection, "register": True}, jira.transport())
+    [state] = await rows(
+        engine,
+        "select status, last_error from doctor.itsm_connections where id = cast(:c as uuid)",
+        c=connection,
+    )
+    assert jira.deleted == [3]
+    assert state["status"] == "active"
+    assert "limite de webhooks" in state["last_error"]
+
+
+@pytest.mark.asyncio
+async def test_evento_do_jira_rele_so_a_issue_dele(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    connection = await jira_connection(engine, org)
+    for key in ("SUST-881", "SUST-882", "SUST-883"):
+        await open_ticket(engine, org, await incident(engine, org, "high"), key)
+    jira = FakeJira()
+    await sync(engine, {"connection_id": connection, "issue_key": "SUST-882"}, jira.transport())
+    assert jira.reads == ["SUST-882"]

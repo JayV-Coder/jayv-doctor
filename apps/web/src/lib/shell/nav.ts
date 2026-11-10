@@ -21,6 +21,7 @@ const TITLES: Record<string, string> = {
   "/membros": "Membros",
   "/alertas": "Alertas",
   "/webhooks": "Webhooks",
+  "/chamados": "Chamados (ITSM)",
   "/integracoes": "Integrações",
   "/importar": "Importar logs",
   "/eventos": "Evento original",

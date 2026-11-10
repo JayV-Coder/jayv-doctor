@@ -1,7 +1,6 @@
 """Relatório técnico (ticket #32), dentro de `tenant_tx`: o RLS vale. A abertura pelo link roda
 sem Usuário (`anonymous_tx`) e só alcança `doctor.open_report_share`."""
 
-import hashlib
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -12,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from aid_api.core.auth import Claims
 from aid_api.core.db import anonymous_tx, translated_tx
 from aid_api.core.errors import ApiError
+from aid_api.core.tokens import token_hash
 from aid_api.reports.schemas import (
     ReportQueued,
     ReportRequest,
@@ -44,10 +44,6 @@ class SharedFile:
     download_url: str
     format: str
     filename: str
-
-
-def token_hash(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
 
 
 SHARES = (

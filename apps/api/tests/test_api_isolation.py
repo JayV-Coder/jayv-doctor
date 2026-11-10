@@ -70,6 +70,8 @@ ROUTES: list[tuple[str, str, str, dict[str, Any] | None]] = [
     ("DELETE", "/api/v1/notification-channels/{target}", "channel", None),
     ("DELETE", "/api/v1/push-subscriptions/{target}", "push", None),
     ("PATCH", "/api/v1/webhooks/{target}", "webhook", {"enabled": False}),
+    ("GET", "/api/v1/incidents/{target}/tickets", "incident", None),
+    ("POST", "/api/v1/incidents/{target}/tickets", "incident", None),
     ("POST", "/api/v1/webhooks/{target}/rotate-secret", "webhook", None),
     ("DELETE", "/api/v1/webhooks/{target}", "webhook", None),
     ("GET", "/api/v1/webhooks/{target}/deliveries", "webhook", None),

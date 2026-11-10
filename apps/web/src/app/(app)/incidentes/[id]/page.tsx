@@ -12,7 +12,7 @@ import { Chip } from "@/components/ui/chip";
 import { ErrorState } from "@/components/ui/error-state";
 import { ListItem } from "@/components/ui/list-item";
 import { ReloadButton } from "@/components/ui/reload-button";
-import { getMe } from "@/lib/api";
+import { getJira, getMe, listTickets } from "@/lib/api";
 import {
   durationText,
   executionTitle,
@@ -26,6 +26,7 @@ import { incidentCode, severityLabel, severityTone, statusLabel } from "@/lib/in
 import { environmentLabel } from "@/lib/integrations/labels";
 import { CommentForm } from "./comment-form";
 import { IncidentControls } from "./incident-controls";
+import { TicketCard } from "./ticket-card";
 import { NewDiagnosis } from "./new-diagnosis";
 import { PromoteButton, ReviewControls } from "./review-controls";
 
@@ -63,11 +64,13 @@ export default async function IncidentPage({
   searchParams: Promise<{ versao?: string | string[] }>;
 }) {
   const [{ id }, { versao }] = await Promise.all([params, searchParams]);
-  const [incident, comments, me, versions] = await Promise.all([
+  const [incident, comments, me, versions, tickets, jira] = await Promise.all([
     getIncident(id),
     listComments(id),
     getMe(),
     listDiagnoses(id),
+    listTickets(id),
+    getJira(),
   ]);
   if (incident === "not_found") notFound();
   if (incident === null) {
@@ -150,6 +153,14 @@ export default async function IncidentPage({
           Relatório
         </Link>
       </div>
+      {(tickets?.length || (jira?.status === "active" && jira.project_key)) && (
+        <TicketCard
+          incidentId={incident.id}
+          tickets={tickets ?? []}
+          canOpen={operator && jira?.status === "active"}
+          resolved={incident.status === "resolved"}
+        />
+      )}
       {operator && (
         <IncidentControls
           id={incident.id}
@@ -277,7 +288,13 @@ export default async function IncidentPage({
                 <ListItem
                   key={comment.id}
                   title={comment.body_md}
-                  detail={`${comment.author_id === me?.id ? "você" : "membro"} · ${when(comment.created_at)}`}
+                  detail={`${
+                    comment.external_author
+                      ? `Jira · ${comment.external_author}`
+                      : comment.author_id === me?.id
+                        ? "você"
+                        : "membro"
+                  } · ${when(comment.created_at)}`}
                 />
               ))}
             </ul>

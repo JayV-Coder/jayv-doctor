@@ -747,6 +747,83 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/itsm/jira": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Connection */
+    get: operations["connection_api_v1_itsm_jira_get"];
+    /** Configure */
+    put: operations["configure_api_v1_itsm_jira_put"];
+    post?: never;
+    /** Disconnect */
+    delete: operations["disconnect_api_v1_itsm_jira_delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/itsm/jira/authorize": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Authorize
+     * @description URL do consentimento no Atlassian, com o `state` de uso único (10 min).
+     */
+    post: operations["authorize_api_v1_itsm_jira_authorize_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/itsm/jira/callback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Callback */
+    post: operations["callback_api_v1_itsm_jira_callback_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/incidents/{target}/tickets": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Tickets */
+    get: operations["tickets_api_v1_incidents__target__tickets_get"];
+    put?: never;
+    /**
+     * Request Ticket
+     * @description Abre o chamado no Jira (uma vez por Incidente); a chave aparece quando o Jira responde.
+     */
+    post: operations["request_ticket_api_v1_incidents__target__tickets_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/connectors": {
     parameters: {
       query?: never;
@@ -1695,6 +1772,11 @@ export interface components {
        */
       limit: number;
     };
+    /** Authorization */
+    Authorization: {
+      /** Url */
+      url: string;
+    };
     /** Bucket */
     Bucket: {
       /**
@@ -1706,6 +1788,13 @@ export interface components {
       total: number;
       /** Failed */
       failed: number;
+    };
+    /** Callback */
+    Callback: {
+      /** Code */
+      code: string;
+      /** State */
+      state: string;
     };
     /** CategoryCount */
     CategoryCount: {
@@ -1722,7 +1811,7 @@ export interface components {
        * Type
        * @enum {string}
        */
-      type: "email" | "slack" | "teams" | "webpush";
+      type: "email" | "slack" | "teams" | "webpush" | "jira";
       /** Name */
       name: string;
       /** Config */
@@ -1741,7 +1830,7 @@ export interface components {
        * Type
        * @enum {string}
        */
-      type: "email" | "slack" | "teams" | "webpush";
+      type: "email" | "slack" | "teams" | "webpush" | "jira";
       /** Name */
       name: string;
       /**
@@ -1759,6 +1848,8 @@ export interface components {
       id: string;
       /** Author Id */
       author_id: string | null;
+      /** External Author */
+      external_author?: string | null;
       /** Body Md */
       body_md: string;
       /** Mentions */
@@ -2824,6 +2915,62 @@ export interface components {
        */
       expires_at: string;
     };
+    /** JiraConfig */
+    JiraConfig: {
+      /** Cloud Id */
+      cloud_id: string;
+      /** Project Key */
+      project_key: string;
+      /** Issue Type */
+      issue_type: string;
+      /** Priority Map */
+      priority_map?: {
+        [key: string]: string;
+      };
+      /** Custom Fields */
+      custom_fields?: {
+        [key: string]: string | number | boolean;
+      };
+      /**
+       * Sync Status
+       * @default true
+       */
+      sync_status: boolean;
+    };
+    /** JiraConnection */
+    JiraConnection: {
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "pending" | "active" | "needs_reauth";
+      /** Sites */
+      sites: {
+        [key: string]: unknown;
+      }[];
+      /** Cloud Id */
+      cloud_id: string | null;
+      /** Site Url */
+      site_url: string | null;
+      /** Project Key */
+      project_key: string | null;
+      /** Issue Type */
+      issue_type: string | null;
+      /** Priority Map */
+      priority_map: {
+        [key: string]: string;
+      };
+      /** Custom Fields */
+      custom_fields: {
+        [key: string]: unknown;
+      };
+      /** Sync Status */
+      sync_status: boolean;
+      /** Jira Webhook Expires At */
+      jira_webhook_expires_at: string | null;
+      /** Last Error */
+      last_error: string | null;
+    };
     /** KnowledgeDocument */
     KnowledgeDocument: {
       /** Id */
@@ -3577,6 +3724,33 @@ export interface components {
       capabilities?: {
         [key: string]: boolean;
       };
+    };
+    /** Ticket */
+    Ticket: {
+      /** Id */
+      id: string;
+      /** Provider */
+      provider: string;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "creating" | "open" | "done" | "failed";
+      /** External Key */
+      external_key: string | null;
+      /** Url */
+      url: string | null;
+      /** External Status */
+      external_status: string | null;
+      /** Error */
+      error: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Last Synced At */
+      last_synced_at: string | null;
     };
     /** TimelineEvent */
     TimelineEvent: {
@@ -5618,6 +5792,236 @@ export interface operations {
           "application/json": {
             [key: string]: unknown;
           };
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  connection_api_v1_itsm_jira_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["JiraConnection"] | null;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  configure_api_v1_itsm_jira_put: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["JiraConfig"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["JiraConnection"] | null;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  disconnect_api_v1_itsm_jira_delete: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  authorize_api_v1_itsm_jira_authorize_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Authorization"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  callback_api_v1_itsm_jira_callback_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["Callback"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["JiraConnection"] | null;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  tickets_api_v1_incidents__target__tickets_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Ticket"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  request_ticket_api_v1_incidents__target__tickets_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Ticket"][];
         };
       };
       /** @description Validation Error */

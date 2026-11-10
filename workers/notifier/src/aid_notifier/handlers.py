@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aid_notifier.channels import Senders
+from aid_notifier.jira import create_ticket, maintain, post_comment, sync
 from aid_notifier.notify import evaluate, scan
 from aid_notifier.webhooks import deliver, due
 
@@ -29,7 +30,25 @@ async def webhook_deliver(payload: Mapping[str, Any]) -> None:
     await deliver(engine(), str(payload["delivery_id"]), Senders())
 
 
-TOPICS: dict[str, Handler] = {"alert.evaluate": alert_evaluate, "webhook.deliver": webhook_deliver}
+async def itsm_ticket(payload: Mapping[str, Any]) -> None:
+    await create_ticket(engine(), str(payload["ticket_id"]))
+
+
+async def itsm_sync(payload: Mapping[str, Any]) -> None:
+    await sync(engine(), payload)
+
+
+async def itsm_comment(payload: Mapping[str, Any]) -> None:
+    await post_comment(engine(), payload)
+
+
+TOPICS: dict[str, Handler] = {
+    "alert.evaluate": alert_evaluate,
+    "webhook.deliver": webhook_deliver,
+    "itsm.ticket": itsm_ticket,
+    "itsm.sync": itsm_sync,
+    "itsm.comment": itsm_comment,
+}
 
 router = APIRouter()
 
@@ -41,4 +60,5 @@ async def alerts_scan() -> dict[str, int]:
     return {
         "sent": await scan(engine(), Senders()),
         "webhooks": await due(engine(), Senders()),
+        "jira": await maintain(engine()),
     }

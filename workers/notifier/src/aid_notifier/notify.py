@@ -179,6 +179,21 @@ async def deliver_channel(
 ) -> tuple[str, str | None]:
     """(status, erro) da entrega num canal."""
     try:
+        if channel.type == "jira":
+            # Canal Jira: abre o chamado do Incidente (uma vez só, pela reserva única).
+            if not notice.subject.startswith("incident:"):
+                return "quiet", "o canal Jira só abre chamado de Incidente"
+            incident = notice.subject.split(":")[1]
+            async with engine.begin() as connection:
+                await platform_role(connection)
+                await connection.execute(
+                    text(
+                        "select doctor.queue_ticket(cast(:t as uuid), cast(:i as uuid), null,"
+                        " cast(:r as uuid))"
+                    ),
+                    {"t": rule.tenant_id, "i": incident, "r": rule.id},
+                )
+            return "sent", None
         if channel.type in ("slack", "teams"):
             async with engine.begin() as connection:
                 await platform_role(connection)

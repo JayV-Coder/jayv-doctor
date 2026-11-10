@@ -9,7 +9,7 @@ locals {
     diagnosis   = { secrets = ["supabase-db-url", "anthropic-api-key", "voyage-api-key", "supabase-service-role-key", "smtp-url"], memory = "1Gi", timeout = "600s" }
     connectors  = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "600s" }
     # Alertas (#41, ADR-0017): só ele lê os webhooks dos canais e a chave privada do push.
-    notifier = { secrets = ["supabase-db-url", "smtp-url", "vapid-private-key"], memory = "512Mi", timeout = "300s", max_instances = 1 }
+    notifier = { secrets = ["supabase-db-url", "smtp-url", "vapid-private-key", "atlassian-client-secret"], memory = "512Mi", timeout = "300s", max_instances = 1 }
     # Relay da outbox: o único que publica nos tópicos, chamado pelo Cloud Scheduler.
     relay = { secrets = ["supabase-db-url"], memory = "256Mi", timeout = "60s" }
   }
@@ -38,12 +38,17 @@ locals {
     "alert.evaluate" = { worker = "notifier", publishers = ["relay"], ack_deadline = 300 }
     # Webhooks de saída (#42): a primeira tentativa; as seguintes saem da varredura.
     "webhook.deliver" = { worker = "notifier", publishers = ["relay"], ack_deadline = 300 }
+    # Jira Service Management (#43): criar o chamado, ler status e comentários, comentar.
+    "itsm.ticket"  = { worker = "notifier", publishers = ["relay"], ack_deadline = 300 }
+    "itsm.sync"    = { worker = "notifier", publishers = ["relay"], ack_deadline = 300 }
+    "itsm.comment" = { worker = "notifier", publishers = ["relay"], ack_deadline = 300 }
     # Consultas de leitura do enriquecimento (#40): só o worker de Conectores lê credenciais.
     "enrichment.requested" = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
   }
 
   # voyage-api-key: a busca da Base de conhecimento gera o embedding da pergunta (#23).
-  api_secrets = ["supabase-db-url", "hmac-master-key", "smtp-url", "voyage-api-key"]
+  # atlassian-client-secret: a API troca o código do OAuth do Jira pelos tokens (#43).
+  api_secrets = ["supabase-db-url", "hmac-master-key", "smtp-url", "voyage-api-key", "atlassian-client-secret"]
 
   secret_env = {
     "supabase-db-url"   = "SUPABASE_DB_URL"
@@ -54,6 +59,8 @@ locals {
     "smtp-url"        = "SMTP_URL"
     # Web Push (#41): a chave privada VAPID, só no worker de alertas.
     "vapid-private-key" = "AID_VAPID_PRIVATE_KEY"
+    # App OAuth 2.0 (3LO) da plataforma no Atlassian (#43): API e `notifier`.
+    "atlassian-client-secret" = "AID_ATLASSIAN_CLIENT_SECRET"
     # Só o worker de ingestão: lê o Log bruto no Storage como job de plataforma.
     "supabase-service-role-key" = "SUPABASE_SERVICE_ROLE_KEY"
   }
@@ -161,6 +168,9 @@ module "api" {
     APP_URL                  = var.app_url
     # Chave pública do push (#41): o navegador assina com ela; a privada fica no `notifier`.
     AID_VAPID_PUBLIC_KEY = var.vapid_public_key
+    # Jira (#43): o consentimento volta para o app, que repassa o código à API.
+    AID_ATLASSIAN_CLIENT_ID    = var.atlassian_client_id
+    AID_ATLASSIAN_REDIRECT_URI = "${trimsuffix(var.app_url, "/")}/chamados/jira"
     # Liga os logs JSON ao trace (`logging.googleapis.com/trace`, #34).
     GCP_PROJECT_ID = var.project_id
     OTEL_ENABLED   = "true"
@@ -211,7 +221,13 @@ module "workers" {
     # O backup do Storage (#33) roda no worker de diagnóstico, que tem a chave do Storage.
     each.key == "diagnosis" ? { BACKUP_BUCKET = google_storage_bucket.storage_backup.name } : {},
     # Os links das notificações levam ao app (#41).
-    each.key == "notifier" ? { APP_URL = var.app_url, AID_VAPID_SUBJECT = var.vapid_subject } : {},
+    each.key == "notifier" ? {
+      APP_URL                 = var.app_url
+      AID_VAPID_SUBJECT       = var.vapid_subject
+      AID_ATLASSIAN_CLIENT_ID = var.atlassian_client_id
+      # O endereço do webhook do Jira aponta para a API pública.
+      AID_PUBLIC_API_URL = "https://${var.api_domain}"
+    } : {},
   )
   secret_env = { for secret in each.value.secrets : local.secret_env[secret] => secret }
   depends_on = [module.secrets]

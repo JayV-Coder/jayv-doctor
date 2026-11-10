@@ -86,6 +86,8 @@ class HistoryEntry(BaseModel):
 class Comment(BaseModel):
     id: str
     author_id: str | None
+    # Comentário que veio do Jira (#43): o nome de quem escreveu lá.
+    external_author: str | None = None
     body_md: str
     mentions: list[str]
     created_at: datetime

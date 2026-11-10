@@ -9,6 +9,8 @@ import pytest
 from aid_diagnosis_engine.diagnosis import (
     DiagnosisEngine,
     DiagnosisError,
+    EnrichmentItem,
+    EnrichmentPending,
     EventItem,
     IncidentInfo,
     KnowledgeItem,
@@ -56,6 +58,7 @@ class Loader:
         events: Sequence[EventItem] = EVENTS,
         rules: Sequence[RuleItem] = RULES,
         knowledge: Sequence[KnowledgeItem] | Exception = KNOWLEDGE,
+        enrichment: Sequence[EnrichmentItem] | Exception = (),
     ) -> None:
         self._incident, self._events, self._rules, self._knowledge = (
             incident,
@@ -63,6 +66,7 @@ class Loader:
             rules,
             knowledge,
         )
+        self._enrichment = enrichment
         self.queries: list[str] = []
 
     async def incident(self) -> IncidentInfo | None:
@@ -73,6 +77,11 @@ class Loader:
 
     async def rules(self) -> Sequence[RuleItem]:
         return self._rules
+
+    async def enrichment(self) -> Sequence[EnrichmentItem]:
+        if isinstance(self._enrichment, Exception):
+            raise self._enrichment
+        return self._enrichment
 
     async def knowledge(self, query: str) -> Sequence[KnowledgeItem]:
         self.queries.append(query)
@@ -318,3 +327,84 @@ async def test_hipoteses_tem_os_mesmos_ajustes_da_confianca() -> None:
     draft = await diagnosis.run(Loader(), mode="hybrid")
     assert draft.confidence == 0.4
     assert [h.confidence for h in draft.hypotheses] == [0.4, 0.26]
+
+
+# Ticket #40: a consulta de leitura no destino, feita na etapa 2, muda a Recomendação.
+CHECKED = T0 + timedelta(minutes=3)
+FOUND = EnrichmentItem(
+    id="enr-1",
+    system="sap",
+    entity="A_SalesOrder",
+    field="PurchaseOrderByCustomer",
+    reference="801XX0001",
+    outcome="found",
+    record_id="0000012345",
+    record_status="C",
+    checked_at=CHECKED,
+)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["rules_only", "hybrid"])
+async def test_pedido_ja_criado_apesar_do_504_muda_para_nao_reenviar(mode: str) -> None:
+    diagnosis, _ = engine(answer())
+    draft = await diagnosis.run(Loader(enrichment=[FOUND]), mode=mode)  # type: ignore[arg-type]
+    first = draft.recommendations[0]
+    assert first.kind == "verify"
+    assert first.text.startswith("Não reenvie: o pedido 801XX0001 já foi criado no SAP")
+    # Nenhuma outra Recomendação sugere reprocessar.
+    assert not any(
+        "reprocess" in r.text.lower() or "reenvi" in r.text.lower()
+        for r in draft.recommendations[1:]
+    )
+    enrichment = [e for e in draft.evidence if e.kind == "enrichment"]
+    assert [(e.ref_id, e.label) for e in enrichment] == [
+        ("enr-1", "Consulta ao SAP · A_SalesOrder")
+    ]
+    assert "existe" in enrichment[0].finding
+    assert "0000012345" in enrichment[0].finding
+
+
+@pytest.mark.asyncio
+async def test_pedido_inexistente_libera_o_reenvio_depois_da_correcao() -> None:
+    missing = EnrichmentItem(
+        **{**FOUND.__dict__, "outcome": "not_found", "record_id": None, "record_status": None}
+    )
+    diagnosis, _ = engine()
+    draft = await diagnosis.run(Loader(enrichment=[missing]), mode="rules_only")
+    assert draft.recommendations[0].text.startswith("O pedido 801XX0001 não existe no SAP")
+    assert draft.evidence[0].kind == "enrichment"
+
+
+@pytest.mark.asyncio
+async def test_consulta_que_falhou_vira_nota_sem_evidencia() -> None:
+    failed = EnrichmentItem(
+        **{**FOUND.__dict__, "outcome": "failed", "record_id": None, "record_status": None}
+    )
+    diagnosis, _ = engine()
+    draft = await diagnosis.run(Loader(enrichment=[failed]), mode="rules_only")
+    assert not any(e.kind == "enrichment" for e in draft.evidence)
+    assert any("Consulta ao SAP indisponível" in note for note in draft.verification_notes)
+
+
+@pytest.mark.asyncio
+async def test_consulta_pendente_interrompe_na_etapa_2() -> None:
+    diagnosis, provider = engine(answer())
+    stages: list[Stage] = []
+
+    async def record(stage: Stage) -> None:
+        stages.append(stage)
+
+    with pytest.raises(EnrichmentPending):
+        await diagnosis.run(Loader(enrichment=EnrichmentPending()), mode="hybrid", on_stage=record)
+    assert stages == ["validation", "correlation"]
+    assert provider.requests == []
+
+
+@pytest.mark.asyncio
+async def test_llm_recebe_a_consulta_como_dado_e_pode_cita_la() -> None:
+    cited = answer(evidence=[{"ref": "enr-1", "finding": "O pedido já existe no SAP."}])
+    diagnosis, provider = engine(cited)
+    draft = await diagnosis.run(Loader(enrichment=[FOUND]), mode="hybrid")
+    assert "enr-1" in json.dumps(provider.requests[0], default=str)
+    assert [e.ref_id for e in draft.evidence].count("enr-1") == 1

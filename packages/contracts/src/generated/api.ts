@@ -245,6 +245,42 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/integrations/{target}/correlation-mappings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Mappings */
+    get: operations["list_mappings_api_v1_integrations__target__correlation_mappings_get"];
+    put?: never;
+    /** Create Mapping */
+    post: operations["create_mapping_api_v1_integrations__target__correlation_mappings_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/correlation-mappings/{target}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Delete Mapping */
+    delete: operations["delete_mapping_api_v1_correlation_mappings__target__delete"];
+    options?: never;
+    head?: never;
+    /** Update Mapping */
+    patch: operations["update_mapping_api_v1_correlation_mappings__target__patch"];
+    trace?: never;
+  };
   "/api/v1/imports": {
     parameters: {
       query?: never;
@@ -1477,6 +1513,37 @@ export interface components {
       /** Error */
       error: string | null;
     };
+    /** CorrelationMapping */
+    CorrelationMapping: {
+      /** Id */
+      id: string;
+      /** Integration Id */
+      integration_id: string;
+      /** Name */
+      name: string;
+      /** Keys */
+      keys: {
+        [key: string]: unknown;
+      }[];
+      /** Window Minutes */
+      window_minutes: number;
+      /** Reconcile */
+      reconcile: boolean;
+      /** Lookup */
+      lookup: {
+        [key: string]: unknown;
+      } | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
     /** CreatedImport */
     CreatedImport: {
       /** Id */
@@ -1791,7 +1858,7 @@ export interface components {
        * Kind
        * @enum {string}
        */
-      kind: "event" | "raw_log" | "chunk" | "global_chunk" | "rule_match";
+      kind: "event" | "raw_log" | "chunk" | "global_chunk" | "rule_match" | "enrichment";
       /** Ref Id */
       ref_id: string | null;
       /** Event Timestamp */
@@ -2471,6 +2538,71 @@ export interface components {
       /** Cost Estimate */
       cost_estimate: number | null;
     };
+    /**
+     * Lookup
+     * @description Consulta de leitura no destino, feita pelo Conector na hora do Diagnóstico: o registro
+     *     com `field` igual à chave existe? (ex.: `Order.OrderNumber` no Salesforce, `A_SalesOrder.
+     *     PurchaseOrderByCustomer` num serviço OData do SAP).
+     */
+    Lookup: {
+      /**
+       * Connector Id
+       * Format: uuid
+       */
+      connector_id: string;
+      /** Entity */
+      entity: string;
+      /** Field */
+      field: string;
+      /** Status Field */
+      status_field?: string | null;
+      /**
+       * Pad Left
+       * @default 0
+       */
+      pad_left: number;
+    };
+    /** MappingChange */
+    MappingChange: {
+      /** Name */
+      name?: string | null;
+      /** Keys */
+      keys?:
+        | {
+            [key: string]: unknown;
+          }[]
+        | null;
+      /** Window Minutes */
+      window_minutes?: number | null;
+      /** Reconcile */
+      reconcile?: boolean | null;
+      lookup?: components["schemas"]["Lookup"] | null;
+      /**
+       * Clear Lookup
+       * @default false
+       */
+      clear_lookup: boolean;
+    };
+    /** MappingIn */
+    MappingIn: {
+      /** Name */
+      name: string;
+      /** Keys */
+      keys: {
+        [key: string]: unknown;
+      }[];
+      /**
+       * Window Minutes
+       * @default 60
+       */
+      window_minutes: number;
+      /**
+       * Reconcile
+       * @default false
+       */
+      reconcile: boolean;
+      lookup?: components["schemas"]["Lookup"] | null;
+    };
     /** Me */
     Me: {
       /** Id */
@@ -2535,7 +2667,7 @@ export interface components {
        * Provider
        * @enum {string}
        */
-      provider: "fake" | "gcp" | "salesforce" | "sap";
+      provider: "fake" | "gcp" | "salesforce" | "sap" | "odata";
       /** Config */
       config?: {
         [key: string]: unknown;
@@ -2552,7 +2684,7 @@ export interface components {
        * Provider
        * @enum {string}
        */
-      provider: "fake" | "gcp" | "salesforce" | "sap";
+      provider: "fake" | "gcp" | "salesforce" | "sap" | "odata";
       /** Name */
       name: string;
       /** Config */
@@ -3632,6 +3764,147 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Integration"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_mappings_api_v1_integrations__target__correlation_mappings_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CorrelationMapping"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_mapping_api_v1_integrations__target__correlation_mappings_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MappingIn"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CorrelationMapping"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  delete_mapping_api_v1_correlation_mappings__target__delete: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_mapping_api_v1_correlation_mappings__target__patch: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MappingChange"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CorrelationMapping"];
         };
       };
       /** @description Validation Error */

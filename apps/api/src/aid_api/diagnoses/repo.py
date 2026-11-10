@@ -132,7 +132,7 @@ class DiagnosisRepository:
                     # Da Regra, o primeiro Evento que ela apontou, com o instante: o link leva a
                     # consulta do Evento direto à partição dele.
                     "select e.rank, e.kind, coalesce(e.event_id, e.raw_log_object_id, e.chunk_id,"
-                    " e.global_chunk_id, e.rule_match_id)::text as ref_id,"
+                    " e.global_chunk_id, e.rule_match_id, e.enrichment_id)::text as ref_id,"
                     " coalesce(e.event_timestamp, me.timestamp) as event_timestamp,"
                     " e.label, e.finding,"
                     " coalesce(e.event_id, m.matched_event_ids[1])::text as event_id,"

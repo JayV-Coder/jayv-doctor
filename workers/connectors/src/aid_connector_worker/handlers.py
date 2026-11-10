@@ -11,6 +11,7 @@ from aid_db import supavisor_engine
 from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from aid_connector_worker.enrich import run_enrichment
 from aid_connector_worker.schedule import enqueue_due
 from aid_connector_worker.sync import sync_connector
 
@@ -28,7 +29,14 @@ async def connector_sync(payload: Mapping[str, Any]) -> None:
     await sync_connector(payload, engine(), REGISTRY, RetryPolicy())
 
 
-TOPICS: dict[str, Handler] = {"connector.sync": connector_sync}
+async def enrichment_requested(payload: Mapping[str, Any]) -> None:
+    await run_enrichment(engine(), payload, REGISTRY)
+
+
+TOPICS: dict[str, Handler] = {
+    "connector.sync": connector_sync,
+    "enrichment.requested": enrichment_requested,
+}
 
 router = APIRouter()
 

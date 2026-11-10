@@ -17,6 +17,8 @@ async def enqueue_due(engine: AsyncEngine) -> int:
                 "with due as ("
                 " select id, tenant_id from doctor.connectors"
                 " where status in ('active', 'failing') and next_run_at <= now()"
+                # OData é só de consulta (#40): não há o que sincronizar.
+                " and provider <> 'odata'"
                 " order by next_run_at limit :batch for update skip locked),"
                 " bumped as ("
                 " update doctor.connectors c"

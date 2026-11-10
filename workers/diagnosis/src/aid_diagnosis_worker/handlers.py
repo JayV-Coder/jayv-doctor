@@ -14,7 +14,7 @@ from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aid_diagnosis_worker.backup import GcsTarget, StorageSource, backup_storage
-from aid_diagnosis_worker.diagnose import diagnose, open_automatic
+from aid_diagnosis_worker.diagnose import diagnose, expire_enrichment, open_automatic
 from aid_diagnosis_worker.evaluate import evaluate_execution
 from aid_diagnosis_worker.knowledge import index, reindex_stale
 from aid_diagnosis_worker.notify import mailer_from_env, notify_threshold
@@ -86,6 +86,13 @@ router = APIRouter()
 @router.post("/knowledge/reindex")
 async def reindex() -> dict[str, int]:
     return {"queued": await reindex_stale(engine(), provider_for)}
+
+
+# A cada 5 min (Cloud Scheduler): consulta de enriquecimento sem resposta não prende o
+# Diagnóstico (#40).
+@router.post("/enrichment/expire")
+async def enrichment_expire() -> dict[str, int]:
+    return {"resumed": await expire_enrichment(engine())}
 
 
 @router.post("/retention/run")

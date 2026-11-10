@@ -121,6 +121,24 @@ Lê os Message Processing Logs do Cloud Integration (`/api/v1/MessageProcessingL
 - **Checkpoint:** `(LogEnd, MessageGuid)`, com desempate pelo Guid no mesmo instante, por `$filter`/`$orderby`/`$top`.
 - **Ainda não:** o detalhe do erro (`ErrorInformation/$value`) exige uma chamada por mensagem e fica para quando o volume do piloto mostrar a necessidade. O conector OData genérico para enriquecimento por Referência vai com o ticket #40. O assistente na tela fica para depois do piloto; por enquanto, o Conector se cria pela API.
 
+## OData (`odata`, só consulta, ticket #40)
+
+Não coleta Eventos: responde às consultas do enriquecimento (o pedido existe no destino?), por exemplo no S/4HANA (`API_SALES_ORDER_SRV`) ou num ECC exposto pelo gateway ou pela BTP. O agendador não pede Sincronização para ele.
+
+```json
+{
+  "service_url": "https://s4.acme.com.br/sap/opu/odata/sap/API_SALES_ORDER_SRV",
+  "version": "v2",
+  "auth": "basic",
+  "requests_per_minute": 60
+}
+```
+
+- **Endereço:** só HTTPS na porta 443, com nome de host, sem usuário, query ou fragmento. A cada consulta, o host precisa resolver só para endereços públicos (SSRF; o risco de DNS rebinding está na ADR-0016). Loopback só com `AID_ODATA_ALLOW_LOOPBACK=1`, que existe só no E2E.
+- **Credencial:** `{"username", "password"}` (Basic, usuário técnico só de leitura) ou `{"client_id", "client_secret"}` com `auth: "oauth_client_credentials"` e `token_url`.
+- **Consulta:** `GET <service_url>/<entity>?$filter=<field> eq '<valor>'&$top=1&$select=…`, com os nomes no padrão de identificador e o valor com as aspas dobradas. O teste de conexão lê o `$metadata`.
+- **Salesforce** também consulta, com as credenciais da Sincronização: `SELECT Id[, status] FROM <objeto> WHERE <campo> = '<valor>' LIMIT 1`.
+
 ## Google Cloud Logging (`gcp`)
 
 Config:

@@ -15,6 +15,8 @@ from aid_diagnosis_engine.diagnosis import (
     DiagnosisDraft,
     DiagnosisEngine,
     DiagnosisError,
+    EnrichmentItem,
+    EnrichmentPending,
     EventItem,
     IncidentInfo,
     KnowledgeItem,
@@ -38,6 +40,11 @@ MAX_ATTEMPTS = 3
 MAX_EVENTS = 200
 MAX_RULES = 20
 KNOWLEDGE_K = 5
+# Consultas de enriquecimento por Diagnóstico (#40) e quanto se espera pelo worker de Conectores.
+MAX_LOOKUPS = 5
+LOOKUP_WAIT = timedelta(minutes=5)
+# Sistema consultado, pelo provedor do Conector do Mapa.
+LOOKUP_SYSTEMS = {"salesforce": "salesforce", "odata": "sap"}
 DESCRIPTIONS = {rule.code: (rule.category, rule.description_pt) for rule in RULES}
 
 ProviderFor = Callable[[str], LLMProvider]
@@ -105,7 +112,12 @@ def estimate_cost(model: str | None, input_tokens: int, output_tokens: int) -> f
 
 class DbLoader:
     def __init__(
-        self, engine: AsyncEngine, tenant: str, incident: str, provider: LLMProvider | None
+        self,
+        engine: AsyncEngine,
+        tenant: str,
+        incident: str,
+        provider: LLMProvider | None,
+        diagnosis: str = "",
     ) -> None:
         self.engine, self.tenant, self.incident_id, self.provider = (
             engine,
@@ -113,6 +125,7 @@ class DbLoader:
             incident,
             provider,
         )
+        self.diagnosis_id = diagnosis
         self.rule_code: str | None = None
 
     async def _rows(self, sql: str, **params: Any) -> Sequence[Any]:
@@ -170,6 +183,92 @@ class DbLoader:
             for row in rows
         ]
         return sorted(items, key=lambda item: item.view.timestamp)
+
+    async def enrichment(self) -> Sequence[EnrichmentItem]:
+        """Etapa 2 (#40): as consultas de leitura deste Diagnóstico. Na primeira passagem, pede
+        as que os Mapas com `lookup` indicam e devolve o Diagnóstico à fila; com todas
+        respondidas, entrega o resultado. Pendentes há mais de 5 min são expiradas pela rota
+        `/enrichment/expire`."""
+        rows = await self._rows(
+            "select id::text, system, entity, field, reference, outcome, record_id,"
+            " record_status, checked_at from doctor.enrichments"
+            " where diagnosis_id = cast(:d as uuid) order by created_at, reference",
+            d=self.diagnosis_id,
+        )
+        if any(row.outcome == "pending" for row in rows):
+            raise EnrichmentPending
+        if rows:
+            return [
+                EnrichmentItem(
+                    id=row.id,
+                    system=row.system,
+                    entity=row.entity,
+                    field=row.field,
+                    reference=row.reference,
+                    outcome=row.outcome,
+                    record_id=row.record_id,
+                    record_status=row.record_status,
+                    checked_at=row.checked_at,
+                )
+                for row in rows
+            ]
+        wanted = await self._lookups()
+        if not wanted:
+            return []
+        async with self.engine.begin() as connection:
+            await platform_role(connection)
+            await connection.execute(
+                text(
+                    "insert into doctor.enrichments (tenant_id, diagnosis_id, mapping_id,"
+                    " connector_id, reference, system, entity, field) values (cast(:t as uuid),"
+                    " cast(:d as uuid), cast(:m as uuid), cast(:c as uuid), :r, :s, :e, :f)"
+                    " on conflict (tenant_id, diagnosis_id, mapping_id, reference) do nothing"
+                ),
+                [{"t": self.tenant, "d": self.diagnosis_id, **item} for item in wanted],
+            )
+            await connection.execute(
+                text(
+                    "insert into doctor.outbox_messages (tenant_id, topic, payload)"
+                    " values (cast(:t as uuid), 'enrichment.requested', cast(:p as jsonb))"
+                ),
+                {"t": self.tenant, "p": json.dumps({"diagnosis_id": self.diagnosis_id})},
+            )
+        raise EnrichmentPending
+
+    async def _lookups(self) -> list[dict[str, Any]]:
+        """Uma consulta por (Mapa com `lookup`, chave) das Execuções do Incidente, até 5."""
+        rows = await self._rows(
+            "select distinct m.id::text as mapping, m.lookup, c.provider, k.key"
+            " from doctor.incident_executions ie"
+            " join doctor.executions x on x.tenant_id = ie.tenant_id and x.id = ie.execution_id"
+            " join doctor.events e on e.tenant_id = x.tenant_id and e.execution_ref = x.id"
+            " and e.timestamp between x.first_event_at and x.last_event_at"
+            " cross join lateral unnest(e.cross_keys) as k(key)"
+            " join doctor.correlation_mappings m on m.tenant_id = e.tenant_id"
+            " and m.integration_id = e.integration_id and m.lookup is not null"
+            " and k.key like m.id::text || ':%'"
+            " join doctor.connectors c on c.tenant_id = m.tenant_id"
+            " and c.id = cast(m.lookup ->> 'connector_id' as uuid)"
+            " where ie.incident_id = cast(:i as uuid) and e.cross_keys is not null"
+            " order by m.id::text, k.key limit :n",
+            n=MAX_LOOKUPS,
+        )
+        found = []
+        for row in rows:
+            lookup = dict(row.lookup)
+            value = row.key.split(":", 1)[1]
+            pad = int(lookup.get("pad_left") or 0)
+            found.append(
+                {
+                    "m": row.mapping,
+                    "c": lookup["connector_id"],
+                    "r": value.rjust(pad, "0")[:256],
+                    "s": LOOKUP_SYSTEMS.get(row.provider, row.provider),
+                    "e": lookup["entity"],
+                    "f": lookup["field"],
+                }
+            )
+        return found
 
     async def rules(self) -> Sequence[RuleItem]:
         rows = await self._rows(
@@ -266,6 +365,53 @@ async def release(engine: AsyncEngine, diagnosis: Any) -> None:
         )
 
 
+async def wait_enrichment(engine: AsyncEngine, diagnosis: Any) -> None:
+    """Volta à fila na etapa 2 esperando as consultas, sem contar a passagem como tentativa: o
+    worker de Conectores (ou a expiração) pede o Diagnóstico de novo."""
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        await connection.execute(
+            text(
+                "update doctor.diagnoses set status = 'queued', stage = 'correlation',"
+                " started_at = null, attempts = greatest(attempts - 1, 0)"
+                " where id = cast(:d as uuid) and status = 'running'"
+            ),
+            {"d": diagnosis.id},
+        )
+
+
+async def expire_enrichment(engine: AsyncEngine, wait: timedelta = LOOKUP_WAIT) -> int:
+    """Consulta sem resposta em 5 min vira `failed` e o Diagnóstico segue sem ela (rota
+    agendada `/enrichment/expire`). Devolve quantos Diagnósticos foram retomados."""
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        resumed = list(
+            await connection.execute(
+                text(
+                    "with expired as ("
+                    " update doctor.enrichments set outcome = 'failed', checked_at = now(),"
+                    " error = 'O Conector não respondeu à consulta a tempo.'"
+                    " where outcome = 'pending' and created_at < now() - make_interval(secs => :w)"
+                    " returning tenant_id, diagnosis_id)"
+                    " select distinct tenant_id::text, diagnosis_id::text from expired"
+                ),
+                {"w": wait.total_seconds()},
+            )
+        )
+        if resumed:
+            await connection.execute(
+                text(
+                    "insert into doctor.outbox_messages (tenant_id, topic, payload)"
+                    " values (cast(:t as uuid), 'diagnosis.requested', cast(:p as jsonb))"
+                ),
+                [
+                    {"t": row.tenant_id, "p": json.dumps({"diagnosis_id": row.diagnosis_id})}
+                    for row in resumed
+                ],
+            )
+        return len(resumed)
+
+
 async def fail(engine: AsyncEngine, diagnosis: Any, error: str) -> None:
     """Final como os outros: com `published_at`, duração e a mensagem `diagnosis.published`."""
     async with engine.begin() as connection:
@@ -308,6 +454,7 @@ def _evidence_row(diagnosis: Any, rank: int, item: Any) -> dict[str, Any]:
         "chunk": "chunk_id",
         "global_chunk": "global_chunk_id",
         "rule_match": "rule_match_id",
+        "enrichment": "enrichment_id",
     }
     row: dict[str, Any] = {
         "t": diagnosis.tenant_id,
@@ -318,6 +465,7 @@ def _evidence_row(diagnosis: Any, rank: int, item: Any) -> dict[str, Any]:
         "chunk_id": None,
         "global_chunk_id": None,
         "rule_match_id": None,
+        "enrichment_id": None,
         "ts": item.event_timestamp,
         "label": item.label,
         "finding": item.finding,
@@ -354,10 +502,10 @@ async def publish(engine: AsyncEngine, diagnosis: Any, draft: DiagnosisDraft) ->
                 text(
                     "insert into doctor.diagnosis_evidence (tenant_id, diagnosis_id, rank, kind,"
                     " event_id, event_timestamp, chunk_id, global_chunk_id, rule_match_id,"
-                    " label, finding) values (cast(:t as uuid), cast(:d as uuid), :r, :k,"
-                    " cast(:event_id as uuid), :ts, cast(:chunk_id as uuid),"
-                    " cast(:global_chunk_id as uuid), cast(:rule_match_id as uuid), :label,"
-                    " :finding)"
+                    " enrichment_id, label, finding) values (cast(:t as uuid), cast(:d as uuid),"
+                    " :r, :k, cast(:event_id as uuid), :ts, cast(:chunk_id as uuid),"
+                    " cast(:global_chunk_id as uuid), cast(:rule_match_id as uuid),"
+                    " cast(:enrichment_id as uuid), :label, :finding)"
                 ),
                 [
                     _evidence_row(diagnosis, rank, item)
@@ -449,7 +597,11 @@ async def diagnose(
         # Envio ao LLM desligado: a Base também não gera o embedding da pergunta (só o texto). No
         # rules_only com o envio ligado, o embedding da Base continua.
         loader = DbLoader(
-            engine, diagnosis.tenant_id, diagnosis.incident_id, provider if enabled else None
+            engine,
+            diagnosis.tenant_id,
+            diagnosis.incident_id,
+            provider if enabled else None,
+            diagnosis.id,
         )
         draft = await motor.run(
             loader,
@@ -458,6 +610,9 @@ async def diagnose(
             on_stage=on_stage,
         )
         published = await publish(engine, diagnosis, draft)
+    except EnrichmentPending:
+        await wait_enrichment(engine, diagnosis)
+        return "waiting"
     except DiagnosisError as exc:
         await fail(engine, diagnosis, str(exc))
         return "failed"

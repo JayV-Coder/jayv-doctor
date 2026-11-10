@@ -72,6 +72,8 @@ begin
   values (diagnosis, t, incident, 1, 'running', 'verification', 'hybrid', 'hybrid', 'k-' || t::text);
   insert into doctor.diagnosis_hypotheses (tenant_id, diagnosis_id, rank, statement)
   values (t, diagnosis, 1, 'Gateway lento.');
+  insert into doctor.enrichments (tenant_id, diagnosis_id, reference, system, entity, field, outcome, checked_at)
+  values (t, diagnosis, '801XX0001', 'sap', 'A_SalesOrder', 'PurchaseOrderByCustomer', 'found', now());
   insert into doctor.diagnosis_recommendations (tenant_id, diagnosis_id, rank, text, kind)
   values (t, diagnosis, 1, 'Confira o SAP.', 'verify');
   insert into doctor.diagnosis_evidence (tenant_id, diagnosis_id, rank, kind, rule_match_id, label, finding)

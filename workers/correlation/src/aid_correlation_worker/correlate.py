@@ -11,12 +11,22 @@ acha pendentes e termina sem efeito. As escritas vão em lote: poucas idas ao ba
 
 import json
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, replace
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
-from aid_correlation import Correlator, EventRef, Group, execution_status, merge_plan
+from aid_correlation import (
+    Correlator,
+    EventRef,
+    Group,
+    IdentifierMap,
+    MappingError,
+    cross_keys,
+    execution_status,
+    merge_plan,
+    parse_keys,
+)
 from aid_db import platform_role
 from sqlalchemy import text
 from sqlalchemy.engine import Row
@@ -31,11 +41,13 @@ COLUMNS = (
     " e.source ->> 'resource' as resource,"
     " case when e.attributes ->> 'attempt' ~ '^[0-9]{1,6}$'"
     "  then (e.attributes ->> 'attempt')::int end as attempt,"
-    " e.execution_ref::text as execution_ref"
+    " e.execution_ref::text as execution_ref, coalesce(e.cross_keys, '{}') as cross_keys"
 )
 
+# Os pendentes trazem também o que o Mapa de identificadores lê (#40); as chaves calculadas são
+# gravadas junto com a Execução, e os já correlacionados usam a coluna `cross_keys`.
 PENDING = text(
-    f"select {COLUMNS} from doctor.events e"  # noqa: S608
+    f"select {COLUMNS}, e.source, e.attributes, e.error from doctor.events e"  # noqa: S608
     " where e.tenant_id = cast(:t as uuid) and e.integration_id = cast(:i as uuid)"
     " and e.execution_ref is null order by e.timestamp, e.id limit :page"
 )
@@ -55,7 +67,13 @@ NEIGHBORS = text(
     "   cast(:resource_at as timestamptz[])) as p(resource, at)"
     "   where e.source ->> 'resource' = p.resource"
     "   and e.timestamp between p.at - make_interval(secs => :near)"
-    "   and p.at + make_interval(secs => :near)))"
+    "   and p.at + make_interval(secs => :near))"
+    "  or (e.cross_keys && cast(:links as text[]) and e.timestamp between :lo and :hi))"
+)
+
+MAPS = text(
+    "select id::text, keys, window_minutes from doctor.correlation_mappings"
+    " where tenant_id = cast(:t as uuid) and integration_id = cast(:i as uuid) order by id"
 )
 
 MEMBERS = text(
@@ -72,12 +90,38 @@ class Existing:
     low_confidence: bool
 
 
-def to_ref(row: Row[Any]) -> EventRef:
-    return EventRef(**row._asdict())
+EXTRA = ("source", "attributes", "error")
 
 
-async def load(connection: AsyncConnection, query: Any, **params: Any) -> list[EventRef]:
-    return [to_ref(row) for row in await connection.execute(query, params)]
+def to_ref(row: Row[Any], maps: Sequence[IdentifierMap] = ()) -> EventRef:
+    fields = row._asdict()
+    contract = {name: fields.pop(name) for name in EXTRA if name in fields}
+    stored = tuple(fields.pop("cross_keys") or ())
+    keys = cross_keys({**fields, **contract}, maps) if contract else stored
+    return EventRef(**fields, cross_keys=keys)
+
+
+async def identifier_maps(
+    connection: AsyncConnection, tenant: str, integration: str
+) -> list[IdentifierMap]:
+    found = []
+    for row in await connection.execute(MAPS, {"t": tenant, "i": integration}):
+        try:
+            keys = parse_keys(row.keys)
+        except MappingError:
+            # Gravado pela API já validado; um mapa que deixou de valer não derruba a correlação.
+            continue
+        found.append(IdentifierMap(row.id, keys, timedelta(minutes=row.window_minutes)))
+    return found
+
+
+async def load(
+    connection: AsyncConnection,
+    query: Any,
+    maps: Sequence[IdentifierMap] = (),
+    **params: Any,
+) -> list[EventRef]:
+    return [to_ref(row, maps) for row in await connection.execute(query, params)]
 
 
 async def tenant_of(connection: AsyncConnection, integration_id: str) -> str | None:
@@ -98,6 +142,8 @@ async def neighborhood(
     def values(name: str) -> list[str]:
         return sorted({str(getattr(e, name)) for e in pending if getattr(e, name) is not None})
 
+    links = sorted({key for e in pending for key in e.cross_keys})
+    widest = max((correlator.settings.window_of(key) for key in links), default=timedelta(0))
     with_reference = [e for e in pending if e.business_reference is not None]
     with_resource = [e for e in pending if e.resource is not None and e.attempt is not None]
     neighbors = await load(
@@ -113,6 +159,9 @@ async def neighborhood(
         resource_at=[e.timestamp for e in with_resource],
         window=correlator.settings.reference_window.total_seconds(),
         near=correlator.settings.proximity.total_seconds(),
+        links=links,
+        lo=min(e.timestamp for e in pending) - widest,
+        hi=max(e.timestamp for e in pending) + widest,
     )
     refs = sorted({e.execution_ref for e in neighbors if e.execution_ref})
     members = await load(connection, MEMBERS, t=tenant, refs=refs) if refs else []
@@ -181,7 +230,11 @@ async def correlate_integration(
             text("select pg_advisory_xact_lock(hashtextextended(:k, 0))"),
             {"k": f"doctor.correlation:{integration}"},
         )
-        pending = await load(connection, PENDING, t=tenant, i=integration, page=PAGE)
+        maps = await identifier_maps(connection, tenant, integration)
+        if maps:
+            windows = {item.id: item.window for item in maps}
+            correlator = Correlator(replace(correlator.settings, cross_windows=windows))
+        pending = await load(connection, PENDING, maps, t=tenant, i=integration, page=PAGE)
         if not pending:
             return 0
         known = await neighborhood(connection, tenant, integration, pending, correlator)
@@ -233,7 +286,8 @@ async def correlate_integration(
         # Com o instante na condição: o Postgres vai direto à partição do Evento.
         await connection.execute(
             text(
-                "update doctor.events set execution_ref = cast(:x as uuid), correlated_by = :c"
+                "update doctor.events set execution_ref = cast(:x as uuid), correlated_by = :c,"
+                " cross_keys = nullif(cast(:k as text[]), '{}')"
                 " where tenant_id = cast(:t as uuid) and id = cast(:id as uuid)"
                 " and timestamp = :ts"
             ),
@@ -244,6 +298,7 @@ async def correlate_integration(
                     "ts": waiting[event_id].timestamp,
                     "x": execution,
                     "c": group.correlated_by.get(event_id),
+                    "k": list(waiting[event_id].cross_keys),
                 }
                 for group, execution, _ in targets
                 for event_id in group.event_ids

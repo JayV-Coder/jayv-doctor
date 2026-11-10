@@ -54,6 +54,7 @@ source = { editable = "apps/api" }
 dependencies = [
     { name = "aid-connectors" },
     { name = "aid-contracts" },
+    { name = "aid-correlation" },
     { name = "aid-db" },
     { name = "aid-knowledge" },
     { name = "aid-observability" },
@@ -74,6 +75,7 @@ dependencies = [
 requires-dist = [
     { name = "aid-connectors", editable = "packages/connectors" },
     { name = "aid-contracts", editable = "packages/contracts" },
+    { name = "aid-correlation", editable = "packages/correlation" },
     { name = "aid-db", editable = "packages/db" },
     { name = "aid-knowledge", editable = "packages/knowledge" },
     { name = "aid-observability", editable = "packages/observability" },

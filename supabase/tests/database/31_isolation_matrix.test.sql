@@ -78,6 +78,8 @@ begin
   values (t, diagnosis, 1, 'rule_match', match, 'INT-003', '504');
   update doctor.diagnoses set status = 'published', stage = 'done', published_at = now() where id = diagnosis;
   insert into doctor.diagnosis_feedback (tenant_id, diagnosis_id, verdict) values (t, diagnosis, 'accepted');
+  insert into doctor.correlation_mappings (tenant_id, integration_id, name, keys)
+  values (t, integration, 'Pedido', '[{"system": "sap", "field": "execution_id"}]');
   insert into doctor.agents (tenant_id, integration_id, name, status, secret_hash, public_key)
   values (t, integration, 'Agente', 'active', encode(sha256(('agente' || t::text)::bytea), 'hex'),
     repeat('A', 43) || '=');

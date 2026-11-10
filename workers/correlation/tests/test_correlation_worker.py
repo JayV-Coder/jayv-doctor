@@ -98,14 +98,25 @@ async def insert(
         t=ids["tenant"],
         i=ids["integration"],
         ts=T0 + timedelta(milliseconds=offset_ms),
-        src=json.dumps({"provider": "gcp", "service": "s", "resource": fields.get("resource")}),
+        src=json.dumps(
+            {
+                "provider": fields.get("provider", "gcp"),
+                "service": "s",
+                "resource": fields.get("resource"),
+            }
+        ),
         op=fields.get("operation", "op"),
         sev=severity,
         d=event_id,
         exec=fields.get("execution_id"),
         trace=fields.get("trace_id"),
         ref=fields.get("business_reference"),
-        attrs=json.dumps({"attempt": fields["attempt"]} if "attempt" in fields else {}),
+        attrs=json.dumps(
+            {
+                **({"attempt": fields["attempt"]} if "attempt" in fields else {}),
+                **fields.get("attributes", {}),
+            }
+        ),
     )
     return event_id
 
@@ -436,3 +447,69 @@ async def test_importa_login_do_auth_uma_vez(engine: AsyncEngine, tenant: dict[s
                 text("delete from public.organization_members where user_id = :u"), {"u": user}
             )
             await connection.execute(text("delete from auth.users where id = :u"), {"u": user})
+
+
+@pytest.mark.asyncio
+async def test_mapa_une_salesforce_gcp_e_sap_chegando_em_lotes_separados(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    """Critério do #40: pedido criado no Salesforce, processado no Cloud Run e com timeout no SAP
+    vira uma Execução só, mesmo com um id forte diferente em cada sistema."""
+    mapping = str(uuid4())
+    await run(
+        engine,
+        "insert into doctor.correlation_mappings (id, tenant_id, integration_id, name, keys)"
+        " values (:m, :t, :i, 'Pedido', cast(:k as jsonb))",
+        m=mapping,
+        t=tenant["tenant"],
+        i=tenant["integration"],
+        k=json.dumps(
+            [
+                {"system": "salesforce", "field": "execution_id"},
+                {
+                    "system": "gcp",
+                    "field": "attributes.sf_order",
+                    "transforms": [{"op": "strip_prefix", "value": "SF-"}],
+                },
+                {
+                    "system": "sap",
+                    "field": "attributes.bstkd",
+                    "transforms": [{"op": "strip_leading_zeros"}],
+                },
+            ]
+        ),
+    )
+    await insert(engine, tenant, 0, provider="salesforce", execution_id="801XX0001")
+    assert await correlate(engine, tenant) == 1
+    await insert(
+        engine,
+        tenant,
+        900,
+        provider="gcp",
+        trace_id="trace-gcp-9",
+        attributes={"sf_order": "SF-801XX0001"},
+    )
+    await insert(
+        engine,
+        tenant,
+        31_000,
+        "ERROR",
+        provider="sap",
+        execution_id="IDOC-77",
+        attributes={"bstkd": "0000801XX0001"},
+    )
+    # Evento do SAP sem a chave do mapa fica na própria Execução.
+    await insert(engine, tenant, 1_000, provider="sap", execution_id="IDOC-99")
+    assert await correlate(engine, tenant) == 3
+    found = await executions(engine, tenant)
+    assert [row["event_count"] for row in found] == [3, 1]
+    assert found[0]["status"] == "failed"
+    assert found[0]["correlation_keys"]["cross_system"] == [f"{mapping}:801XX0001"]
+    stored = await rows(
+        engine,
+        "select correlated_by, cross_keys from doctor.events where tenant_id = :t"
+        " and cross_keys is not null order by timestamp",
+        t=tenant["tenant"],
+    )
+    assert [row["correlated_by"] for row in stored] == ["execution_id", "trace_id", "execution_id"]
+    assert all(row["cross_keys"] == [f"{mapping}:801XX0001"] for row in stored)

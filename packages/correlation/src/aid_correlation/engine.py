@@ -2,9 +2,11 @@
 
 Cada etapa decide só pelo conjunto de Eventos, com desempates por chaves ordenáveis (instante,
 id), e nunca pela ordem de chegada: a mesma entrada produz sempre a mesma saída. Os ids fortes
-(`execution_id`, `trace_id`) são classes de equivalência; a Referência de negócio e a
-proximidade temporal só prendem Eventos sem id forte a um grupo, ou entre si, e nunca juntam dois
-grupos de ids fortes diferentes.
+(`execution_id`, `trace_id`) são classes de equivalência. As chaves do Mapa de identificadores
+(`cross_keys`, ticket #40) unem Eventos de sistemas diferentes, mesmo com ids fortes diferentes,
+quando a mesma chave aparece dentro da janela do mapa: é a configuração explícita da Organização
+dizendo que são o mesmo fluxo. A Referência de negócio e a proximidade temporal só prendem
+Eventos sem id forte a um grupo, ou entre si, e nunca juntam dois grupos de ids fortes diferentes.
 """
 
 from collections import defaultdict
@@ -13,7 +15,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Literal
 
-Strategy = Literal["execution_id", "trace_id", "business_reference", "temporal_proximity"]
+Strategy = Literal[
+    "execution_id", "trace_id", "cross_system", "business_reference", "temporal_proximity"
+]
 Status = Literal["success", "failed", "pending_confirmation", "unknown"]
 FAILED = frozenset({"ERROR", "CRITICAL"})
 
@@ -33,6 +37,8 @@ class EventRef:
     business_reference: str | None = None
     resource: str | None = None
     attempt: int | None = None
+    # Chaves do Mapa de identificadores: `<id do mapa>:<valor normalizado>`.
+    cross_keys: tuple[str, ...] = ()
     # Execução a que o Evento já pertence (gravada antes): Execuções nunca se dividem, só se
     # juntam, então Eventos com o mesmo `execution_ref` ficam sempre no mesmo grupo.
     execution_ref: str | None = None
@@ -43,7 +49,7 @@ class EventRef:
 
     @property
     def strong(self) -> bool:
-        return self.execution_id is not None or self.trace_id is not None
+        return self.execution_id is not None or self.trace_id is not None or bool(self.cross_keys)
 
     @property
     def anchored(self) -> bool:
@@ -61,6 +67,12 @@ class Settings:
     # `operation` compatível para a estratégia da Referência. Por padrão, toda operação da mesma
     # Integração é: a Referência igual dentro da janela já é o sinal.
     compatible: Callable[[str, str], bool] = always
+    # Janela de cada Mapa de identificadores (pelo id do mapa, o prefixo da chave).
+    cross_windows: Mapping[str, timedelta] = field(default_factory=dict)
+    cross_window: timedelta = timedelta(minutes=60)
+
+    def window_of(self, key: str) -> timedelta:
+        return self.cross_windows.get(key.split(":", 1)[0], self.cross_window)
 
 
 @dataclass(frozen=True)
@@ -150,6 +162,9 @@ class Correlator:
                 how[event.id] = "execution_id"
             elif event.trace_id is not None:
                 how[event.id] = "trace_id"
+            elif event.cross_keys:
+                how[event.id] = "cross_system"
+        self._by_cross_keys(events, sets)
 
         # Ancorado: tem id forte ou já pertence a uma Execução gravada. As estratégias fracas só
         # prendem Eventos soltos a um grupo, um de cada vez: nunca ligam dois grupos ancorados.
@@ -161,6 +176,16 @@ class Correlator:
         for event in events:
             members[sets.find(event.id)].append(event)
         return [self._group(group, how, weak) for group in members.values()]
+
+    def _by_cross_keys(self, events: list[EventRef], sets: _Sets) -> None:
+        """Mesma chave do Mapa, dentro da janela dele: o mesmo fluxo em sistemas diferentes."""
+        buckets: dict[str, list[EventRef]] = defaultdict(list)
+        for event in events:
+            for key in event.cross_keys:
+                buckets[key].append(event)
+        for key in sorted(buckets):
+            for event, other in _pairs(buckets[key], self.settings.window_of(key)):
+                sets.union(event.id, other.id)
 
     def _by_reference(
         self,
@@ -290,6 +315,7 @@ class Correlator:
         keys = {
             "execution_id": sorted({e.execution_id for e in events if e.execution_id}),
             "trace_id": sorted({e.trace_id for e in events if e.trace_id}),
+            "cross_system": sorted({key for e in events for key in e.cross_keys}),
             "business_reference": sorted(
                 {e.business_reference for e in events if e.business_reference}
             ),

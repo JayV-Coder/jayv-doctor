@@ -1,0 +1,21 @@
+[project]
+name = "aid-notifier"
+version = "0.0.0"
+description = "Worker de alertas: avalia as Regras e entrega por push, e-mail, Slack e Teams"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "aid-alerts",
+    "aid-db",
+    "fastapi>=0.162",
+    "httpx>=0.28",
+    "pywebpush>=2.0",
+    "sqlalchemy[asyncio]>=2.0",
+]
+
+[tool.uv.sources]
+aid-alerts = { workspace = true }
+aid-db = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.9.5,<0.10"]
+build-backend = "uv_build"

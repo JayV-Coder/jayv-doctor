@@ -55,12 +55,15 @@ async def leftovers(url: str, tenant: str) -> list[str]:
             )
             if objects:
                 found.append(f"storage.objects: {objects}")
-            # Os Conectores da Organização ficam no comprovante; o segredo leva o id no nome.
+            # Conectores e canais da Organização ficam no comprovante; o segredo leva o id no nome.
             secrets = await connection.scalar(
                 text(
                     "select count(*) from vault.secrets s where s.name in (select"
                     " 'doctor/connector/' || jsonb_array_elements_text(r.removed -> 'connectors')"
-                    " from doctor.deletion_receipts r where r.tenant_id = cast(:t as uuid))"
+                    " from doctor.deletion_receipts r where r.tenant_id = cast(:t as uuid)"
+                    " union all select 'doctor/channel/'"
+                    " || jsonb_array_elements_text(coalesce(r.removed -> 'notification_channels',"
+                    " '[]')) from doctor.deletion_receipts r where r.tenant_id = cast(:t as uuid))"
                 ),
                 {"t": tenant},
             )

@@ -31,6 +31,46 @@ isOneToOne: false
       referencedColumns: ["tenant_id","id"]
     }
                   ]
+                },"alert_preferences": {
+                  Row: {
+                    "created_at": string,"id": string,"quiet_hours": Json | null,"tenant_id": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"quiet_hours"?: Json | null,"tenant_id"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"quiet_hours"?: Json | null,"tenant_id"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "alert_preferences_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"alert_rules": {
+                  Row: {
+                    "channels": NonNullable<Json>,"conditions": NonNullable<Json>,"created_at": string,"created_by": string | null,"enabled": boolean,"id": string,"name": string,"quiet_hours": Json | null,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "channels"?: NonNullable<Json>,"conditions": NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"enabled"?: boolean,"id"?: string,"name": string,"quiet_hours"?: Json | null,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "channels"?: NonNullable<Json>,"conditions"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"enabled"?: boolean,"id"?: string,"name"?: string,"quiet_hours"?: Json | null,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "alert_rules_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"audit_logs": {
                   Row: {
                     "action": string,"actor_id": string | null,"actor_type": string,"after": Json | null,"before": Json | null,"id": number,"ip": unknown,"occurred_at": string,"request_id": string | null,"resource_id": string | null,"resource_type": string | null,"tenant_id": string,"user_agent": string | null
@@ -725,14 +765,14 @@ isOneToOne: false
                   ]
                 },"executions": {
                   Row: {
-                    "closed_at": string | null,"correlation_keys": NonNullable<Json>,"created_at": string,"duration_ms": number,"event_count": number,"first_event_at": string,"id": string,"integration_id": string,"last_activity_at": string,"last_event_at": string,"low_confidence": boolean,"merged_into": string | null,"status": string,"tenant_id": string,"updated_at": string
+                    "closed_at": string | null,"correlation_keys": NonNullable<Json>,"created_at": string,"duration_ms": number,"event_count": number,"first_event_at": string,"id": string,"integration_id": string,"last_activity_at": string,"last_event_at": string,"low_confidence": boolean,"merged_into": string | null,"reconciled_at": string | null,"status": string,"tenant_id": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "closed_at"?: string | null,"correlation_keys"?: NonNullable<Json>,"created_at"?: string,"duration_ms"?: number,"event_count"?: number,"first_event_at": string,"id"?: string,"integration_id": string,"last_activity_at"?: string,"last_event_at": string,"low_confidence"?: boolean,"merged_into"?: string | null,"status"?: string,"tenant_id": string,"updated_at"?: string
+                    "closed_at"?: string | null,"correlation_keys"?: NonNullable<Json>,"created_at"?: string,"duration_ms"?: number,"event_count"?: number,"first_event_at": string,"id"?: string,"integration_id": string,"last_activity_at"?: string,"last_event_at": string,"low_confidence"?: boolean,"merged_into"?: string | null,"reconciled_at"?: string | null,"status"?: string,"tenant_id": string,"updated_at"?: string
                   }
                   Update: {
-                    "closed_at"?: string | null,"correlation_keys"?: NonNullable<Json>,"created_at"?: string,"duration_ms"?: number,"event_count"?: number,"first_event_at"?: string,"id"?: string,"integration_id"?: string,"last_activity_at"?: string,"last_event_at"?: string,"low_confidence"?: boolean,"merged_into"?: string | null,"status"?: string,"tenant_id"?: string,"updated_at"?: string
+                    "closed_at"?: string | null,"correlation_keys"?: NonNullable<Json>,"created_at"?: string,"duration_ms"?: number,"event_count"?: number,"first_event_at"?: string,"id"?: string,"integration_id"?: string,"last_activity_at"?: string,"last_event_at"?: string,"low_confidence"?: boolean,"merged_into"?: string | null,"reconciled_at"?: string | null,"status"?: string,"tenant_id"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -1191,6 +1231,58 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"notification_channels": {
+                  Row: {
+                    "config": NonNullable<Json>,"created_at": string,"created_by": string | null,"id": string,"name": string,"secret_id": string | null,"tenant_id": string,"type": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "config"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"id"?: string,"name": string,"secret_id"?: string | null,"tenant_id": string,"type": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "config"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"id"?: string,"name"?: string,"secret_id"?: string | null,"tenant_id"?: string,"type"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "notification_channels_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"notification_deliveries": {
+                  Row: {
+                    "channel_id": string | null,"created_at": string,"error": string | null,"id": string,"rule_id": string | null,"status": string,"subject": string,"tenant_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "channel_id"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"rule_id"?: string | null,"status": string,"subject": string,"tenant_id": string
+                  }
+                  Update: {
+                    "channel_id"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"rule_id"?: string | null,"status"?: string,"subject"?: string,"tenant_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "notification_deliveries_tenant_id_channel_id_fkey"
+      columns: ["tenant_id","channel_id"]
+isOneToOne: false
+      referencedRelation: "notification_channels"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "notification_deliveries_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "notification_deliveries_tenant_id_rule_id_fkey"
+      columns: ["tenant_id","rule_id"]
+isOneToOne: false
+      referencedRelation: "alert_rules"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
                 },"outbox_messages": {
                   Row: {
                     "attempts": number,"created_at": string,"id": number,"payload": NonNullable<Json>,"published_at": string | null,"tenant_id": string,"topic": string,"traceparent": string | null
@@ -1238,6 +1330,26 @@ isOneToOne: false
                   }
                   Relationships: [
 
+                  ]
+                },"push_subscriptions": {
+                  Row: {
+                    "auth": string,"created_at": string,"endpoint": string,"id": string,"last_success_at": string | null,"p256dh": string,"tenant_id": string,"updated_at": string,"user_agent": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "auth": string,"created_at"?: string,"endpoint": string,"id"?: string,"last_success_at"?: string | null,"p256dh": string,"tenant_id"?: string,"updated_at"?: string,"user_agent"?: string | null,"user_id"?: string
+                  }
+                  Update: {
+                    "auth"?: string,"created_at"?: string,"endpoint"?: string,"id"?: string,"last_success_at"?: string | null,"p256dh"?: string,"tenant_id"?: string,"updated_at"?: string,"user_agent"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "push_subscriptions_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"raw_log_objects": {
                   Row: {
@@ -1560,8 +1672,16 @@ isOneToOne: false
 "agent_seen":
 { Args: { "secret_hash": string,"version": string }; Returns: undefined
                            },
+"alert_audience":
+{ Args: { "everyone": boolean,"tenant": string }; Returns: {
+              "email": string,"quiet_hours": Json,"user_id": string
+            }[]
+                           },
 "cancel_tenant_deletion":
 { Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"claim_push_endpoint":
+{ Args: { "endpoint": string }; Returns: undefined
                            },
 "create_agent":
 { Args: { "config": Json,"integration_id": string,"name": string,"token_hash": string }; Returns: string
@@ -1581,6 +1701,9 @@ isOneToOne: false
 { Args: { "content_type": string,"filename": string,"size_bytes": number,"title": string }; Returns: {
               "id": string,"storage_path": string
             }[]
+                           },
+"create_notification_channel":
+{ Args: { "config": Json,"name": string,"secret": string,"type": string }; Returns: string
                            },
 "create_organization":
 { Args: { "llm_provider": string,"name": string,"segment": string,"slug": string }; Returns: string
@@ -1607,6 +1730,9 @@ isOneToOne: false
                            },
 "delete_knowledge_document":
 { Args: { "target": string }; Returns: string
+                           },
+"delete_notification_channel":
+{ Args: { "target": string }; Returns: undefined
                            },
 "diagnosis_is_final":
 { Args: { "status": string }; Returns: boolean
@@ -1656,8 +1782,14 @@ isOneToOne: false
 "freeze_tenant":
 { Args: { "tenant": string }; Returns: undefined
                            },
+"get_channel_secret":
+{ Args: { "target": string }; Returns: string
+                           },
 "get_connector_secret":
 { Args: { "target": string }; Returns: string
+                           },
+"has_alert_rules":
+{ Args: { "kind": string,"tenant": string }; Returns: boolean
                            },
 "has_member_role":
 { Args: { "roles": (string)[] }; Returns: boolean

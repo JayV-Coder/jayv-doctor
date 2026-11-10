@@ -10,6 +10,7 @@ Todas as rotas ficam em `/api/v1`, com `Authorization: Bearer <JWT do Supabase>`
 | Importação de arquivos | [imports.md](imports.md) |
 | Integrações e Conectores | [integrations.md](integrations.md), [connectors.md](connectors.md) |
 | Agentes locais (SAP on-premises) | [agents.md](agents.md) |
+| Alertas e notificações (Regras, canais, push) | [alerts.md](alerts.md) |
 | Mapas de identificadores (correlação entre sistemas, enriquecimento) | [correlation.md](correlation.md) |
 | Execuções, Eventos e Logs brutos | [executions.md](executions.md) |
 | Incidentes e Dashboard | [incidents.md](incidents.md), [dashboard.md](dashboard.md) |

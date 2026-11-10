@@ -23,6 +23,7 @@ run "topicos_tem_push_autenticado_e_dlq_apos_5_tentativas" {
     condition = toset(keys(module.topics)) == toset([
       "ingestion.raw", "ingestion.normalized", "correlation.requested", "diagnosis.requested", "connector.sync",
       "rules.evaluate", "incident.opened", "incident.updated", "knowledge.index", "diagnosis.published", "usage.threshold", "report.requested",
+      "alert.evaluate",
       "enrichment.requested",
     ])
     error_message = "Os cinco tópicos do ticket precisam existir."
@@ -57,7 +58,7 @@ run "workers_sao_privados_e_a_api_so_entra_pelo_load_balancer" {
     error_message = "A API não pode ficar exposta fora do Load Balancer."
   }
   assert {
-    condition     = toset(keys(module.workers)) == toset(["ingestion", "correlation", "diagnosis", "connectors", "relay"])
+    condition     = toset(keys(module.workers)) == toset(["ingestion", "correlation", "diagnosis", "connectors", "notifier", "relay"])
     error_message = "Um serviço por worker."
   }
 }
@@ -66,7 +67,7 @@ run "cada_servico_tem_conta_propria_sem_chave_exportada" {
   command = plan
 
   assert {
-    condition     = length(toset(concat([google_service_account.api.account_id], [for account in google_service_account.worker : account.account_id]))) == 6
+    condition     = length(toset(concat([google_service_account.api.account_id], [for account in google_service_account.worker : account.account_id]))) == 7
     error_message = "API e workers usam service accounts separadas."
   }
 }

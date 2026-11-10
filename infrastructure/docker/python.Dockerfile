@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir uv==0.9.5
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY apps/api apps/api
+COPY packages/alerts packages/alerts
 COPY packages/connectors packages/connectors
 COPY packages/contracts packages/contracts
 COPY packages/correlation packages/correlation
@@ -22,6 +23,7 @@ COPY workers/connectors workers/connectors
 COPY workers/correlation workers/correlation
 COPY workers/diagnosis workers/diagnosis
 COPY workers/ingestion workers/ingestion
+COPY workers/notifier workers/notifier
 COPY workers/relay workers/relay
 COPY workers/runtime workers/runtime
 RUN uv sync --frozen --no-dev --no-editable --package "$PACKAGE"

@@ -9,7 +9,7 @@ requires-python = ">=3.12,<3.13"
 package = false
 
 [tool.uv.workspace]
-members = ["apps/agent", "apps/api", "packages/connectors", "packages/contracts", "packages/correlation", "packages/db", "packages/diagnosis-engine", "packages/evaluation", "packages/knowledge", "packages/observability", "packages/security", "workers/connectors", "workers/correlation", "workers/diagnosis", "workers/ingestion", "workers/relay", "workers/runtime"]
+members = ["apps/agent", "apps/api", "packages/alerts", "packages/connectors", "packages/contracts", "packages/correlation", "packages/db", "packages/diagnosis-engine", "packages/evaluation", "packages/knowledge", "packages/observability", "packages/security", "workers/connectors", "workers/correlation", "workers/diagnosis", "workers/ingestion", "workers/notifier", "workers/relay", "workers/runtime"]
 
 [dependency-groups]
 dev = [
@@ -52,6 +52,8 @@ warn_unreachable = true
 # Nomes de arquivos de teste são únicos no repositório (ex.: test_api_smoke.py),
 # porque o mypy trata cada pasta tests/ sem __init__.py como módulos de topo.
 files = [
+    "packages/alerts/src",
+    "packages/alerts/tests",
     "apps/agent/src",
     "apps/agent/tests",
     "apps/api/src",
@@ -80,6 +82,8 @@ files = [
     "workers/connectors/src",
     "workers/connectors/tests",
     "workers/ingestion/src",
+    "workers/notifier/src",
+    "workers/notifier/tests",
     "workers/ingestion/tests",
     "workers/relay/src",
     "workers/relay/tests",
@@ -99,7 +103,7 @@ root_package = "aid_api"
 [[tool.importlinter.contracts]]
 name = "Módulos independentes sobre o core"
 type = "layers"
-layers = ["aid_api.main", "aid_api.health | aid_api.orgs | aid_api.integrations | aid_api.imports | aid_api.ingestion | aid_api.connectors | aid_api.executions | aid_api.incidents | aid_api.dashboard | aid_api.knowledge | aid_api.diagnoses | aid_api.audit | aid_api.privacy | aid_api.usage | aid_api.reports | aid_api.agents | aid_api.correlation", "aid_api.core"]
+layers = ["aid_api.main", "aid_api.health | aid_api.orgs | aid_api.integrations | aid_api.imports | aid_api.ingestion | aid_api.connectors | aid_api.executions | aid_api.incidents | aid_api.dashboard | aid_api.knowledge | aid_api.diagnoses | aid_api.audit | aid_api.privacy | aid_api.usage | aid_api.reports | aid_api.agents | aid_api.alerts | aid_api.correlation", "aid_api.core"]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib --strict-markers"

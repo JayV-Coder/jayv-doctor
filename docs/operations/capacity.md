@@ -23,8 +23,8 @@ Premissa do PRD §12: **100 mil Eventos por dia** e **1.000 Diagnósticos por m�
 O `aid_db` usa `NullPool` (ADR-0009): o pool é o do Supavisor, em modo transação. No pior caso, cada requisição em curso abre uma conexão de cliente:
 
 ```text
-clientes = api_max_instances × api_concurrency + workers × worker_max_instances × worker_concurrency
-         = 4 × 40 + 5 × 3 × 8 = 280  ≤  supavisor_client_budget (300)
+clientes = api_max_instances × api_concurrency + Σ(max_instances de cada worker) × worker_concurrency
+         = 4 × 40 + (5 × 3 + 1) × 8 = 288  ≤  supavisor_client_budget (300)
 ```
 
 O projeto Supabase é compartilhado com o jayv-coder em produção: o Doctor fica com uma **fatia** dos clientes do Supavisor (`supavisor_client_budget`). O `check "conexoes_cabem_no_supavisor"` do Terraform barra o plano que passar dela, e o teste `dimensionamento_acima_do_supavisor_e_barrado` garante que a checagem existe.
@@ -38,7 +38,7 @@ O `pool_size` do Supavisor (conexões reais no Postgres) é configurado no paine
 | API | 40 | 4 | 50 Usuários a ~1 requisição/s cabem em 2 instâncias; 4 deixam folga para o pico de ingestão (1 lote/s por Integração) |
 | Workers (cada) | 8 | 3 | push do Pub/Sub com ack até 600 s; a ingestão de um lote de 200 Eventos leva centenas de ms |
 
-Os valores são variáveis da stack (`api_max_instances`, `api_concurrency`, `worker_max_instances`, `worker_concurrency`). Os resultados da carga calibram os números.
+Os valores são variáveis da stack (`api_max_instances`, `api_concurrency`, `worker_max_instances`, `worker_concurrency`). O `notifier` (#41) tem `max_instances = 1` fixo: volume baixo e a deduplicação serializa por assunto. Os resultados da carga calibram os números.
 
 ### Compute do Supabase
 

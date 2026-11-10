@@ -109,3 +109,15 @@ variable "platform_operators" {
   type        = list(string)
   default     = []
 }
+
+variable "vapid_public_key" {
+  description = "Chave pública VAPID do Web Push (base64url), entregue ao navegador pela API (#41). Vazia desliga o push."
+  type        = string
+  default     = ""
+}
+
+variable "vapid_subject" {
+  description = "Contato do remetente do Web Push (VAPID `sub`), ex.: mailto:plantao@empresa.com."
+  type        = string
+  default     = "mailto:alertas@jayv.dev"
+}

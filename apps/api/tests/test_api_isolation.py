@@ -38,6 +38,15 @@ BODY_CASES: list[tuple[str, str, dict[str, Any]]] = [
     ("PATCH", "/api/v1/incidents/{own_incident}", {"assignee_id": "{user_b}"}),
     (
         "POST",
+        "/api/v1/alert-rules",
+        {
+            "name": "Invasora",
+            "conditions": {"type": "connector_failing"},
+            "channels": ["{channel}"],
+        },
+    ),
+    (
+        "POST",
         "/api/v1/integrations/{own_integration}/correlation-mappings",
         {
             "name": "Pedido",
@@ -56,6 +65,10 @@ ROUTES: list[tuple[str, str, str, dict[str, Any] | None]] = [
     ("DELETE", "/api/v1/invitations/{target}", "invitation", None),
     ("PATCH", "/api/v1/integrations/{target}", "integration", {"name": "Invadida"}),
     ("POST", "/api/v1/integrations/{target}/archive", "integration", None),
+    ("PATCH", "/api/v1/alert-rules/{target}", "alert_rule", {"enabled": False}),
+    ("DELETE", "/api/v1/alert-rules/{target}", "alert_rule", None),
+    ("DELETE", "/api/v1/notification-channels/{target}", "channel", None),
+    ("DELETE", "/api/v1/push-subscriptions/{target}", "push", None),
     ("GET", "/api/v1/integrations/{target}/correlation-mappings", "integration", None),
     (
         "POST",
@@ -171,6 +184,9 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
             "report",
             "share",
             "agent",
+            "alert_rule",
+            "channel",
+            "push",
             "mapping",
             "document",
             "own_integration",
@@ -225,6 +241,13 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
         " :incident, 1, 'published', 'done', 'hybrid', 'hybrid', 'k', now())",
         "insert into doctor.diagnosis_feedback (tenant_id, diagnosis_id, reviewer_id, verdict)"
         " values (:tenant, :diagnosis, :user_b, 'accepted')",
+        "insert into doctor.notification_channels (id, tenant_id, type, name, config)"
+        " values (:channel, :tenant, 'email', 'Gestores', '{}')",
+        "insert into doctor.alert_rules (id, tenant_id, name, conditions, channels)"
+        " values (:alert_rule, :tenant, 'Falhas', '{\"type\": \"connector_failing\"}', '[]')",
+        "insert into doctor.push_subscriptions (id, tenant_id, user_id, endpoint, p256dh, auth)"
+        " values (:push, :tenant, :user_b, 'https://fcm.googleapis.com/fcm/send/b',"
+        " repeat('p', 87), repeat('a', 22))",
         "insert into doctor.correlation_mappings (id, tenant_id, integration_id, name, keys)"
         " values (:mapping, :tenant, :integration, 'Pedido',"
         ' \'[{"system": "sap", "field": "execution_id"}]\')',

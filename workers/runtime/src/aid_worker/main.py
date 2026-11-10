@@ -69,6 +69,10 @@ def handlers_for(worker: str) -> dict[str, Handler]:
         from aid_diagnosis_worker.handlers import TOPICS as DIAGNOSIS_TOPICS
 
         return {topic: json_handler(handler) for topic, handler in DIAGNOSIS_TOPICS.items()}
+    if worker == "notifier":
+        from aid_notifier.handlers import TOPICS as NOTIFIER_TOPICS
+
+        return {topic: json_handler(handler) for topic, handler in NOTIFIER_TOPICS.items()}
     return {}
 
 
@@ -95,6 +99,10 @@ def routers_for(worker: str) -> list[APIRouter]:
         from aid_diagnosis_worker.handlers import router as knowledge
 
         return [knowledge]
+    if worker == "notifier":
+        from aid_notifier.handlers import router as alerts
+
+        return [alerts]
     return []
 
 

@@ -8,6 +8,8 @@ locals {
     correlation = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "300s" }
     diagnosis   = { secrets = ["supabase-db-url", "anthropic-api-key", "voyage-api-key", "supabase-service-role-key", "smtp-url"], memory = "1Gi", timeout = "600s" }
     connectors  = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "600s" }
+    # Alertas (#41, ADR-0017): só ele lê os webhooks dos canais e a chave privada do push.
+    notifier = { secrets = ["supabase-db-url", "smtp-url", "vapid-private-key"], memory = "512Mi", timeout = "300s", max_instances = 1 }
     # Relay da outbox: o único que publica nos tópicos, chamado pelo Cloud Scheduler.
     relay = { secrets = ["supabase-db-url"], memory = "256Mi", timeout = "60s" }
   }
@@ -32,6 +34,8 @@ locals {
     "usage.threshold"  = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
     "report.requested" = { worker = "diagnosis", publishers = ["relay"], ack_deadline = 600 }
     "connector.sync"   = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
+    # Alertas (#41): Incidente, Diagnóstico e Conector em falha, por trigger na outbox.
+    "alert.evaluate" = { worker = "notifier", publishers = ["relay"], ack_deadline = 300 }
     # Consultas de leitura do enriquecimento (#40): só o worker de Conectores lê credenciais.
     "enrichment.requested" = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
   }
@@ -46,6 +50,8 @@ locals {
     "voyage-api-key"  = "VOYAGE_API_KEY"
     "hmac-master-key" = "HMAC_MASTER_KEY"
     "smtp-url"        = "SMTP_URL"
+    # Web Push (#41): a chave privada VAPID, só no worker de alertas.
+    "vapid-private-key" = "AID_VAPID_PRIVATE_KEY"
     # Só o worker de ingestão: lê o Log bruto no Storage como job de plataforma.
     "supabase-service-role-key" = "SUPABASE_SERVICE_ROLE_KEY"
   }
@@ -151,6 +157,8 @@ module "api" {
     AID_TRUSTED_PROXY_HOPS   = "2"
     SUPABASE_PUBLISHABLE_KEY = var.supabase_publishable_key
     APP_URL                  = var.app_url
+    # Chave pública do push (#41): o navegador assina com ela; a privada fica no `notifier`.
+    AID_VAPID_PUBLIC_KEY = var.vapid_public_key
     # Liga os logs JSON ao trace (`logging.googleapis.com/trace`, #34).
     GCP_PROJECT_ID = var.project_id
     OTEL_ENABLED   = "true"
@@ -188,7 +196,7 @@ module "workers" {
   subnetwork          = module.network.subnetwork_id
   memory              = each.value.memory
   timeout             = each.value.timeout
-  max_instances       = var.worker_max_instances
+  max_instances       = lookup(each.value, "max_instances", var.worker_max_instances)
   concurrency         = var.worker_concurrency
   deletion_protection = var.environment == "prod"
   env = merge(
@@ -200,6 +208,8 @@ module "workers" {
     },
     # O backup do Storage (#33) roda no worker de diagnóstico, que tem a chave do Storage.
     each.key == "diagnosis" ? { BACKUP_BUCKET = google_storage_bucket.storage_backup.name } : {},
+    # Os links das notificações levam ao app (#41).
+    each.key == "notifier" ? { APP_URL = var.app_url, AID_VAPID_SUBJECT = var.vapid_subject } : {},
   )
   secret_env = { for secret in each.value.secrets : local.secret_env[secret] => secret }
   depends_on = [module.secrets]
@@ -474,6 +484,36 @@ resource "google_cloud_scheduler_job" "retention" {
   depends_on = [module.project]
 }
 
+resource "google_cloud_run_v2_service_iam_member" "scheduler_invoker_notifier" {
+  project  = var.project_id
+  location = var.region
+  name     = module.workers["notifier"].name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.scheduler.email}"
+}
+
+# Alertas (#41): a cada minuto, taxa de erro e Diagnóstico aguardando revisão.
+resource "google_cloud_scheduler_job" "alerts_scan" {
+  project          = var.project_id
+  region           = var.region
+  name             = "${local.name_prefix}-alerts-scan"
+  schedule         = "* * * * *"
+  time_zone        = "Etc/UTC"
+  attempt_deadline = "120s"
+
+  http_target {
+    http_method = "POST"
+    uri         = "${module.workers["notifier"].uri}/alerts/scan"
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = module.workers["notifier"].uri
+    }
+  }
+
+  depends_on = [module.project]
+}
+
 # Enriquecimento (#40): a cada 5 min, consulta sem resposta vira `failed` e o Diagnóstico segue.
 resource "google_cloud_scheduler_job" "enrichment_expire" {
   project          = var.project_id
@@ -606,7 +646,7 @@ check "conexoes_cabem_no_supavisor" {
   assert {
     condition = (
       var.api_max_instances * var.api_concurrency
-      + length(local.workers) * var.worker_max_instances * var.worker_concurrency
+      + sum([for worker in local.workers : lookup(worker, "max_instances", var.worker_max_instances)]) * var.worker_concurrency
     ) <= var.supavisor_client_budget
     error_message = "Instâncias × concorrência passam da fatia do Supavisor reservada ao Doctor."
   }

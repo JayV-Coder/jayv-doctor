@@ -22,6 +22,7 @@ export default async function MorePage() {
         <ListItem href="/integracoes" title="Integrações" />
         <ListItem href="/conhecimento" title="Base de conhecimento" />
         <ListItem href="/uso" title="Uso e cotas" />
+        <ListItem href="/alertas" title="Alertas" />
         {isManager(role) && <ListItem href="/membros" title="Membros e convites" />}
         {isManager(role) && <ListItem href="/auditoria" title="Auditoria" />}
       </ul>

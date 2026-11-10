@@ -4,6 +4,7 @@
 !apps/agent/**
 !apps/api/**
 !packages/evaluation/**
+!packages/alerts/**
 !packages/connectors/**
 !packages/contracts/**
 !packages/correlation/**
@@ -16,6 +17,7 @@
 !workers/correlation/**
 !workers/diagnosis/**
 !workers/ingestion/**
+!workers/notifier/**
 !workers/relay/**
 !workers/runtime/**
 **/node_modules

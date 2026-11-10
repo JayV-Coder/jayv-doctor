@@ -19,6 +19,7 @@ const MORE = "/mais";
 
 const TITLES: Record<string, string> = {
   "/membros": "Membros",
+  "/alertas": "Alertas",
   "/integracoes": "Integrações",
   "/importar": "Importar logs",
   "/eventos": "Evento original",

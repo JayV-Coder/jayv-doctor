@@ -73,3 +73,38 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+// Push dos alertas (#41): o servidor manda só título, corpo curto e o link do Incidente.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  const title = typeof data.title === "string" ? data.title : "Integration AI Doctor";
+  const url = typeof data.url === "string" ? data.url : "/";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: typeof data.body === "string" ? data.body : "",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      tag: url,
+      data: { url },
+    }),
+  );
+});
+
+// Só abre caminho do próprio app: o link vem do servidor, mas a notificação não navega para fora.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || "/", self.location.origin);
+  const url = target.origin === self.location.origin ? target.pathname + target.search : "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const open = windows.find((client) => new URL(client.url).origin === self.location.origin);
+      if (open) return open.navigate(url).then((client) => (client ?? open).focus());
+      return self.clients.openWindow(url);
+    }),
+  );
+});

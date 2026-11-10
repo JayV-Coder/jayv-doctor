@@ -190,3 +190,19 @@ async def test_queda_do_pub_sub_nao_gasta_tentativa(engine: AsyncEngine, tenant:
     stats = await drain(engine, Down(PROJECT, emulator_host=EMULATOR))
     assert stats.stopped
     assert await state(engine, message_id) == (False, 0)
+
+
+@pytest.mark.asyncio
+async def test_rodada_que_acompanha_publica_o_que_chega_no_meio(
+    engine: AsyncEngine, tenant: str
+) -> None:
+    """#41: com `follow`, a mensagem gravada durante a rodada sai nela, em segundos."""
+    topic = f"relay.test.{letters()}"
+    await topic_with_subscription(topic)
+
+    async def later() -> int:
+        await asyncio.sleep(0.5)
+        return await enqueue(engine, tenant, topic, {"incident_id": "x"})
+
+    _, message_id = await asyncio.gather(drain(engine, publisher(), seconds=3, follow=0.2), later())
+    assert await state(engine, message_id) == (True, 0)

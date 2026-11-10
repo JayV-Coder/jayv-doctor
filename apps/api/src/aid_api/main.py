@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from aid_api import __version__
 from aid_api.agents import router as agents
+from aid_api.alerts import router as alerts
 from aid_api.audit import router as audit
 from aid_api.connectors import router as connectors
 from aid_api.core import errors, request_meta, telemetry
@@ -37,6 +38,7 @@ def create_app() -> FastAPI:
     app.include_router(ingestion.events)
     app.include_router(agent_router.agent)
     app.include_router(agents.router)
+    app.include_router(alerts.router)
     app.include_router(connectors.router)
     app.include_router(executions.router)
     app.include_router(incidents.router)

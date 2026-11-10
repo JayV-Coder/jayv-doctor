@@ -36,6 +36,15 @@ BODY_CASES: list[tuple[str, str, dict[str, Any]]] = [
     ),
     ("POST", "/api/v1/ingestion-tokens", {"name": "Token", "integration_id": "{integration}"}),
     ("PATCH", "/api/v1/incidents/{own_incident}", {"assignee_id": "{user_b}"}),
+    (
+        "POST",
+        "/api/v1/alert-rules",
+        {
+            "name": "Invasora",
+            "conditions": {"type": "connector_failing"},
+            "channels": ["{channel}"],
+        },
+    ),
 ]
 
 # (método, caminho, recurso de B no parâmetro, corpo)
@@ -47,6 +56,10 @@ ROUTES: list[tuple[str, str, str, dict[str, Any] | None]] = [
     ("DELETE", "/api/v1/invitations/{target}", "invitation", None),
     ("PATCH", "/api/v1/integrations/{target}", "integration", {"name": "Invadida"}),
     ("POST", "/api/v1/integrations/{target}/archive", "integration", None),
+    ("PATCH", "/api/v1/alert-rules/{target}", "alert_rule", {"enabled": False}),
+    ("DELETE", "/api/v1/alert-rules/{target}", "alert_rule", None),
+    ("DELETE", "/api/v1/notification-channels/{target}", "channel", None),
+    ("DELETE", "/api/v1/push-subscriptions/{target}", "push", None),
     ("POST", "/api/v1/imports/{target}/upload-url", "import", None),
     ("POST", "/api/v1/imports/{target}/complete", "import", None),
     ("POST", "/api/v1/ingestion-tokens/{target}/revoke", "token", None),
@@ -153,6 +166,9 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
             "report",
             "share",
             "agent",
+            "alert_rule",
+            "channel",
+            "push",
             "document",
             "own_integration",
             "own_incident",
@@ -206,6 +222,13 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
         " :incident, 1, 'published', 'done', 'hybrid', 'hybrid', 'k', now())",
         "insert into doctor.diagnosis_feedback (tenant_id, diagnosis_id, reviewer_id, verdict)"
         " values (:tenant, :diagnosis, :user_b, 'accepted')",
+        "insert into doctor.notification_channels (id, tenant_id, type, name, config)"
+        " values (:channel, :tenant, 'email', 'Gestores', '{}')",
+        "insert into doctor.alert_rules (id, tenant_id, name, conditions, channels)"
+        " values (:alert_rule, :tenant, 'Falhas', '{\"type\": \"connector_failing\"}', '[]')",
+        "insert into doctor.push_subscriptions (id, tenant_id, user_id, endpoint, p256dh, auth)"
+        " values (:push, :tenant, :user_b, 'https://fcm.googleapis.com/fcm/send/b',"
+        " repeat('p', 87), repeat('a', 22))",
         "insert into doctor.agents (id, tenant_id, integration_id, name, registration_token_hash,"
         " registration_expires_at) values (:agent, :tenant, :integration, 'Agente',"
         " repeat('a', 64), now() + interval '1 day')",
@@ -340,16 +363,20 @@ async def test_recurso_de_outra_organizacao_responde_404(
                 if answer != baseline:
                     leaks[f"{method} {path}"] = (answer, baseline)
 
+            def fill(value: Any) -> Any:
+                if isinstance(value, dict):
+                    return {key: fill(item) for key, item in value.items()}
+                if isinstance(value, list):
+                    return [fill(item) for item in value]
+                if isinstance(value, str) and value.startswith("{"):
+                    return ids[value[1:-1]]
+                return value
+
             for method, path, payload in BODY_CASES:
-                body = {
-                    key: ids[value[1:-1]]
-                    if isinstance(value, str) and value.startswith("{")
-                    else value
-                    for key, value in payload.items()
-                }
-                response = await client.request(
-                    method, path.replace("{own_incident}", ids["own_incident"]), json=body
+                target = path.replace("{own_incident}", ids["own_incident"]).replace(
+                    "{own_integration}", ids["own_integration"]
                 )
+                response = await client.request(method, target, json=fill(payload))
                 outcomes[f"{method} {path} (id de B no corpo)"] = response.status_code
         assert {
             route: status for route, status in outcomes.items() if status not in (404, 422)

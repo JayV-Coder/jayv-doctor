@@ -4,6 +4,7 @@ version = "0.0.0"
 description = "Worker de diagnóstico: Regras sobre a Execução fechada e abertura de Incidentes"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "aid-alerts",
     "aid-observability",
     "aid-knowledge",
     "aid-db",
@@ -14,6 +15,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
+aid-alerts = { workspace = true }
 aid-observability = { workspace = true }
 aid-knowledge = { workspace = true }
 aid-db = { workspace = true }

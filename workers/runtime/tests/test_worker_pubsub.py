@@ -76,7 +76,7 @@ def test_so_o_relay_expoe_a_rota_do_scheduler(monkeypatch: Any) -> None:
     import aid_relay.handlers as relay
     from aid_relay.relay import Stats
 
-    async def drain(*args: object) -> Stats:
+    async def drain(*args: object, **kwargs: object) -> Stats:
         return Stats(published=3)
 
     monkeypatch.setattr(relay, "drain", drain)
@@ -92,6 +92,16 @@ def test_worker_de_conectores_registra_o_topico_e_o_agendador() -> None:
 
     assert set(handlers_for("connectors")) == {"connector.sync"}
     assert TestClient(create_app("ingestion", {})).post("/schedule").status_code == 404
+
+
+def test_worker_de_alertas_registra_o_topico_e_a_varredura() -> None:
+    from aid_worker.main import create_app as build
+    from aid_worker.main import handlers_for, routers_for
+
+    assert set(handlers_for("notifier")) == {"alert.evaluate"}
+    paths = {route.path for router in routers_for("notifier") for route in router.routes}  # type: ignore[attr-defined]
+    assert paths == {"/alerts/scan"}
+    assert build("diagnosis", {}) is not None
 
 
 def test_falha_do_handler_e_registrada_com_o_contexto_e_reentregue(

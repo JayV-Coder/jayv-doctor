@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import type { ApiComponents } from "@aid/contracts";
 import { cache } from "react";
+import { toQuiet, type Quiet } from "@/lib/alerts/labels";
 import { createClient } from "@/lib/supabase/server";
 
 const API_URL = process.env.API_URL ?? "http://127.0.0.1:8000";
@@ -19,6 +20,9 @@ export type ExecutionDetail = Schemas["ExecutionDetail"];
 export type EventDetail = Schemas["EventDetail"];
 export type ExecutionSearch = Schemas["ExecutionSearch"];
 export type Connector = Schemas["Connector"];
+export type AlertRule = Schemas["AlertRule"];
+export type NotificationChannel = Schemas["Channel"];
+export type PushSubscriptionInfo = Schemas["PushSubscription"];
 export type Agent = Schemas["Agent"];
 export type RegistrationToken = Schemas["RegistrationToken"];
 export type ConnectorSync = Schemas["ConnectorSync"];
@@ -89,6 +93,36 @@ async function getOne<T>(path: string): Promise<T | "not_found" | null> {
   const response = await apiFetch(path).catch(() => null);
   if (response?.status === 404 || response?.status === 422) return "not_found";
   return response?.ok ? ((await response.json()) as T) : null;
+}
+
+async function getList<T>(path: string): Promise<T | null> {
+  const response = await apiFetch(path).catch(() => null);
+  return response?.ok ? ((await response.json()) as T) : null;
+}
+
+// Tela 20 (#41): Regras, canais, push e silêncio; `null` se a API não respondeu.
+export async function getAlerts(): Promise<{
+  rules: AlertRule[];
+  channels: NotificationChannel[];
+  subscriptions: PushSubscriptionInfo[];
+  quiet: Quiet;
+  pushKey: string | null;
+} | null> {
+  const [rules, channels, subscriptions, preferences, key] = await Promise.all([
+    getList<AlertRule[]>("/alert-rules"),
+    getList<NotificationChannel[]>("/notification-channels"),
+    getList<PushSubscriptionInfo[]>("/push-subscriptions"),
+    getList<Schemas["Preferences"]>("/alert-preferences"),
+    getList<Schemas["PushKey"]>("/push/key"),
+  ]);
+  if (!rules || !channels || !subscriptions || !preferences) return null;
+  return {
+    rules,
+    channels,
+    subscriptions,
+    quiet: toQuiet(preferences.quiet_hours),
+    pushKey: key?.public_key ?? null,
+  };
 }
 
 export async function getExecution(id: string): Promise<ExecutionDetail | "not_found" | null> {

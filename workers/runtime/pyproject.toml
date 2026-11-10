@@ -9,6 +9,7 @@ dependencies = [
     "aid-correlation-worker",
     "aid-diagnosis-worker",
     "aid-ingestion",
+    "aid-notifier",
     "aid-relay",
     "fastapi>=0.162",
     "opentelemetry-exporter-gcp-trace>=1.9",
@@ -21,6 +22,7 @@ aid-connector-worker = { workspace = true }
 aid-correlation-worker = { workspace = true }
 aid-diagnosis-worker = { workspace = true }
 aid-ingestion = { workspace = true }
+aid-notifier = { workspace = true }
 aid-relay = { workspace = true }
 
 [build-system]

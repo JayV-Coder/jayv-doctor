@@ -11,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aid_relay.publisher import PubSubPublisher
-from aid_relay.relay import drain
+from aid_relay.relay import FOLLOW_SECONDS, drain
 
 
 @lru_cache
@@ -32,7 +32,7 @@ router = APIRouter()
 # Disparado pelo Cloud Scheduler: sempre 200, a próxima rodada retoma o que faltou.
 @router.post("/relay")
 async def relay() -> dict[str, int]:
-    stats = await drain(engine(), publisher())
+    stats = await drain(engine(), publisher(), follow=FOLLOW_SECONDS)
     return {"published": stats.published, "failed": stats.failed}
 
 

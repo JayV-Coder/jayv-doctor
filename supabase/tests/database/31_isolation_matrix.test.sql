@@ -94,6 +94,16 @@ begin
   insert into doctor.connectors (id, tenant_id, integration_id, provider, name)
   values (connector, t, integration, 'gcp', 'Cloud Logging');
   insert into doctor.connector_syncs (tenant_id, connector_id) values (t, connector);
+  insert into doctor.notification_channels (tenant_id, type, name, config)
+  values (t, 'email', 'E-mail dos gestores', '{"audience": "managers"}');
+  insert into doctor.alert_rules (tenant_id, name, conditions)
+  values (t, 'Crítico em prd', '{"type": "incident", "min_severity": "critical"}');
+  insert into doctor.push_subscriptions (tenant_id, user_id, endpoint, p256dh, auth)
+  values (t, owner, 'https://push.test/' || t::text, repeat('p', 87), repeat('a', 22));
+  insert into doctor.alert_preferences (tenant_id, user_id, quiet_hours)
+  values (t, owner, '{"start": "22:00", "end": "07:00"}');
+  insert into doctor.notification_deliveries (tenant_id, subject, status)
+  values (t, 'incident:x', 'sent');
   insert into doctor.ingestion_tokens (tenant_id, name, integration_id, token_hash, prefix)
   values (t, 'Token', integration, md5(t::text) || md5(t::text), 'aid_test');
   insert into doctor.ingestion_batches (tenant_id, integration_id, connector_id, events, event_count)

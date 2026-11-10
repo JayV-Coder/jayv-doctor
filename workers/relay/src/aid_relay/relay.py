@@ -10,6 +10,7 @@ relay ou do Pub/Sub encerra a rodada sem gastar tentativa de ninguém: uma queda
 abandona as mensagens. Mensagem recusada 10 vezes fica na tabela para investigação.
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -28,6 +29,9 @@ logger = logging.getLogger(__name__)
 MAX_ATTEMPTS = 10
 # Abaixo dos 60 s do Cloud Run e do Scheduler, com folga para o último lote.
 ROUND_SECONDS = 40.0
+# Com a outbox vazia, a rodada continua olhando a cada 2 s até o prazo: um alerta gravado no meio
+# da rodada sai em segundos, não no minuto seguinte (#41).
+FOLLOW_SECONDS = 2.0
 
 
 @dataclass
@@ -95,7 +99,10 @@ async def drain(
     *,
     batch: int = 100,
     seconds: float = ROUND_SECONDS,
+    follow: float | None = None,
 ) -> Stats:
+    """Publica o pendente. Com `follow`, em vez de sair quando a outbox esvazia, espera esse
+    intervalo e olha de novo, até o prazo da rodada."""
     stats = Stats()
     deadline = time.monotonic() + seconds
     async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
@@ -113,12 +120,14 @@ async def drain(
                         {"max": MAX_ATTEMPTS, "batch": batch},
                     )
                 ).all()
-                if not rows:
-                    break
-                published, rejected = await publish_batch(client, publisher, list(rows), stats)
-                await mark(connection, published, rejected)
-            stats.published += len(published)
-            stats.failed += len(rejected)
+                if rows:
+                    published, rejected = await publish_batch(client, publisher, list(rows), stats)
+                    await mark(connection, published, rejected)
+            if rows:
+                stats.published += len(published)
+                stats.failed += len(rejected)
             if len(rows) < batch:
-                break
+                if follow is None or time.monotonic() + follow >= deadline:
+                    break
+                await asyncio.sleep(follow)
     return stats

@@ -96,6 +96,31 @@ O Conector lê objetos de log de integração do cliente (`*__c`), `ApexLog` e, 
 - **Capacidades:** o teste de conexão lê a lista de objetos (`describeGlobal`) e diz quais fontes a edição tem, por exemplo "EventLogFile indisponível nesta edição". A Sincronização não repete essa chamada: uma fonte que responde `INVALID_TYPE` (não existe nesta org) ou `INSUFFICIENT_ACCESS` (o usuário não lê o objeto) fica de fora, com aviso no log, e as outras seguem. Campo inexistente (`INVALID_FIELD`, `MALFORMED_QUERY`) é erro de configuração, sem novas tentativas.
 - **Enriquecimento** (status de `Order` e `Account` por Referência): fica para o ticket #40.
 
+## SAP Integration Suite (`sap`, ticket #38)
+
+Lê os Message Processing Logs do Cloud Integration (`/api/v1/MessageProcessingLogs`, OData v2). Só lê: a service key precisa do papel de leitura de monitoração (`MonitoringDataRead`).
+
+```json
+{
+  "product": "integration_suite",
+  "api_url": "https://acme.it-cpi018.cfapps.br10.hana.ondemand.com",
+  "token_url": "https://acme.authentication.br10.hana.ondemand.com/oauth/token",
+  "include_completed": false,
+  "backfill_hours": 24,
+  "page_size": 200,
+  "requests_per_minute": 60
+}
+```
+
+- **Credencial:** a service key do plano `api` do Process Integration Runtime, `{"client_id", "client_secret"}` no Vault, trocada por token com OAuth client credentials. Token e API só em hosts da SAP BTP (`*.hana.ondemand.com`, `*.cloud.sap`), com HTTPS e sem usuário na URL (SSRF); endereço local só com `AID_SAP_ALLOW_LOOPBACK=1`, que existe só no E2E. Resposta fora do formato esperado vira erro temporário classificado.
+- **Eventos:** `FAILED`, `ESCALATED` e `RETRY` (e `COMPLETED` com `include_completed`), um por mensagem.
+  - `execution_id` = `CorrelationId`: a Execução junta os passos do iFlow e o que veio antes e depois dele;
+  - `operation` e `source.resource` = o iFlow;
+  - `error.message` = o `CustomStatus`;
+  - atributos com o Guid, o status, o sender e o receiver.
+- **Checkpoint:** `(LogEnd, MessageGuid)`, com desempate pelo Guid no mesmo instante, por `$filter`/`$orderby`/`$top`.
+- **Ainda não:** o detalhe do erro (`ErrorInformation/$value`) exige uma chamada por mensagem e fica para quando o volume do piloto mostrar a necessidade. O conector OData genérico para enriquecimento por Referência vai com o ticket #40. O assistente na tela fica para depois do piloto; por enquanto, o Conector se cria pela API.
+
 ## Google Cloud Logging (`gcp`)
 
 Config:

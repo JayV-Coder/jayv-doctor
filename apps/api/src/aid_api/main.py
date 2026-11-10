@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from aid_api import __version__
+from aid_api.agents import router as agents
 from aid_api.audit import router as audit
 from aid_api.connectors import router as connectors
 from aid_api.core import errors, request_meta, telemetry
@@ -10,6 +11,7 @@ from aid_api.executions import router as executions
 from aid_api.health import router as health
 from aid_api.imports import router as imports
 from aid_api.incidents import router as incidents
+from aid_api.ingestion import agent_router
 from aid_api.ingestion import router as ingestion
 from aid_api.integrations import router as integrations
 from aid_api.knowledge import router as knowledge
@@ -33,6 +35,8 @@ def create_app() -> FastAPI:
     app.include_router(imports.router)
     app.include_router(ingestion.tokens)
     app.include_router(ingestion.events)
+    app.include_router(agent_router.agent)
+    app.include_router(agents.router)
     app.include_router(connectors.router)
     app.include_router(executions.router)
     app.include_router(incidents.router)

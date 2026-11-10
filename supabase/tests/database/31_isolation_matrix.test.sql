@@ -78,6 +78,9 @@ begin
   values (t, diagnosis, 1, 'rule_match', match, 'INT-003', '504');
   update doctor.diagnoses set status = 'published', stage = 'done', published_at = now() where id = diagnosis;
   insert into doctor.diagnosis_feedback (tenant_id, diagnosis_id, verdict) values (t, diagnosis, 'accepted');
+  insert into doctor.agents (tenant_id, integration_id, name, status, secret_hash, public_key)
+  values (t, integration, 'Agente', 'active', encode(sha256(('agente' || t::text)::bytea), 'hex'),
+    repeat('A', 43) || '=');
   insert into doctor.reports (id, tenant_id, incident_id, diagnosis_id, format, status, storage_path,
     content_sha256, processing_key)
   values (report, t, incident, diagnosis, 'pdf', 'ready', t::text || '/r.pdf', repeat('c', 64), 'r-' || t::text);

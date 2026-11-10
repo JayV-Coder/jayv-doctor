@@ -10,6 +10,7 @@ from uuid import uuid4
 import pytest
 from aid_diagnosis_engine.llm.base import LLMUnavailableError
 from aid_diagnosis_engine.llm.fake import FakeProvider
+from aid_diagnosis_engine.rules import RULESET_VERSION
 from aid_diagnosis_worker.diagnose import DbLoader, diagnose, open_automatic
 from aid_diagnosis_worker.evaluate import evaluate_execution
 from sqlalchemy import text
@@ -125,7 +126,7 @@ async def test_exemplo_do_prd_e_tres_entregas_fazem_um_diagnostico(
         "provider": "fake",
         "duration_ms": saved["duration_ms"],
         "published": True,
-        "ruleset_version": "2026.10.1",
+        "ruleset_version": RULESET_VERSION,
     }
     assert saved["duration_ms"] is not None
     evidence = await rows(

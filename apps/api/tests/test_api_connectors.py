@@ -115,7 +115,10 @@ def test_config_invalida_para_o_provedor_vira_422_sem_ecoar_valores() -> None:
     assert "-5" not in response.text
 
 
-def test_provedor_sem_conector_neste_ambiente_vira_422() -> None:
+def test_provedor_sem_conector_neste_ambiente_vira_422(monkeypatch: pytest.MonkeyPatch) -> None:
+    from aid_connectors.registry import REGISTRY
+
+    monkeypatch.delitem(REGISTRY, "sap")
     response = client().post("/api/v1/connectors", json={**NEW, "provider": "sap"})
     assert response.status_code == 422
     assert response.json()["code"] == "provider_unavailable"

@@ -28,6 +28,8 @@ const TITLES: Record<string, string> = {
   "/uso": "Uso e cotas",
   "/titular": "Direitos do titular",
   "/conectores/novo": "Novo conector",
+  "/conectores/agentes/novo": "Novo agente",
+  "/conectores/agentes": "Agentes locais",
 };
 
 // Telas que não são abas, mas pertencem a uma (o mockup abre Importar logs a partir de Conectores).

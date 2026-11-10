@@ -349,6 +349,137 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/agent/register": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Register
+     * @description Token de uso único (criado na tela) mais a chave pública que o agente gerou. Devolve o
+     *     segredo do agente, que não aparece de novo, e o certificado do mTLS.
+     */
+    post: operations["register_api_v1_agent_register_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/agent/config": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Config
+     * @description Long-poll da config, que também é o sinal de vida do agente (`version` na query).
+     */
+    get: operations["config_api_v1_agent_config_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/agent/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Events
+     * @description O mesmo contrato e os mesmos limites do POST /ingestion/events, com o tenant e a
+     *     Integração vindos do agente.
+     */
+    post: operations["events_api_v1_agent_events_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/agents": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Agents */
+    get: operations["list_agents_api_v1_agents_get"];
+    put?: never;
+    /** Create Agent */
+    post: operations["create_agent_api_v1_agents_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/agents/{target}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Change Config */
+    patch: operations["change_config_api_v1_agents__target__patch"];
+    trace?: never;
+  };
+  "/api/v1/agents/{target}/revoke": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Revoke Agent */
+    post: operations["revoke_agent_api_v1_agents__target__revoke_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/agents/{target}/rotate": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Rotate Agent */
+    post: operations["rotate_agent_api_v1_agents__target__rotate_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/connectors": {
     parameters: {
       query?: never;
@@ -1071,6 +1202,95 @@ export interface components {
     AcceptedInvitation: {
       /** Tenant Id */
       tenant_id: string;
+    };
+    /** Agent */
+    Agent: {
+      /** Id */
+      id: string;
+      /** Integration Id */
+      integration_id: string;
+      /** Name */
+      name: string;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "pending" | "active" | "revoked";
+      /** Config */
+      config: {
+        [key: string]: unknown;
+      };
+      /** Config Version */
+      config_version: number;
+      /** Cert Fingerprint */
+      cert_fingerprint: string | null;
+      /** Version */
+      version: string | null;
+      /** Last Seen At */
+      last_seen_at: string | null;
+      /** Registered At */
+      registered_at: string | null;
+      /** Revoked At */
+      revoked_at: string | null;
+      /** Registration Expires At */
+      registration_expires_at: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+    };
+    /** AgentConfig */
+    AgentConfig: {
+      /** Integration Id */
+      integration_id: string;
+      /** Config */
+      config: {
+        [key: string]: unknown;
+      };
+      /** Config Version */
+      config_version: number;
+      update?: components["schemas"]["AgentUpdate"] | null;
+    };
+    /** AgentConfigChange */
+    AgentConfigChange: {
+      /** Config */
+      config: {
+        [key: string]: unknown;
+      };
+    };
+    /** AgentRegistered */
+    AgentRegistered: {
+      /** Agent Id */
+      agent_id: string;
+      /** Secret */
+      secret: string;
+      /** Certificate */
+      certificate: string | null;
+    };
+    /**
+     * AgentRegistration
+     * @description Registro do agente local (ticket #39): o token de uso único e a chave pública Ed25519
+     *     (32 bytes em base64) que ele gerou na máquina do cliente.
+     */
+    AgentRegistration: {
+      /** Token */
+      token: string;
+      /** Public Key */
+      public_key: string;
+      /** Version */
+      version: string;
+    };
+    /** AgentUpdate */
+    AgentUpdate: {
+      /** Version */
+      version: string;
+      /** Url */
+      url: string;
+      /** Sha256 */
+      sha256: string;
+      /** Signature */
+      signature: string;
     };
     /** AuditEntry */
     AuditEntry: {
@@ -2280,6 +2500,20 @@ export interface components {
       /** Mfa Enabled */
       mfa_enabled: boolean;
     };
+    /** NewAgent */
+    NewAgent: {
+      /** Name */
+      name: string;
+      /**
+       * Integration Id
+       * Format: uuid
+       */
+      integration_id: string;
+      /** Config */
+      config?: {
+        [key: string]: unknown;
+      };
+    };
     /** NewComment */
     NewComment: {
       /** Body Md */
@@ -2500,6 +2734,17 @@ export interface components {
        * @enum {string}
        */
       kind: "investigate" | "fix" | "verify";
+    };
+    /** RegistrationToken */
+    RegistrationToken: {
+      /** Id */
+      id: string;
+      /** Registration Token */
+      registration_token: string;
+      /** Expires In Hours */
+      expires_in_hours: number;
+      /** Install Command */
+      install_command: string;
     };
     /** RejectedEvent */
     RejectedEvent: {
@@ -3657,6 +3902,288 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["IngestionResult"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  register_api_v1_agent_register_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AgentRegistration"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AgentRegistered"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  config_api_v1_agent_config_get: {
+    parameters: {
+      query?: {
+        known_version?: number;
+        version?: string;
+      };
+      header?: {
+        authorization?: string | null;
+        "x-aid-timestamp"?: string | null;
+        "x-aid-signature"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AgentConfig"];
+        };
+      };
+      /** @description sem mudança */
+      304: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  events_api_v1_agent_events_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "x-aid-timestamp"?: string | null;
+        "x-aid-signature"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["IngestionResult"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_agents_api_v1_agents_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Agent"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_agent_api_v1_agents_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["NewAgent"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RegistrationToken"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  change_config_api_v1_agents__target__patch: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AgentConfigChange"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: number;
+          };
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  revoke_agent_api_v1_agents__target__revoke_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  rotate_agent_api_v1_agents__target__rotate_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["RegistrationToken"];
         };
       };
       /** @description Validation Error */

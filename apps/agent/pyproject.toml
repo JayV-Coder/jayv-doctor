@@ -1,0 +1,29 @@
+[project]
+name = "aid-agent"
+version = "0.1.0"
+description = "Agente local do Integration AI Doctor para SAP on-premises (só conexões de saída)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "aid-connectors",
+    "aid-contracts",
+    "aid-ingestion",
+    "aid-security",
+    "cryptography>=44",
+    "httpx>=0.28",
+]
+
+# Sem dependência de RFC: o PyRFC foi descontinuado pela SAP e o NW RFC SDK tem licença da
+# SAP. Quem usa as coletas RFC instala a biblioteca na imagem do cliente (docs/operations/agente.md).
+
+[project.scripts]
+aid-agent = "aid_agent.main:main"
+
+[tool.uv.sources]
+aid-connectors = { workspace = true }
+aid-contracts = { workspace = true }
+aid-ingestion = { workspace = true }
+aid-security = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.9.5,<0.10"]
+build-backend = "uv_build"

@@ -60,7 +60,9 @@ test("Admin configura o GCP pelo assistente, retoma o rascunho e o Analyst só v
 
   await page.goto("/conectores");
   await expect(page.getByText("Nenhum Conector configurado")).toBeVisible();
-  await expect(page.getByRole("article", { name: "SAP" })).toContainText("v0.2");
+  await expect(page.getByRole("article", { name: "SAP Integration Suite" })).toContainText(
+    "pela API",
+  );
   await startWizard(page, "acme-integracoes");
 
   // Passo 2: comandos copiáveis com o projeto, teste com a chave.

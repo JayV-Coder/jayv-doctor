@@ -4,6 +4,7 @@ requires-python = "==3.12.*"
 
 [manifest]
 members = [
+    "aid-agent",
     "aid-api",
     "aid-connector-worker",
     "aid-connectors",
@@ -21,6 +22,29 @@ members = [
     "aid-security",
     "aid-worker",
     "jayv-doctor",
+]
+
+[[package]]
+name = "aid-agent"
+version = "0.1.0"
+source = { editable = "apps/agent" }
+dependencies = [
+    { name = "aid-connectors" },
+    { name = "aid-contracts" },
+    { name = "aid-ingestion" },
+    { name = "aid-security" },
+    { name = "cryptography" },
+    { name = "httpx" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aid-connectors", editable = "packages/connectors" },
+    { name = "aid-contracts", editable = "packages/contracts" },
+    { name = "aid-ingestion", editable = "workers/ingestion" },
+    { name = "aid-security", editable = "packages/security" },
+    { name = "cryptography", specifier = ">=44" },
+    { name = "httpx", specifier = ">=0.28" },
 ]
 
 [[package]]

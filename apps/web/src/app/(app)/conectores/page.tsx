@@ -64,14 +64,28 @@ export default async function ConnectorsPage() {
           Importar arquivo
         </Link>
       </article>
+      <article className="card" aria-labelledby="agente-local">
+        <div className="row-between">
+          <h2 id="agente-local" className="t">
+            Agente local
+          </h2>
+          <Chip tone="neutral">SAP on-premises</Chip>
+        </div>
+        <p className="small">Coleta na rede do SAP, só com conexões de saída.</p>
+        <Link className="btn" href="/conectores/agentes">
+          Ver agentes
+        </Link>
+      </article>
       <article className="card soon" aria-labelledby="proxima-versao" aria-disabled="true">
         <div className="row-between">
           <h2 id="proxima-versao" className="t muted">
-            SAP
+            SAP Integration Suite
           </h2>
-          <Chip tone="info">v0.2</Chip>
+          <Chip tone="info">pela API</Chip>
         </div>
-        <p className="small">Disponível na próxima versão.</p>
+        <p className="small">
+          O assistente na tela vem depois do piloto. Por enquanto, o Conector é criado pela API.
+        </p>
       </article>
     </>
   );

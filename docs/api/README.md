@@ -9,6 +9,7 @@ Todas as rotas ficam em `/api/v1`, com `Authorization: Bearer <JWT do Supabase>`
 | Ingestão por API (tokens, lotes, exemplos em curl, Python e Node) | [ingestion.md](ingestion.md) |
 | Importação de arquivos | [imports.md](imports.md) |
 | Integrações e Conectores | [integrations.md](integrations.md), [connectors.md](connectors.md) |
+| Agentes locais (SAP on-premises) | [agents.md](agents.md) |
 | Execuções, Eventos e Logs brutos | [executions.md](executions.md) |
 | Incidentes e Dashboard | [incidents.md](incidents.md), [dashboard.md](dashboard.md) |
 | Diagnósticos e revisão | [diagnoses.md](diagnoses.md) |

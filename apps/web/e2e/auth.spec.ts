@@ -72,6 +72,8 @@ test("redefine a senha pelo link do e-mail", async ({ page }) => {
   await expect(page.getByText(`Sessão ativa: ${email}`)).toBeVisible();
 
   await page.getByRole("button", { name: "Sair" }).click();
+  // Sair cancela o push antes de enviar (#41): espera chegar ao login.
+  await expect(page).toHaveURL(/\/login$/);
   await signInWithPassword(page, email, newPassword);
   await expect(page.getByText(`Sessão ativa: ${email}`)).toBeVisible();
 });
@@ -88,6 +90,8 @@ test("cadastra MFA e passa a exigir o código no login", async ({ page }) => {
   await expect(page.getByRole("status")).toContainText("App autenticador cadastrado");
   await page.goto("/");
   await page.getByRole("button", { name: "Sair" }).click();
+  // Sair cancela o push antes de enviar (#41): espera chegar ao login.
+  await expect(page).toHaveURL(/\/login$/);
 
   await signInWithPassword(page, email);
   await expect(page).toHaveURL(/\/mfa$/);
@@ -117,6 +121,8 @@ test("quem tem MFA redefine a senha depois de verificar o código", async ({ pag
   await expect(page.getByRole("status")).toContainText("App autenticador cadastrado");
   await page.goto("/");
   await page.getByRole("button", { name: "Sair" }).click();
+  // Sair cancela o push antes de enviar (#41): espera chegar ao login.
+  await expect(page).toHaveURL(/\/login$/);
 
   await page.goto("/esqueci-senha");
   await page.getByLabel("E-mail corporativo").fill(email);

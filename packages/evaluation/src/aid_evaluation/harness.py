@@ -10,6 +10,7 @@ from itertools import groupby
 
 from aid_diagnosis_engine.diagnosis import (
     DiagnosisEngine,
+    EnrichmentItem,
     EventItem,
     IncidentInfo,
     KnowledgeItem,
@@ -68,6 +69,10 @@ class CaseLoader:
 
     async def rules(self) -> Sequence[RuleItem]:
         return self._rules
+
+    async def enrichment(self) -> Sequence[EnrichmentItem]:
+        # O dataset é de logs: sem consulta ao destino, como um Mapa sem `lookup`.
+        return []
 
     async def knowledge(self, query: str) -> Sequence[KnowledgeItem]:
         return []

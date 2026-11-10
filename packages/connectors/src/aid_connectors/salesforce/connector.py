@@ -18,6 +18,8 @@ from aid_connectors.base import (
     Checkpoint,
     ConfigErrors,
     ConnectorError,
+    LookupQuery,
+    LookupResult,
     RateLimitPolicy,
     Secret,
     TestResult,
@@ -35,6 +37,9 @@ from aid_connectors.salesforce.soql import (
     integration_log,
     literal,
     select,
+)
+from aid_connectors.salesforce.soql import (
+    lookup as soql_lookup,
 )
 
 log = logging.getLogger(__name__)
@@ -273,6 +278,31 @@ class SalesforceConnector:
             joined = "; ".join(notes)
             message += f" {joined[0].upper()}{joined[1:]}."
         return TestResult(True, message, capabilities)
+
+    async def lookup(
+        self, secret: Secret, config: Mapping[str, Any], query: LookupQuery
+    ) -> LookupResult:
+        """O registro existe? Uma consulta de leitura, com as mesmas credenciais e limites da
+        Sincronização (enriquecimento, ticket #40)."""
+        try:
+            soql = soql_lookup(query.entity, query.field, query.value, query.status_field)
+        except QueryNotAllowedError as exc:
+            raise ConnectorError("invalid", f"Consulta recusada: {exc}.") from exc
+        async with self.client() as client:
+            try:
+                found = await self.call(client, secret, config, f"/query?q={quote(soql)}")
+            except SourceUnavailableError as exc:
+                raise ConnectorError(
+                    "invalid", f"O usuário de integração não lê {query.entity} ({exc})."
+                ) from exc
+        records = [r for r in found.get("records", []) if isinstance(r, Mapping)]
+        if not records:
+            return LookupResult(False)
+        record = records[0]
+        status = record.get(query.status_field) if query.status_field else None
+        return LookupResult(
+            True, str(record.get("Id") or "") or None, str(status) if status else None
+        )
 
     async def collect(
         self, secret: Secret, config: Mapping[str, Any], checkpoint: Checkpoint | None

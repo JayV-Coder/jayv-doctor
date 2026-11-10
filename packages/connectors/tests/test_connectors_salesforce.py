@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 import httpx
 import jwt
 import pytest
-from aid_connectors.base import ConnectorError, Secret
+from aid_connectors.base import ConnectorError, LookupQuery, Secret
 from aid_connectors.salesforce.auth import trusted_instance
 from aid_connectors.salesforce.connector import SalesforceConnector
 from aid_connectors.salesforce.soql import (
@@ -67,7 +67,7 @@ class FakeSalesforce:
 
     def __init__(
         self,
-        objects: tuple[str, ...] = ("Integration_Log__c", "ApexLog", "EventLogFile"),
+        objects: tuple[str, ...] = ("Integration_Log__c", "ApexLog", "EventLogFile", "Order"),
         used: int = 100,
     ) -> None:
         self.objects = objects
@@ -106,6 +106,14 @@ class FakeSalesforce:
                 )
             if target in self.bad_fields:
                 return httpx.Response(400, json=[{"errorCode": "INVALID_FIELD"}], headers=headers)
+            if "FROM Order " in query:
+                number = query.split("OrderNumber = '")[1].split("'")[0]
+                rows = (
+                    [{"Id": "8015f000000ABCAAA", "Status": "Activated"}]
+                    if number == "801XX0001"
+                    else []
+                )
+                return httpx.Response(200, json={"records": rows}, headers=headers)
             if "FROM Integration_Log__c" in query:
                 rows = self.records
                 if "Id > '" in query:
@@ -342,3 +350,26 @@ def test_loopback_com_usuario_na_url_nao_passa() -> None:
     assert not is_loopback("http://127.0.0.1:1@evil.com/sf")
     assert not is_loopback("https://127.0.0.1:8095")
     assert not is_loopback("http://localhost")
+
+
+def lookup(fake: FakeSalesforce, value: str, entity: str = "Order") -> Any:
+    query = LookupQuery(entity=entity, field="OrderNumber", value=value, status_field="Status")
+    return asyncio.run(connector(fake).lookup(Secret(SECRET), CONFIG, query))
+
+
+def test_consulta_de_leitura_acha_o_pedido_pelo_campo_do_mapa() -> None:
+    fake = FakeSalesforce()
+    found = lookup(fake, "801XX0001")
+    assert (found.found, found.record_id, found.status) == (True, "8015f000000ABCAAA", "Activated")
+    assert fake.queries[-1] == (
+        "SELECT Id, Status FROM Order WHERE OrderNumber = '801XX0001' LIMIT 1"
+    )
+    assert lookup(fake, "999").found is False
+
+
+def test_consulta_escapa_o_valor_e_recusa_nome_fora_do_padrao() -> None:
+    fake = FakeSalesforce()
+    lookup(fake, "x' OR Name != 'y")
+    assert "OrderNumber = 'x\\' OR Name != \\'y'" in fake.queries[-1]
+    with pytest.raises(ConnectorError):
+        lookup(fake, "1", entity="Order WHERE Id != null --")

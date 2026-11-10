@@ -65,6 +65,34 @@ class ConnectorError(Exception):
         self.retry_after = retry_after
 
 
+@dataclass(frozen=True)
+class LookupQuery:
+    """Consulta de leitura de um registro (enriquecimento, ticket #40): `entity` com `field` igual
+    a `value`. Os nomes já passaram pela validação da API; cada Conector valida de novo."""
+
+    entity: str
+    field: str
+    value: str
+    status_field: str | None = None
+    # Campo com a chave do registro no destino (OData; o Salesforce usa sempre o `Id`).
+    id_field: str | None = None
+
+
+@dataclass(frozen=True)
+class LookupResult:
+    found: bool
+    record_id: str | None = None
+    status: str | None = None
+
+
+class Lookup(Protocol):
+    """Conector que também consulta um registro no sistema (Salesforce, OData)."""
+
+    async def lookup(
+        self, secret: Secret, config: Mapping[str, Any], query: LookupQuery
+    ) -> LookupResult: ...
+
+
 class Connector(Protocol):
     provider: ClassVar[str]
     rate_limit: ClassVar[RateLimitPolicy]

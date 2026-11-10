@@ -1,6 +1,6 @@
-"""Regras do PRD §6, versão `2026.11.1` (a `2026.10.1` mais as Regras SAP do ticket #38). Regra
-nova ou alterada ganha versão nova do pacote; os matches antigos continuam apontando para a
-versão que os gerou.
+"""Regras do PRD §6, versão `2026.11.2`: a `2026.10.1`, as Regras SAP do ticket #38 e a
+divergência pelo Mapa de identificadores (INT-008, ticket #40). Regra nova ou alterada ganha
+versão nova do pacote; os matches antigos continuam apontando para a versão que os gerou.
 
 Só Eventos com `error` contam para as Regras de erro (INT-001 a INT-006): um texto qualquer num
 Evento INFO não abre Incidente. INT-007 e INT-008 leem convenções de `attributes`, descritas em
@@ -14,7 +14,7 @@ from typing import Any
 
 from aid_diagnosis_engine.rules.base import EventView, ExecutionView, Rule
 
-RULESET_VERSION = "2026.11.1"
+RULESET_VERSION = "2026.11.2"
 # Prazo para a confirmação do destino chegar (INT-007).
 CONFIRMATION_DEADLINE = timedelta(minutes=5)
 
@@ -170,6 +170,13 @@ def unconfirmed(execution: ExecutionView, events: Sequence[EventView]) -> tuple[
     return tuple(event.id for event in sent)
 
 
+def divergence(execution: ExecutionView, events: Sequence[EventView]) -> tuple[str, ...]:
+    """Contagem ou status divergentes em `attributes.reconciliation`, ou a chave do Mapa vista na
+    origem e ausente no destino (`execution.unreconciled`, #40)."""
+    unreconciled = set(execution.unreconciled)
+    return tuple(event.id for event in events if divergent(event) or event.id in unreconciled)
+
+
 def divergent(event: EventView) -> bool:
     """`attributes.reconciliation` com contagens ou status de origem e destino diferentes."""
     found = event.attributes.get("reconciliation")
@@ -245,8 +252,10 @@ RULES: tuple[Rule, ...] = (
         RULESET_VERSION,
         "DIVERGENCE",
         "high",
-        "Origem e destino divergem em contagem ou status.",
+        "Origem e destino divergem em contagem ou status, ou o registro da origem não chegou"
+        " ao destino.",
         divergent,
+        check=divergence,
     ),
     Rule(
         "INT-009",

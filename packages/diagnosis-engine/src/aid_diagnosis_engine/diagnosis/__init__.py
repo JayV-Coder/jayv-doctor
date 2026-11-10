@@ -3,6 +3,8 @@
 from aid_diagnosis_engine.diagnosis.engine import DiagnosisEngine, DiagnosisError
 from aid_diagnosis_engine.diagnosis.model import (
     DiagnosisDraft,
+    EnrichmentItem,
+    EnrichmentPending,
     EventItem,
     IncidentInfo,
     KnowledgeItem,
@@ -15,6 +17,8 @@ __all__ = [
     "DiagnosisDraft",
     "DiagnosisEngine",
     "DiagnosisError",
+    "EnrichmentItem",
+    "EnrichmentPending",
     "EventItem",
     "IncidentInfo",
     "KnowledgeItem",

@@ -51,6 +51,7 @@ export function activeTab(pathname: string): string {
 
 export function pageTitle(pathname: string): string {
   if (/^\/incidentes\/[^/]+\/relatorio$/.test(pathname)) return "Relatório";
+  if (/^\/integracoes\/[^/]+\/mapas$/.test(pathname)) return "Mapa entre sistemas";
   const own = Object.entries(TITLES).find(([href]) => within(pathname, href));
   if (own) return own[1];
   const tab = activeTab(pathname);

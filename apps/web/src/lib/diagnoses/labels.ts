@@ -102,7 +102,7 @@ export function systemLabel(system: string | null | undefined): string {
 }
 
 type EvidenceLink = {
-  kind: "event" | "raw_log" | "chunk" | "global_chunk" | "rule_match";
+  kind: "event" | "raw_log" | "chunk" | "global_chunk" | "rule_match" | "enrichment";
   label: string;
   event_id: string | null;
   event_timestamp: string | null;
@@ -113,11 +113,14 @@ export function evidenceChip(item: Pick<EvidenceLink, "kind" | "label">): string
   if (item.kind === "rule_match") return item.label.split(" · ")[0] ?? "Regra";
   if (item.kind === "event") return "Evento";
   if (item.kind === "raw_log") return "Log";
+  // Consulta de leitura no destino (#40): o registro está lá, não no Doctor; sem link.
+  if (item.kind === "enrichment") return "Consulta";
   return "Base";
 }
 
 // Da Evidência ao JSON do Evento num toque; a Base abre a aba certa.
 export function evidenceHref(item: EvidenceLink): string | null {
+  if (item.kind === "enrichment") return null;
   if (item.kind === "chunk") return "/conhecimento";
   if (item.kind === "global_chunk") return "/conhecimento?aba=global";
   if (item.event_id) {

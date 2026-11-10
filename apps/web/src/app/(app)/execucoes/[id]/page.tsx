@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { CSSProperties } from "react";
 import { Chip } from "@/components/ui/chip";
 import { ErrorState } from "@/components/ui/error-state";
 import { ReloadButton } from "@/components/ui/reload-button";
@@ -14,6 +15,7 @@ import {
   statusLabel,
   timeOfDay,
 } from "@/lib/executions/labels";
+import { crossKeysText, laneOf, lanes } from "@/lib/executions/lanes";
 import { environmentLabel } from "@/lib/integrations/labels";
 
 export const metadata = { title: "Execução · Integration AI Doctor" };
@@ -34,6 +36,10 @@ export default async function ExecutionPage({ params }: { params: Promise<{ id: 
   const keys = execution.correlation_keys;
   // Resolvido ou descartado não é problema ativo.
   const active = ["open", "investigating"].includes(execution.incident?.status ?? "");
+  // Raias por sistema quando a Execução passa por mais de um (#40).
+  const systems = lanes(execution.events);
+  const laned = systems.length > 1;
+  const laneStyle = { "--lanes": String(systems.length) } as CSSProperties;
 
   return (
     <>
@@ -60,6 +66,12 @@ export default async function ExecutionPage({ params }: { params: Promise<{ id: 
             <dd>{keys.trace_id.join(", ")}</dd>
           </>
         )}
+        {keys.cross_system?.[0] && (
+          <>
+            <dt>entre sistemas</dt>
+            <dd>{crossKeysText(keys.cross_system)}</dd>
+          </>
+        )}
         {keys.business_reference?.[0] && (
           <>
             <dt>referência</dt>
@@ -79,13 +91,39 @@ export default async function ExecutionPage({ params }: { params: Promise<{ id: 
         {execution.events.length} {execution.events.length === 1 ? "evento" : "eventos"}{" "}
         correlacionados
       </h2>
-      <ol className="timeline" aria-label="Timeline">
+      {laned && (
+        <div className="lanes-head" style={laneStyle} aria-hidden="true">
+          {systems.map((lane) => (
+            <span key={lane.system} title={lane.label}>
+              {lane.short}
+            </span>
+          ))}
+        </div>
+      )}
+      <ol
+        className={laned ? "timeline lanes" : "timeline"}
+        style={laned ? laneStyle : undefined}
+        aria-label={
+          laned ? `Timeline em raias: ${systems.map((l) => l.label).join(", ")}` : "Timeline"
+        }
+      >
         {execution.events.map((event) => {
           const tone = severityTone(event.severity);
           const flagged = event.rule_codes.length > 0;
+          const mine = laneOf(event);
           return (
             <li key={event.id} className={flagged ? "it flagged" : "it"}>
-              <span className="dot" data-tone={tone} aria-hidden="true" />
+              {laned ? (
+                <span className="lane-rail" aria-hidden="true">
+                  {systems.map((lane) => (
+                    <span key={lane.system} className="lane-cell">
+                      {lane.system === mine && <span className="dot" data-tone={tone} />}
+                    </span>
+                  ))}
+                </span>
+              ) : (
+                <span className="dot" data-tone={tone} aria-hidden="true" />
+              )}
               <Link
                 className="it-body"
                 href={`/eventos/${event.id}?em=${encodeURIComponent(event.timestamp)}`}
@@ -97,6 +135,7 @@ export default async function ExecutionPage({ params }: { params: Promise<{ id: 
                   <span className="it-error">{errorSummary(event.error)}</span>
                 )}
                 <span className="small">
+                  {laned && `${systems.find((lane) => lane.system === mine)?.label ?? mine} · `}
                   {timeOfDay(event.timestamp)} UTC · {event.severity} ·{" "}
                   {correlatedByLabel(event.correlated_by)}
                 </span>

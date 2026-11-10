@@ -30,6 +30,7 @@ EVIDENCE_KIND = {
     "chunk": "Base de conhecimento",
     "global_chunk": "Base global",
     "rule_match": "Regra",
+    "enrichment": "Consulta ao destino",
 }
 
 

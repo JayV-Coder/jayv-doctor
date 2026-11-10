@@ -10,6 +10,7 @@ de validação da rota, para uma resposta gravada não dispensar a permissão de
 import functools
 import hashlib
 import inspect
+import json
 from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
@@ -174,6 +175,24 @@ def reserving(endpoint: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitabl
     return wrapped
 
 
+# Campos que aparecem uma vez (segredo de webhook, token de registro do agente e de ingestão):
+# a resposta guardada para a repetição sai com eles mascarados. A repetição devolve a máscara,
+# nunca o segredo, que só existe no Vault (ou como hash).
+SECRET_FIELDS = frozenset({"secret", "token", "registration_token", "install_command"})
+REDACTED = "[exibido uma vez]"
+
+
+def redacted(body: bytes) -> str:
+    text_body = body.decode()
+    try:
+        found = json.loads(text_body)
+    except ValueError:
+        return text_body
+    if not isinstance(found, dict) or not SECRET_FIELDS & found.keys():
+        return text_body
+    return json.dumps({k: REDACTED if k in SECRET_FIELDS else v for k, v in found.items()})
+
+
 class IdempotentRoute(APIRoute):
     def __init__(self, path: str, endpoint: Callable[..., Any], **kwargs: Any) -> None:
         super().__init__(path, reserving(endpoint), **kwargs)
@@ -195,7 +214,7 @@ class IdempotentRoute(APIRoute):
                 if session is not None:
                     pending: Pending = request.state.idempotency
                     await session.remember(
-                        pending.key, response.status_code, bytes(response.body).decode()
+                        pending.key, response.status_code, redacted(bytes(response.body))
                     )
                 return response
 

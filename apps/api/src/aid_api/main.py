@@ -21,6 +21,7 @@ from aid_api.orgs import router as orgs
 from aid_api.privacy import router as privacy
 from aid_api.reports import router as reports
 from aid_api.usage import router as usage
+from aid_api.webhooks import router as webhooks
 
 
 def create_app() -> FastAPI:
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(agent_router.agent)
     app.include_router(agents.router)
     app.include_router(alerts.router)
+    app.include_router(webhooks.router)
     app.include_router(connectors.router)
     app.include_router(executions.router)
     app.include_router(incidents.router)

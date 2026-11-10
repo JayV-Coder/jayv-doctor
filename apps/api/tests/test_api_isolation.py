@@ -69,6 +69,11 @@ ROUTES: list[tuple[str, str, str, dict[str, Any] | None]] = [
     ("DELETE", "/api/v1/alert-rules/{target}", "alert_rule", None),
     ("DELETE", "/api/v1/notification-channels/{target}", "channel", None),
     ("DELETE", "/api/v1/push-subscriptions/{target}", "push", None),
+    ("PATCH", "/api/v1/webhooks/{target}", "webhook", {"enabled": False}),
+    ("POST", "/api/v1/webhooks/{target}/rotate-secret", "webhook", None),
+    ("DELETE", "/api/v1/webhooks/{target}", "webhook", None),
+    ("GET", "/api/v1/webhooks/{target}/deliveries", "webhook", None),
+    ("POST", "/api/v1/webhook-deliveries/{target}/resend", "webhook_delivery", None),
     ("GET", "/api/v1/integrations/{target}/correlation-mappings", "integration", None),
     (
         "POST",
@@ -187,6 +192,8 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
             "alert_rule",
             "channel",
             "push",
+            "webhook",
+            "webhook_delivery",
             "mapping",
             "document",
             "own_integration",
@@ -248,6 +255,11 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
         "insert into doctor.push_subscriptions (id, tenant_id, user_id, endpoint, p256dh, auth)"
         " values (:push, :tenant, :user_b, 'https://fcm.googleapis.com/fcm/send/b',"
         " repeat('p', 87), repeat('a', 22))",
+        "insert into doctor.webhooks (id, tenant_id, name, url, events, secret_id)"
+        " values (:webhook, :tenant, 'ITSM', 'https://itsm.varejo.test/aid',"
+        " array['incident.opened'], gen_random_uuid())",
+        "insert into doctor.webhook_deliveries (id, tenant_id, webhook_id, event, subject)"
+        " values (:webhook_delivery, :tenant, :webhook, 'incident.opened', '{}')",
         "insert into doctor.correlation_mappings (id, tenant_id, integration_id, name, keys)"
         " values (:mapping, :tenant, :integration, 'Pedido',"
         ' \'[{"system": "sap", "field": "execution_id"}]\')',

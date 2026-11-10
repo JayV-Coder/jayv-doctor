@@ -660,6 +660,93 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/webhooks": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Webhooks */
+    get: operations["list_webhooks_api_v1_webhooks_get"];
+    put?: never;
+    /** Create Webhook */
+    post: operations["create_webhook_api_v1_webhooks_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/webhooks/{target}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Delete Webhook */
+    delete: operations["delete_webhook_api_v1_webhooks__target__delete"];
+    options?: never;
+    head?: never;
+    /** Update Webhook */
+    patch: operations["update_webhook_api_v1_webhooks__target__patch"];
+    trace?: never;
+  };
+  "/api/v1/webhooks/{target}/rotate-secret": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Rotate Secret */
+    post: operations["rotate_secret_api_v1_webhooks__target__rotate_secret_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/webhooks/{target}/deliveries": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List Deliveries */
+    get: operations["list_deliveries_api_v1_webhooks__target__deliveries_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/webhook-deliveries/{target}/resend": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Resend */
+    post: operations["resend_api_v1_webhook_deliveries__target__resend_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/connectors": {
     parameters: {
       query?: never;
@@ -1887,6 +1974,43 @@ export interface components {
     DeletionRequest: {
       /** Confirmation */
       confirmation: string;
+    };
+    /** Delivery */
+    Delivery: {
+      /** Id */
+      id: string;
+      /** Event */
+      event: string;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "pending" | "succeeded" | "failed" | "abandoned";
+      /** Attempts */
+      attempts: number;
+      /** Response Status */
+      response_status: number | null;
+      /** Latency Ms */
+      latency_ms: number | null;
+      /** Response Excerpt */
+      response_excerpt: string | null;
+      /** Error */
+      error: string | null;
+      /** Body */
+      body: {
+        [key: string]: unknown;
+      } | null;
+      /** Resent From */
+      resent_from: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /** Delivered At */
+      delivered_at: string | null;
+      /** Next Attempt At */
+      next_attempt_at: string | null;
     };
     /** DiagnosisDetail */
     DiagnosisDetail: {
@@ -3516,6 +3640,71 @@ export interface components {
       input?: unknown;
       /** Context */
       ctx?: Record<string, never>;
+    };
+    /** Webhook */
+    Webhook: {
+      /** Id */
+      id: string;
+      /** Name */
+      name: string;
+      /** Url */
+      url: string;
+      /** Events */
+      events: string[];
+      /** Enabled */
+      enabled: boolean;
+      /** Failure Count */
+      failure_count: number;
+      /** Last Status */
+      last_status: number | null;
+      /** Last Delivery At */
+      last_delivery_at: string | null;
+      /** Disabled Reason */
+      disabled_reason: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+    };
+    /** WebhookChange */
+    WebhookChange: {
+      /** Url */
+      url?: string | null;
+      /** Events */
+      events?:
+        | (
+            | "incident.opened"
+            | "incident.updated"
+            | "incident.resolved"
+            | "diagnosis.published"
+            | "diagnosis.reviewed"
+          )[]
+        | null;
+      /** Enabled */
+      enabled?: boolean | null;
+    };
+    /** WebhookIn */
+    WebhookIn: {
+      /** Name */
+      name: string;
+      /** Url */
+      url: string;
+      /** Events */
+      events: (
+        | "incident.opened"
+        | "incident.updated"
+        | "incident.resolved"
+        | "diagnosis.published"
+        | "diagnosis.reviewed"
+      )[];
+    };
+    /** WebhookSecret */
+    WebhookSecret: {
+      /** Id */
+      id: string;
+      /** Secret */
+      secret: string;
     };
   };
   responses: never;
@@ -5189,6 +5378,246 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Preferences"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_webhooks_api_v1_webhooks_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Webhook"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  create_webhook_api_v1_webhooks_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["WebhookIn"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WebhookSecret"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  delete_webhook_api_v1_webhooks__target__delete: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_webhook_api_v1_webhooks__target__patch: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["WebhookChange"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Webhook"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  rotate_secret_api_v1_webhooks__target__rotate_secret_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WebhookSecret"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  list_deliveries_api_v1_webhooks__target__deliveries_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Delivery"][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  resend_api_v1_webhook_deliveries__target__resend_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            [key: string]: unknown;
+          };
         };
       };
       /** @description Validation Error */

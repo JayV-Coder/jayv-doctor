@@ -98,7 +98,7 @@ def test_worker_de_alertas_registra_o_topico_e_a_varredura() -> None:
     from aid_worker.main import create_app as build
     from aid_worker.main import handlers_for, routers_for
 
-    assert set(handlers_for("notifier")) == {"alert.evaluate"}
+    assert set(handlers_for("notifier")) == {"alert.evaluate", "webhook.deliver"}
     paths = {route.path for router in routers_for("notifier") for route in router.routes}  # type: ignore[attr-defined]
     assert paths == {"/alerts/scan"}
     assert build("diagnosis", {}) is not None

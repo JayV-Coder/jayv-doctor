@@ -1,38 +1,17 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { apiFetch } from "@/lib/api";
+import { send as post, type Outcome } from "@/lib/forms/send";
 
-const MESSAGES: Record<string, string> = {
-  forbidden: "Seu papel não permite esta ação.",
-  mfa_required: "Confirme a verificação em duas etapas para continuar.",
-  name_taken: "Já existe um item com este nome.",
-  not_found: "Regra, canal ou assinatura não encontrada.",
-  validation_error: "Confira os campos e tente de novo.",
+export type { Outcome };
+
+const OPTIONS = {
+  page: "/alertas",
+  messages: { not_found: "Regra, canal ou assinatura não encontrada." },
+  detailed: ["invalid_alert"],
 };
-const GENERIC = "Não foi possível concluir agora. Tente de novo.";
-const OFFLINE = "Sem conexão. Tente de novo.";
 
-export type Outcome = { ok: true } | { ok: false; message: string; offline: boolean };
-
-// A chave vem da tela: repetir sem resposta não duplica; com resposta, a tela gera outra.
-async function send(path: string, init: RequestInit, key: string): Promise<Outcome> {
-  const response = await apiFetch(path, {
-    ...init,
-    headers: { "Idempotency-Key": key },
-  }).catch(() => null);
-  if (!response) return { ok: false, message: OFFLINE, offline: true };
-  if (!response.ok) {
-    const { code, title } = (await response.json().catch(() => ({}))) as {
-      code?: string;
-      title?: string;
-    };
-    // A API diz o campo e a regra (nunca o webhook, que nem volta).
-    const message = code === "invalid_alert" && title ? title : (MESSAGES[code ?? ""] ?? GENERIC);
-    return { ok: false, message, offline: false };
-  }
-  revalidatePath("/alertas");
-  return { ok: true };
+function send(path: string, init: RequestInit, key: string): Promise<Outcome> {
+  return post(path, init, key, OPTIONS);
 }
 
 function text(form: FormData, name: string): string {

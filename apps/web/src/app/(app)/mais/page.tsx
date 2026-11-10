@@ -25,6 +25,7 @@ export default async function MorePage() {
         <ListItem href="/alertas" title="Alertas" />
         {isManager(role) && <ListItem href="/membros" title="Membros e convites" />}
         {isManager(role) && <ListItem href="/auditoria" title="Auditoria" />}
+        {isManager(role) && <ListItem href="/webhooks" title="Webhooks" />}
       </ul>
       {privacy && active && (
         <PrivacySection

@@ -5,7 +5,7 @@ import { FormMessage } from "@/components/auth-shell";
 import { Chip } from "@/components/ui/chip";
 import { applicationServerKey, quietText, type Quiet } from "@/lib/alerts/labels";
 import { saveQuiet, subscribePush, unsubscribePush } from "./actions";
-import { useIdempotencyKey } from "./use-key";
+import { useIdempotencyKey } from "@/lib/forms/use-idempotency-key";
 
 type Subscription = { id: string; endpoint: string };
 type State = "unsupported" | "unknown" | "denied" | "on" | "off";
@@ -123,7 +123,11 @@ export function MyChannels({
       <form
         className="stack"
         aria-label="Silêncio fora do plantão"
-        action={(form) => {
+        onSubmit={(event) => {
+          // `onSubmit`, não `action`: o `action` limpa o formulário, e depois de um erro a
+          // pessoa perderia o que digitou.
+          event.preventDefault();
+          const form = new FormData(event.currentTarget);
           startTransition(async () => {
             const outcome = await saveQuiet(form, key());
             settle(outcome);

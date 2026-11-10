@@ -36,6 +36,7 @@ declare
   report uuid := gen_random_uuid();
   document uuid := gen_random_uuid();
   connector uuid := gen_random_uuid();
+  webhook uuid := gen_random_uuid();
 begin
   insert into doctor.user_active_tenant (user_id, tenant_id) values (owner, t)
   on conflict (user_id) do nothing;
@@ -108,6 +109,10 @@ begin
   values (t, owner, '{"start": "22:00", "end": "07:00"}');
   insert into doctor.notification_deliveries (tenant_id, subject, status)
   values (t, 'incident:x', 'sent');
+  insert into doctor.webhooks (id, tenant_id, name, url, events, secret_id)
+  values (webhook, t, 'ITSM', 'https://hooks.acme.test/aid', array['incident.opened'], gen_random_uuid());
+  insert into doctor.webhook_deliveries (tenant_id, webhook_id, event, subject)
+  values (t, webhook, 'incident.opened', '{}');
   insert into doctor.ingestion_tokens (tenant_id, name, integration_id, token_hash, prefix)
   values (t, 'Token', integration, md5(t::text) || md5(t::text), 'aid_test');
   insert into doctor.ingestion_batches (tenant_id, integration_id, connector_id, events, event_count)

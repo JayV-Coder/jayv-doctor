@@ -3018,6 +3018,10 @@ export interface components {
       ok: boolean;
       /** Message */
       message: string;
+      /** Capabilities */
+      capabilities?: {
+        [key: string]: boolean;
+      };
     };
     /** TimelineEvent */
     TimelineEvent: {

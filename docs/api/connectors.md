@@ -19,9 +19,10 @@ Exigem `Authorization: Bearer <JWT do Supabase Auth>` e Organização ativa. Tod
 - **Config nova** recomeça a coleta do zero, e a deduplicação descarta o que repetir. Uma Sincronização que já estava rodando não grava o Checkpoint da config antiga.
 - **Conector desativado** pela plataforma não é pausado nem retomado pela API.
 - **Config** é validada pelo conector do provedor. O erro traz o nome do campo e a regra, nunca o valor.
-- `provider`: `fake`, `gcp`, `salesforce` ou `sap`. `sap` é o SAP Integration Suite (Cloud Integration, ticket #38); as configs estão em `docs/operations/conectores.md`. Provedor sem conector no ambiente responde `422 provider_unavailable`.
+- `provider`: `fake`, `gcp`, `salesforce` ou `sap`. `sap` é o SAP Integration Suite (Cloud Integration, ticket #38); as configs de todos estão em `docs/operations/conectores.md`. Provedor sem conector no ambiente responde `422 provider_unavailable`.
+- **Teste de conexão** (`POST /connectors/test` e `/connectors/{id}/test`): `{ok, message, capabilities}`. `capabilities` diz quais fontes a conta do cliente oferece (no Salesforce: `integration_log`, `apex_log`, `event_log_file`).
 
-- **Resposta** traz também `paused_reason` (`auth` ou `manual`), `checkpoint` (no formato do provedor; o do GCP tem `timestamp`) e `last_sync_records`, os registros da última Sincronização terminada (`null` antes da primeira).
+- **Resposta** traz também `paused_reason` (`auth`, `manual` ou `api_limit`: o limite diário de API do provedor, só para mostrar por que o Conector espera; o status continua o mesmo), `checkpoint` (no formato do provedor; o do GCP tem `timestamp`) e `last_sync_records`, os registros da última Sincronização terminada (`null` antes da primeira).
 - **Teste do GCP** é também a prévia do assistente: a `message` diz quantos registros da última hora atendem aos filtros.
 
 Status e política de falhas estão em [`docs/operations/conectores.md`](../operations/conectores.md).

@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from aid_connector_worker.schedule import enqueue_due
-from aid_connector_worker.sync import sync_connector
+from aid_connector_worker.sync import claim, execute, finish, sync_connector
 from aid_connectors.registry import REGISTRY
 from aid_connectors.runtime import RetryPolicy
 from sqlalchemy import text
@@ -319,3 +319,69 @@ async def test_cota_de_eventos_esgotada_nao_conta_como_falha_do_conector(
     assert current["last_error"].startswith("Cota de Eventos do mês esgotada")
     assert current["later"]
     assert current["batches"] == 0
+
+
+@pytest.mark.asyncio
+async def test_limite_diario_do_provedor_espera_a_janela_sem_falhar(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    connector_id = await connector(
+        engine, tenant, {"pages": 2, "fail": {"page": 1, "kind": "api_limit", "times": 1}}
+    )
+    assert await sync(engine, connector_id) == "failed"
+    current = await one(
+        engine,
+        "select status, paused_reason, consecutive_failures,"
+        " next_run_at > now() + interval '50 minutes' as later"
+        " from doctor.connectors where id = :c",
+        c=connector_id,
+    )
+    assert (current["status"], current["paused_reason"], current["consecutive_failures"]) == (
+        "active",
+        "api_limit",
+        0,
+    )
+    assert current["later"]
+    # Antes da janela, o agendador não o chama; depois, chama.
+    await enqueue_due(engine)
+    assert not await queued(engine, connector_id)
+    await run(
+        engine,
+        "update doctor.connectors set next_run_at = now() - interval '1 minute' where id = :c",
+        c=connector_id,
+    )
+    await enqueue_due(engine)
+    assert await queued(engine, connector_id)
+
+
+@pytest.mark.asyncio
+async def test_pausa_manual_durante_a_sincronizacao_vence_o_limite_de_api(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    connector_id = await connector(
+        engine, tenant, {"pages": 2, "fail": {"page": 1, "kind": "api_limit", "times": 1}}
+    )
+    claimed = await claim(engine, connector_id)
+    assert not isinstance(claimed, str)
+    found, sync_id = claimed
+    await run(
+        engine,
+        "update doctor.connectors set status = 'paused', paused_reason = 'manual' where id = :c",
+        c=connector_id,
+    )
+    result = await execute(engine, REGISTRY, FAST, found, sync_id)
+    await finish(engine, found, sync_id, result)
+    after = await one(
+        engine, "select status, paused_reason from doctor.connectors where id = :c", c=connector_id
+    )
+    assert (after["status"], after["paused_reason"]) == ("paused", "manual")
+
+
+async def queued(engine: AsyncEngine, connector_id: str) -> bool:
+    found = await one(
+        engine,
+        "select count(*) as n from doctor.outbox_messages where topic = 'connector.sync'"
+        " and payload ->> 'connector_id' = :c",
+        c=connector_id,
+    )
+    return bool(found["n"])

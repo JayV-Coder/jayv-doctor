@@ -154,6 +154,25 @@ async def finish(
             ),
             {"status": result.status, "error": result.error_message, "s": sync_id},
         )
+        if result.error_kind == "api_limit":
+            # Limite diário do provedor (#37): a próxima rodada fica para depois da janela, sem
+            # contar falha nem mudar o status. `paused_reason` só mostra o motivo na tela; uma
+            # pausa manual ou desativação feita durante a Sincronização continua valendo.
+            await connection.execute(
+                text(
+                    "update doctor.connectors set last_error = :error,"
+                    " paused_reason = case when status in ('paused', 'disabled')"
+                    " then paused_reason else 'api_limit' end,"
+                    " next_run_at = now() + make_interval(secs => :seconds)"
+                    " where id = cast(:c as uuid)"
+                ),
+                {
+                    "error": result.error_message,
+                    "seconds": result.retry_after or 3600,
+                    "c": connector["id"],
+                },
+            )
+            return
         if result.error_kind == "quota":
             # Cota acabou: o Conector não falhou. Sem contar falha nem backoff; tenta de hora em
             # hora (a Cota volta no mês seguinte ou com o aumento do plano).
@@ -173,6 +192,8 @@ async def finish(
                     " status = case when status in ('paused', 'disabled') then status"
                     " else 'active' end,"
                     " last_sync_at = now(), last_error = null,"
+                    " paused_reason = case when paused_reason = 'api_limit' then null"
+                    " else paused_reason end,"
                     " next_run_at = now() + make_interval(secs =>"
                     " case when :more then :soon else sync_interval_seconds end)"
                     " where id = cast(:c as uuid)"

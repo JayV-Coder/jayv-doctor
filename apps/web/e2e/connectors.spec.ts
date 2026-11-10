@@ -41,7 +41,7 @@ async function uploadKey(page: Page, project: string): Promise<void> {
 async function startWizard(page: Page, project: string): Promise<void> {
   await page.goto("/conectores");
   await page.getByRole("link", { name: "Adicionar" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Conector GCP" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Novo conector" })).toBeVisible();
   await page.getByLabel("ID do projeto").fill(project);
   await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page.getByText("passo 2 de 4")).toBeVisible();
@@ -60,7 +60,9 @@ test("Admin configura o GCP pelo assistente, retoma o rascunho e o Analyst só v
 
   await page.goto("/conectores");
   await expect(page.getByText("Nenhum Conector configurado")).toBeVisible();
-  await expect(page.getByRole("article", { name: "Salesforce · SAP" })).toContainText("v0.2");
+  await expect(page.getByRole("article", { name: "SAP Integration Suite" })).toContainText(
+    "pela API",
+  );
   await startWizard(page, "acme-integracoes");
 
   // Passo 2: comandos copiáveis com o projeto, teste com a chave.
@@ -149,4 +151,49 @@ test("teste de conexão sem permissão diz a causa e a ação", async ({ page })
   await expect(alert).toContainText("Conceda o papel roles/logging.viewer", { ignoreCase: true });
   await expect(alert).toContainText("doctor-reader@acme-sem-permissao.iam.gserviceaccount.com");
   await expect(page.getByRole("button", { name: "Continuar" })).toBeDisabled();
+});
+
+test("Salesforce: a org sem Event Monitoring segue com as outras fontes", async ({ page }) => {
+  test.setTimeout(120_000);
+  await ownerWithOrganization(page, `Salesforce ${randomUUID().slice(0, 8)}`);
+  await page.goto("/integracoes");
+  await createIntegration(page, "Pedidos Salesforce → SAP");
+  await expect(page.getByRole("article", { name: "Pedidos Salesforce → SAP" })).toBeVisible();
+
+  await page.goto("/conectores/novo");
+  await page.getByRole("link", { name: "Salesforce" }).click();
+  await expect(page.getByText("Salesforce · passo 1 de 4")).toBeVisible();
+  await page.getByLabel("Nome do conector").fill("Salesforce produção");
+  await page.getByLabel("Objeto de log de integração (opcional)").fill("Integration_Log__c");
+  await page.getByRole("button", { name: "Continuar" }).click();
+
+  // Passo 2: JWT Bearer, sem senha; o teste diz o que a edição tem.
+  const { privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+    publicKeyEncoding: { type: "spki", format: "pem" },
+  });
+  await page.getByLabel("Consumer Key da Connected App").fill("3MVG9-conectado");
+  await page.getByLabel("Usuário de integração").fill("doctor@acme.test");
+  await page.getByLabel("Chave privada do certificado (PEM)").fill(privateKey);
+  await page.getByRole("button", { name: "Testar conexão" }).click();
+  await expect(page.getByRole("status")).toContainText("EventLogFile indisponível nesta edição");
+  await expectNoHorizontalScroll(page);
+  await page.getByRole("button", { name: "Continuar" }).click();
+
+  // Passo 3: a fonte que a org não tem fica desligada; as outras já vêm marcadas.
+  const sources = page.getByRole("group", { name: "Fontes" });
+  await expect(sources.getByLabel("EventLogFile (Event Monitoring)")).toBeDisabled();
+  await expect(sources.getByLabel("ApexLog")).toBeChecked();
+  await expect(sources.getByLabel("Objeto de log de integração (__c)")).toBeChecked();
+  await page.getByLabel("Campo da mensagem").fill("Message__c");
+  await page.getByRole("button", { name: "Continuar" }).click();
+
+  // Passo 4: vincula a Integração e ativa.
+  await page.getByLabel("Integração vinculada").selectOption({ index: 1 });
+  await page.getByRole("button", { name: "Ativar conector" }).click();
+  await expect(page).toHaveURL(/\/conectores\/[0-9a-f-]{36}$/);
+  await expect(
+    page.getByRole("article", { name: "salesforce · Salesforce produção" }),
+  ).toBeVisible();
 });

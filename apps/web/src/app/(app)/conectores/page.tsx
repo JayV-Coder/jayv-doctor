@@ -79,11 +79,13 @@ export default async function ConnectorsPage() {
       <article className="card soon" aria-labelledby="proxima-versao" aria-disabled="true">
         <div className="row-between">
           <h2 id="proxima-versao" className="t muted">
-            Salesforce · SAP
+            SAP Integration Suite
           </h2>
-          <Chip tone="info">v0.2</Chip>
+          <Chip tone="info">pela API</Chip>
         </div>
-        <p className="small">Disponível na próxima versão.</p>
+        <p className="small">
+          O assistente na tela vem depois do piloto. Por enquanto, o Conector é criado pela API.
+        </p>
       </article>
     </>
   );
@@ -118,7 +120,9 @@ function ConnectorCard({
           {connector.last_error}
         </p>
       )}
-      {paused && <p className="alert">{pauseText(connector.paused_reason)}</p>}
+      {(paused || connector.paused_reason === "api_limit") && (
+        <p className="alert">{pauseText(connector.paused_reason)}</p>
+      )}
       <dl className="kv">
         <dt>última sync</dt>
         <dd>{lastSyncText(connector, now)}</dd>

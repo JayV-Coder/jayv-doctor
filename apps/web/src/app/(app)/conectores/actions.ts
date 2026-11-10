@@ -1,5 +1,7 @@
 "use server";
 
+import type { ApiComponents } from "@aid/contracts";
+
 import { revalidatePath } from "next/cache";
 import { apiFetch } from "@/lib/api";
 
@@ -16,7 +18,8 @@ const MESSAGES: Record<string, string> = {
 const GENERIC = "Não foi possível concluir agora. Tente de novo.";
 const OFFLINE = "Sem conexão. Tente de novo.";
 
-export type TestOutcome = { ok: boolean; message: string };
+// Gerado do OpenAPI: `capabilities` são as fontes da conta do cliente (Salesforce, #37).
+export type TestOutcome = ApiComponents["schemas"]["TestResult"];
 
 async function failure(response: Response): Promise<string> {
   const { code, title } = (await response.json().catch(() => ({}))) as {
@@ -82,8 +85,9 @@ export async function editConnector(id: string, form: FormData): Promise<string 
 export async function testNewConnection(
   config: Record<string, unknown>,
   credential: string,
+  provider: "gcp" | "salesforce" = "gcp",
 ): Promise<TestOutcome> {
-  return test("/connectors/test", { provider: "gcp", config, credential });
+  return test("/connectors/test", { provider, config, credential });
 }
 
 export async function createConnector(request: {
@@ -92,10 +96,11 @@ export async function createConnector(request: {
   config: Record<string, unknown>;
   sync_interval_seconds: number;
   credential: string;
+  provider?: "gcp" | "salesforce";
 }): Promise<{ id: string } | { error: string }> {
   const response = await apiFetch("/connectors", {
     method: "POST",
-    body: JSON.stringify({ ...request, provider: "gcp" }),
+    body: JSON.stringify({ provider: "gcp", ...request }),
   }).catch(() => null);
   if (!response) return { error: OFFLINE };
   if (!response.ok) return { error: await failure(response) };

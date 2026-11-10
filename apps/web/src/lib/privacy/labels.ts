@@ -15,14 +15,7 @@ export function daysText(days: number): string {
 
 type Subprocessor = { name: string; purpose: string; region: string };
 
-// Perfil de IA (#45, ADR-0018): onde as Evidências sanitizadas são processadas. Aceita também o
-// nome do provedor (`llm_provider`), que é derivado do perfil.
-const PROFILE_OF: Record<string, string> = {
-  anthropic: "standard",
-  vertex: "br_region",
-  vertex_dedicated: "dedicated",
-};
-
+// Perfil de IA (#45, ADR-0018): onde as Evidências sanitizadas são processadas.
 export const AI_PROFILES: Record<string, { title: string; detail: string }> = {
   standard: {
     title: "Padrão",
@@ -38,13 +31,9 @@ export const AI_PROFILES: Record<string, { title: string; detail: string }> = {
   },
 };
 
-export function profileOf(value: string): string {
-  return PROFILE_OF[value] ?? value;
-}
-
 // O que o DPA diz sobre a IA em cada perfil.
-export function dpaText(value: string): string {
-  return profileOf(value) === "standard"
+export function dpaText(profile: string): string {
+  return profile === "standard"
     ? "Transferência internacional para a Anthropic e a Voyage AI (Estados Unidos), coberta pelas cláusulas-padrão do DPA."
     : "Processamento de IA no Brasil (southamerica-east1), sem transferência internacional para a IA.";
 }
@@ -55,15 +44,40 @@ const day = new Intl.DateTimeFormat("pt-BR", {
   month: "2-digit",
 });
 
-// A verificação diária do perfil: os hosts e a região que a chamada de teste usou.
+// A verificação diária do perfil: os hosts e a região que a chamada de teste usou. Falha da
+// chamada (cota, capacidade) não é divergência de região.
 export function checkText(
-  check: { checked_at: string; ok: boolean; region: string | null; detail: string | null } | null,
+  check: {
+    checked_at: string;
+    ok: boolean;
+    in_region: boolean;
+    region: string | null;
+    detail: string | null;
+  } | null,
 ): { text: string; ok: boolean } | null {
   if (!check) return null;
   const when = day.format(new Date(check.checked_at));
-  return check.ok
-    ? { text: `Verificado em ${when}: ${check.region ?? "região conferida"}`, ok: true }
-    : { text: `Divergência em ${when}: ${check.detail ?? "conferindo"}`, ok: false };
+  if (check.ok)
+    return { text: `Verificado em ${when}: ${check.region ?? "região conferida"}`, ok: true };
+  if (!check.in_region)
+    return { text: `Divergência de região em ${when}: ${check.detail ?? "conferindo"}`, ok: false };
+  return {
+    text: `Verificação sem resposta em ${when}, região conferida: ${check.detail ?? ""}`,
+    ok: false,
+  };
+}
+
+// O que muda ao trocar de perfil (mostrado antes de confirmar).
+export function profileChangeText(current: string, next: string): string {
+  const parts = [
+    next === "standard"
+      ? "Os próximos Diagnósticos e buscas vão para a Anthropic e a Voyage, nos Estados Unidos (transferência internacional prevista no DPA)."
+      : "Os próximos Diagnósticos e buscas ficam no Vertex AI, em southamerica-east1.",
+    "A Base de conhecimento é reindexada em segundo plano.",
+  ];
+  if (current === "dedicated")
+    parts.push("Sair do dedicado libera a capacidade: só a operação da plataforma liga de novo.");
+  return parts.join(" ");
 }
 
 // Reindex depois da troca de perfil: nulo quando a Base já está toda no modelo do perfil.
@@ -73,8 +87,7 @@ export function reindexText(reindex: { total: number; current: number }): string
 }
 
 // Quem trata dados da Organização em nome do Doctor (PRD §8), conforme o perfil de IA.
-export function subprocessors(value: string): Subprocessor[] {
-  const profile = profileOf(value);
+export function subprocessors(profile: string): Subprocessor[] {
   const base: Subprocessor[] = [
     {
       name: "Supabase",

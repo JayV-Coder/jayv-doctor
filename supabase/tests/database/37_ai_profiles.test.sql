@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(14);
+select plan(16);
 
 select tests.create_user('00000000-0000-4000-8000-0000000f2001', 'owner@acme.test');
 select tests.create_user('00000000-0000-4000-8000-0000000f2002', 'admin@acme.test');
@@ -33,6 +33,11 @@ select tests.clear_authentication();
 
 select is((select count(*)::int from doctor.audit_logs where tenant_id = '00000000-0000-4000-8000-00000000ac21'
   and action = 'org.ai_profile_changed'), 1, 'a troca fica na trilha de auditoria');
+select is((select count(*)::int from doctor.audit_logs where tenant_id = '00000000-0000-4000-8000-00000000ac21'
+  and action = 'org.updated'), 0, 'e só uma vez (a auditoria genérica não a repete)');
+update doctor.tenants set llm_provider = 'anthropic' where id = '00000000-0000-4000-8000-00000000be21';
+select is((select ai_profile from doctor.tenants where id = '00000000-0000-4000-8000-00000000be21'), 'standard',
+  'mudar só o provedor (ADR-0007) muda o perfil junto');
 
 set local role service_role;
 select lives_ok($$select doctor.set_dedicated_ai('00000000-0000-4000-8000-00000000ac21', 'cliente-ia-123')$$,

@@ -2,6 +2,7 @@
 reindex não termina, nos índices antigos que o perfil ainda permite. Quem passou para o Brasil
 não manda a pergunta ao Voyage: os Fragmentos antigos dele seguem achados pelo texto."""
 
+import asyncio
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
@@ -27,26 +28,34 @@ async def query_vectors(
     provider: LLMProvider | None,
     profile: str,
     previous_models: Sequence[str],
-    provider_for: Callable[[str], LLMProvider] | None,
+    provider_for: Callable[[str], LLMProvider],
 ) -> QueryVectors:
-    """Sem provedor (envio ao LLM desligado), nada sai: a busca fica só no texto."""
+    """Sem provedor (envio ao LLM desligado), nada sai: a busca fica só no texto. Os
+    embeddings (do modelo atual e dos índices antigos) saem em paralelo."""
     if provider is None:
         return QueryVectors()
-    embedding: list[float] | None = None
-    try:
-        [embedding] = await provider.embed([query], input_type="query")
-    except LLMError:
-        embedding = None
-    model = provider.embedding_model if vector_usable(embedding, provider.embedding_model) else None
-    previous: list[tuple[list[float], str]] = []
     allowed = INDEXES.get(profile, frozenset())
-    for old_model in previous_models if provider_for is not None else ():
-        name = INDEX_PROVIDERS.get(old_model)
-        if old_model not in allowed or name is None or old_model == provider.embedding_model:
-            continue
+    olds = [
+        (old_model, name)
+        for old_model in previous_models
+        if old_model in allowed
+        and old_model != provider.embedding_model
+        and (name := INDEX_PROVIDERS.get(old_model)) is not None
+    ]
+
+    async def embed(chosen: LLMProvider) -> list[float] | None:
         try:
-            [vector] = await provider_for(name).embed([query], input_type="query")  # type: ignore[misc]
+            [vector] = await chosen.embed([query], input_type="query")
         except LLMError:
-            continue
-        previous.append((vector, old_model))
+            return None
+        return vector
+
+    found = await asyncio.gather(embed(provider), *(embed(provider_for(name)) for _, name in olds))
+    embedding = found[0]
+    model = provider.embedding_model if vector_usable(embedding, provider.embedding_model) else None
+    previous = [
+        (vector, old_model)
+        for (old_model, _), vector in zip(olds, found[1:], strict=True)
+        if vector is not None
+    ]
     return QueryVectors(embedding if model else None, model, previous)

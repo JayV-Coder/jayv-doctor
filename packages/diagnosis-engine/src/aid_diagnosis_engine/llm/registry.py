@@ -1,5 +1,6 @@
 """Provedor por Organização (`tenants.llm_provider`, derivado do perfil de IA `ai_profile`,
-ADR-0018): trocar é mudar a coluna, sem deploy. As credenciais vêm do Secret Manager pelo
+ADR-0018): trocar é mudar o perfil (`doctor.set_ai_profile`), sem deploy; o banco mantém o
+provedor e o perfil juntos. As credenciais vêm do Secret Manager pelo
 ambiente do worker (ANTHROPIC_API_KEY, VOYAGE_API_KEY, GCP_PROJECT_ID). O dedicado usa o projeto
 da Organização (`ai_project`) quando é o do cliente."""
 

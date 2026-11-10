@@ -114,7 +114,11 @@ class KnowledgeRepository:
                     )
                 )
             ).first()
-            models = await previous_models(connection, claims.tenant_id or "", None)
+            models = (
+                await previous_models(connection, claims.tenant_id or "", None)
+                if found is not None and found.llm_enabled
+                else []
+            )
         if found is None:
             return AiChoice("anthropic", None, "standard", models)
         return AiChoice(

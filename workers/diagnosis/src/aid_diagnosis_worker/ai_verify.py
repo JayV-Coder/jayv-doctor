@@ -5,6 +5,7 @@ perfil, registra `ai.profile_divergence`, que dispara o alerta."""
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from aid_db import platform_role
@@ -37,7 +38,18 @@ def expected(profile: str, hosts: list[str]) -> str | None:
     return None
 
 
-async def check(provider: LLMProvider, profile: str) -> tuple[bool, list[str], str | None]:
+@dataclass(frozen=True)
+class Outcome:
+    ok: bool
+    in_region: bool
+    hosts: list[str]
+    detail: str | None
+
+
+async def check(provider: LLMProvider, profile: str) -> Outcome:
+    """Região e disponibilidade em separado: falha da chamada (cota, 429 do dedicado, saída
+    inválida) com os hosts no lugar do perfil não é violação de região."""
+    failure: str | None = None
     with egress.recording() as hosts:
         try:
             await provider.embed([QUESTION], input_type="query")
@@ -48,11 +60,21 @@ async def check(provider: LLMProvider, profile: str) -> tuple[bool, list[str], s
                 model_tier="fast",
                 max_tokens=32,
             )
-            failure = None
         except LLMError as exc:
             failure = f"a chamada falhou: {exc}"[:300]
-    divergence = expected(profile, hosts) if failure is None or hosts else None
-    return failure is None and divergence is None, sorted(set(hosts)), divergence or failure
+        except Exception:
+            log.exception("verificação do perfil %s falhou", profile)
+            failure = "a chamada falhou: erro inesperado"
+    # Região só se julga pelo que saiu; nada ter saído sem erro também é falha.
+    divergence = expected(profile, hosts) if hosts else None
+    if failure is None and not hosts:
+        failure = "nenhuma chamada saiu"
+    return Outcome(
+        ok=failure is None and divergence is None,
+        in_region=divergence is None,
+        hosts=sorted(set(hosts)),
+        detail=divergence or failure,
+    )
 
 
 async def verify_profiles(engine: AsyncEngine, provider_for: ProviderFor) -> list[dict[str, Any]]:
@@ -69,29 +91,45 @@ async def verify_profiles(engine: AsyncEngine, provider_for: ProviderFor) -> lis
         ).all()
     results: list[dict[str, Any]] = []
     for profile, project in targets:
-        ok, hosts, detail = await check(provider_for(PROFILES[profile], project), profile)
-        regions = sorted({egress.region_of(host) for host in hosts} - {"local"})
         target = project or "platform"
+        try:
+            outcome = await check(provider_for(PROFILES[profile], project), profile)
+        except Exception:
+            # Um perfil que nem monta o provedor não impede a verificação dos outros.
+            log.exception("verificação do perfil %s (%s) não rodou", profile, target)
+            outcome = Outcome(False, True, [], "o provedor do perfil não pôde ser montado")
+        hosts = outcome.hosts
+        regions = sorted({egress.region_of(host) for host in hosts} - {"local"})
         async with engine.begin() as connection:
             await platform_role(connection)
             await connection.execute(
                 text(
-                    "insert into doctor.ai_profile_checks (profile, target, ok, hosts, region,"
-                    " detail) values (:p, :t, :ok, :h, :r, :d)"
+                    "insert into doctor.ai_profile_checks (profile, target, ok, in_region, hosts,"
+                    " region, detail) values (:p, :t, :ok, :ir, :h, :r, :d)"
                 ),
                 {
                     "p": profile,
                     "t": target,
-                    "ok": ok,
+                    "ok": outcome.ok,
+                    "ir": outcome.in_region,
                     "h": hosts,
                     "r": ", ".join(regions) or None,
-                    "d": detail,
+                    "d": outcome.detail,
                 },
             )
-        if not ok:
-            log.error(
-                "ai.profile_divergence",
-                extra={"fields": {"profile": profile, "target": target, "detail": detail or ""}},
-            )
-        results.append({"profile": profile, "target": target, "ok": ok, "hosts": hosts})
+        fields = {"profile": profile, "target": target, "detail": outcome.detail or ""}
+        if not outcome.in_region:
+            # Só a região fora do perfil dispara o alerta de privacidade.
+            log.error("ai.profile_divergence", extra={"fields": fields})
+        elif not outcome.ok:
+            log.warning("ai.profile_check_failed", extra={"fields": fields})
+        results.append(
+            {
+                "profile": profile,
+                "target": target,
+                "ok": outcome.ok,
+                "in_region": outcome.in_region,
+                "hosts": hosts,
+            }
+        )
     return results

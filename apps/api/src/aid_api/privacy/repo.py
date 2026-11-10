@@ -47,7 +47,7 @@ class PrivacyRepository:
                 (
                     await connection.execute(
                         text(
-                            "select checked_at, ok, hosts, region, detail"
+                            "select checked_at, ok, in_region, hosts, region, detail"
                             " from doctor.ai_profile_status() where checked_at is not null"
                         )
                     )
@@ -96,7 +96,10 @@ class PrivacyRepository:
             ai_profile=tenant.ai_profile,
             ai_project=tenant.ai_project,
             ai_check=AiCheck.model_validate(dict(check)) if check else None,
-            reindex=Reindex(model=model, total=counts.total, current=counts.current),
+            # Envio ao LLM desligado: nada é reindexado (os documentos ficam só com o texto).
+            reindex=Reindex(model=model, total=counts.total, current=counts.current)
+            if tenant.llm_enabled
+            else Reindex(model=model, total=0, current=0),
             deletion=deletion,
         )
 

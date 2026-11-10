@@ -29,6 +29,8 @@ class AiCheck(BaseModel):
 
     checked_at: datetime
     ok: bool
+    # Falso só quando um host saiu do lugar do perfil (falha da chamada não conta).
+    in_region: bool
     hosts: list[str]
     region: str | None
     detail: str | None

@@ -5,6 +5,7 @@ import {
   daysText,
   deletionText,
   dpaText,
+  profileChangeText,
   reindexText,
   subprocessors,
 } from "./labels";
@@ -18,11 +19,11 @@ describe("Retenção e LGPD", () => {
   });
 
   it("subprocessadores conforme o provedor de IA da Organização", () => {
-    const anthropic = subprocessors("anthropic").map((item) => item.name);
+    const anthropic = subprocessors("standard").map((item) => item.name);
     expect(anthropic).toContain("Anthropic");
     expect(anthropic).toContain("Voyage AI");
     expect(anthropic).not.toContain("Google Vertex AI");
-    const vertex = subprocessors("vertex").map((item) => item.name);
+    const vertex = subprocessors("br_region").map((item) => item.name);
     expect(vertex).toContain("Google Vertex AI");
     expect(vertex).not.toContain("Anthropic");
   });
@@ -31,18 +32,21 @@ describe("Retenção e LGPD", () => {
     expect(subprocessors("br_region").map((item) => item.name)).not.toContain("Voyage AI");
     expect(subprocessors("dedicated")[2]?.purpose).toContain("capacidade dedicada");
     expect(dpaText("standard")).toContain("Transferência internacional");
-    expect(dpaText("vertex")).toContain("sem transferência internacional");
+    expect(dpaText("br_region")).toContain("sem transferência internacional");
+    expect(profileChangeText("dedicated", "standard")).toContain("só a operação da plataforma");
+    expect(profileChangeText("standard", "br_region")).toContain("southamerica-east1");
     expect(
       checkText({
         checked_at: "2026-11-10T06:00:00Z",
         ok: true,
+        in_region: true,
         region: "southamerica-east1",
         detail: null,
       }),
     ).toEqual({ text: "Verificado em 10/11: southamerica-east1", ok: true });
-    expect(
-      checkText({ checked_at: "2026-11-10T06:00:00Z", ok: false, region: null, detail: "x" })?.ok,
-    ).toBe(false);
+    const base = { checked_at: "2026-11-10T06:00:00Z", ok: false, region: null, detail: "x" };
+    expect(checkText({ ...base, in_region: false })?.text).toContain("Divergência de região");
+    expect(checkText({ ...base, in_region: true })?.text).toContain("sem resposta");
     expect(reindexText({ total: 10, current: 10 })).toBeNull();
     expect(reindexText({ total: 10, current: 3 })).toContain("3 de 10 documentos");
   });

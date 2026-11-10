@@ -22,4 +22,4 @@
 |---|---|---|
 | `PUT /api/v1/privacy/ai-profile` | Owner `aal2` | `{ "profile": "standard" \| "br_region" }`. `dedicated` → `422 dedicated_by_contract` (é ligado pela operação da plataforma) |
 
-`GET /api/v1/privacy` traz também `ai_profile`, `ai_project` (projeto da capacidade dedicada, ou `null`), `ai_check` (última verificação diária: `checked_at`, `ok`, `hosts`, `region`, `detail`) e `reindex` (`model` do perfil, `total` de documentos prontos e `current` já nesse modelo). Detalhes em [docs/operations/ia-perfis.md](../operations/ia-perfis.md).
+`GET /api/v1/privacy` traz também `ai_profile`, `ai_project` (projeto da capacidade dedicada, ou `null`), `ai_check` (última verificação diária: `checked_at`, `ok`, `in_region`, `hosts`, `region`, `detail`; `in_region = false` é divergência de região, `ok = false` com `in_region = true` é falha da chamada) e `reindex` (`model` do perfil, `total` de documentos prontos e `current` já nesse modelo; zerados com o envio ao LLM desligado, que não reindexa). Detalhes em [docs/operations/ia-perfis.md](../operations/ia-perfis.md).

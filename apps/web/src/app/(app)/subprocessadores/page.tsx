@@ -1,5 +1,5 @@
 import { getPrivacy } from "@/lib/privacy/api";
-import { AI_PROFILES, dpaText, profileOf, subprocessors } from "@/lib/privacy/labels";
+import { AI_PROFILES, dpaText, subprocessors } from "@/lib/privacy/labels";
 
 export const metadata = { title: "Subprocessadores · Integration AI Doctor" };
 
@@ -28,8 +28,7 @@ export default async function SubprocessorsPage() {
         ))}
       </ul>
       <p className="small" role="note">
-        <strong>Perfil de IA: {AI_PROFILES[profileOf(provider)]?.title}.</strong>{" "}
-        {dpaText(provider)}
+        <strong>Perfil de IA: {AI_PROFILES[provider]?.title}.</strong> {dpaText(provider)}
       </p>
       {privacy && !privacy.llm_enabled && (
         <p className="note">O envio de evidências ao LLM está desligado nesta Organização.</p>

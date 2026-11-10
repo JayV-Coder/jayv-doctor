@@ -39,10 +39,14 @@ test("retenção, envio ao LLM, subprocessadores, titular e exclusão total", as
   const profile = page.getByRole("group", { name: "Perfil de IA" });
   await expect(profile.getByRole("radio", { name: /Padrão/ })).toBeChecked();
   await expect(profile.getByRole("radio", { name: /Dedicado/ })).toHaveCount(0);
-  const changed = page.waitForResponse((response) => response.request().method() === "POST");
+  // Escolher não troca: o Owner confirma o que muda.
   await profile.getByRole("radio", { name: /Brasil/ }).check();
-  await changed;
+  await profile.getByRole("button", { name: "Trocar para Brasil" }).click();
+  const switchSheet = page.getByRole("dialog", { name: "Trocar para o perfil Brasil" });
+  await expect(switchSheet).toContainText("southamerica-east1");
   await expectNoHorizontalScroll(page);
+  await switchSheet.getByRole("button", { name: "Confirmar a troca" }).click();
+  await expect(switchSheet).toBeHidden();
   await page.reload();
   await expect(
     page.getByRole("group", { name: "Perfil de IA" }).getByRole("radio", { name: /Brasil/ }),

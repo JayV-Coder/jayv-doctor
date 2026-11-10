@@ -33,14 +33,14 @@ isOneToOne: false
                   ]
                 },"ai_profile_checks": {
                   Row: {
-                    "checked_at": string,"detail": string | null,"hosts": (string)[],"id": number,"ok": boolean,"profile": string,"region": string | null,"target": string
+                    "checked_at": string,"detail": string | null,"hosts": (string)[],"id": number,"in_region": boolean,"ok": boolean,"profile": string,"region": string | null,"target": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "checked_at"?: string,"detail"?: string | null,"hosts"?: (string)[],"id"?: never,"ok": boolean,"profile": string,"region"?: string | null,"target"?: string
+                    "checked_at"?: string,"detail"?: string | null,"hosts"?: (string)[],"id"?: never,"in_region"?: boolean,"ok": boolean,"profile": string,"region"?: string | null,"target"?: string
                   }
                   Update: {
-                    "checked_at"?: string,"detail"?: string | null,"hosts"?: (string)[],"id"?: never,"ok"?: boolean,"profile"?: string,"region"?: string | null,"target"?: string
+                    "checked_at"?: string,"detail"?: string | null,"hosts"?: (string)[],"id"?: never,"in_region"?: boolean,"ok"?: boolean,"profile"?: string,"region"?: string | null,"target"?: string
                   }
                   Relationships: [
 
@@ -1812,7 +1812,7 @@ isOneToOne: false
                            },
 "ai_profile_status":
 { Args: Record<PropertyKey, never>; Returns: {
-              "checked_at": string,"detail": string,"hosts": (string)[],"ok": boolean,"profile": string,"region": string
+              "checked_at": string,"detail": string,"hosts": (string)[],"in_region": boolean,"ok": boolean,"profile": string,"region": string
             }[]
                            },
 "alert_audience":

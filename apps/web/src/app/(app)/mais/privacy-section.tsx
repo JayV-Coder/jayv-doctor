@@ -11,6 +11,7 @@ import {
   classLabel,
   daysText,
   deletionText,
+  profileChangeText,
   reindexText,
 } from "@/lib/privacy/labels";
 import { cancelDeletion, requestDeletion, setAiProfile, setLlm, setRetention } from "./actions";
@@ -164,17 +165,20 @@ function LlmToggle({ enabled, manager }: { enabled: boolean; manager: boolean })
   );
 }
 
-// Perfil de IA (#45): o Owner com MFA troca entre o padrão e o Brasil; o dedicado é contratado.
+// Perfil de IA (#45): o Owner com MFA escolhe e confirma (a troca muda onde os dados são
+// processados, e sair do dedicado só volta pela operação da plataforma).
 function AiProfile({ settings, owner }: { settings: PrivacySettings; owner: boolean }) {
-  const [chosen, setChosen] = useState(settings.ai_profile);
+  const current = settings.ai_profile;
+  const [chosen, setChosen] = useState(current);
   const [error, setError] = useState<string | null>(null);
   const [busy, startTransition] = useTransition();
   const check = checkText(settings.ai_check);
   const reindex = reindexText(settings.reindex);
   const options =
-    settings.ai_profile === "dedicated"
+    current === "dedicated"
       ? (["dedicated", "standard", "br_region"] as const)
       : (["standard", "br_region"] as const);
+  const title = AI_PROFILES[chosen]?.title ?? chosen;
   return (
     <fieldset className="stack" aria-label="Perfil de IA">
       <legend className="label">Perfil de IA</legend>
@@ -187,15 +191,8 @@ function AiProfile({ settings, owner }: { settings: PrivacySettings; owner: bool
             checked={chosen === profile}
             disabled={!owner || busy || profile === "dedicated"}
             onChange={() => {
-              const previous = chosen;
               setChosen(profile);
-              startTransition(async () => {
-                const failure = await setAiProfile(profile).catch(
-                  () => "Sem conexão. Tente de novo.",
-                );
-                setError(failure);
-                if (failure !== null) setChosen(previous);
-              });
+              setError(null);
             }}
           />
           <span>
@@ -204,6 +201,36 @@ function AiProfile({ settings, owner }: { settings: PrivacySettings; owner: bool
           </span>
         </label>
       ))}
+      {owner && chosen !== current && (
+        <BottomSheet
+          title={`Trocar para o perfil ${title}`}
+          trigger={`Trocar para ${title}`}
+          triggerClassName="btn primary"
+          onClose={() => {
+            setError(null);
+          }}
+        >
+          <p className="small">{profileChangeText(current, chosen)}</p>
+          <FormMessage error={error} />
+          <button
+            type="button"
+            className="btn primary"
+            disabled={busy}
+            onClick={(event) => {
+              const dialog = event.currentTarget.closest("dialog");
+              startTransition(async () => {
+                const failure = await setAiProfile(chosen).catch(
+                  () => "Sem conexão. Tente de novo.",
+                );
+                setError(failure);
+                if (failure === null) dialog?.close();
+              });
+            }}
+          >
+            Confirmar a troca
+          </button>
+        </BottomSheet>
+      )}
       {check && (
         <p className={check.ok ? "muted small" : "alert"} role="status">
           {check.text}
@@ -215,10 +242,9 @@ function AiProfile({ settings, owner }: { settings: PrivacySettings; owner: bool
         </p>
       )}
       {!owner && <p className="muted small">Só o Owner com MFA troca o perfil de IA.</p>}
-      {settings.ai_profile !== "dedicated" && (
+      {current !== "dedicated" && (
         <p className="muted small">Capacidade dedicada: fale com o suporte da plataforma.</p>
       )}
-      <FormMessage error={error} />
     </fieldset>
   );
 }

@@ -10,6 +10,7 @@ from typing import Any, Protocol
 
 from aid_db import platform_role
 from aid_diagnosis_engine.llm.base import LLMError, LLMProvider, LLMTransientError
+from aid_diagnosis_engine.llm.registry import EMBEDDING_MODELS
 from aid_knowledge.extract import ExtractionError
 from aid_knowledge.index import index_document
 from aid_knowledge.store import store_chunks
@@ -120,10 +121,8 @@ async def reindex_stale(engine: AsyncEngine, provider_for: ProviderFor) -> int:
     Organização e os que ficaram em `indexing` sem resposta. O pronto continua `ready`: a busca
     por texto segue achando os Fragmentos antigos até os novos chegarem. O Cloud Scheduler chama
     a cada hora."""
-    models = {
-        name: provider_for(name, None).embedding_model
-        for name in ("anthropic", "vertex", "vertex_dedicated")
-    }
+    # O mapa provedor → modelo é o mesmo da tela de privacidade (registro dos provedores).
+    models = EMBEDDING_MODELS
     async with engine.begin() as connection:
         await platform_role(connection)
         result = await connection.execute(

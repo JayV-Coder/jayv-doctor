@@ -24,7 +24,7 @@ from aid_diagnosis_engine.diagnosis import (
     Stage,
 )
 from aid_diagnosis_engine.diagnosis.model import Mode
-from aid_diagnosis_engine.llm.base import LLMProvider
+from aid_diagnosis_engine.llm.base import LLMProvider, LLMUnavailableError
 from aid_diagnosis_engine.llm.client import GuardedLLM
 from aid_diagnosis_engine.rules.base import EventView
 from aid_diagnosis_engine.rules.catalog import RULES, RULESET_VERSION
@@ -110,6 +110,10 @@ def estimate_cost(model: str | None, input_tokens: int, output_tokens: int) -> f
     if price is None:
         return None
     return round(input_tokens / 1e6 * price[0] + output_tokens / 1e6 * price[1], 6)
+
+
+def no_others(name: str) -> LLMProvider:
+    raise LLMUnavailableError(f"sem provedor para o índice de {name}")
 
 
 class DbLoader:
@@ -306,16 +310,13 @@ class DbLoader:
         # Sem embedding (provedor fora), a busca segue só pelo texto, como na API. Perfil de IA
         # trocado: os índices antigos que o perfil permite entram até o reindex terminar.
         models: list[str] = []
-        if self.others is not None:
+        # Sem provedor (envio ao LLM desligado), nada de embedding: nem a consulta aos índices.
+        if self.provider is not None and self.others is not None:
             async with self.engine.begin() as connection:
                 await tenant_role(connection, self.tenant)
                 models = await previous_models(connection, self.tenant, None)
         vectors = await query_vectors(
-            query,
-            self.provider,
-            self.profile,
-            models,
-            self.others or (lambda name: self.provider),  # type: ignore[arg-type,return-value]
+            query, self.provider, self.profile, models, self.others or no_others
         )
         async with self.engine.begin() as connection:
             await tenant_role(connection, self.tenant)

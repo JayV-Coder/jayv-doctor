@@ -51,14 +51,20 @@ def dataset(paths: list[str] | None) -> list[Case]:
 
 
 async def evaluate(
-    cases: list[Case], modes: list[str], provider: str | None, judge: bool
+    cases: list[Case],
+    modes: list[str],
+    provider: str | None,
+    judge: bool,
+    judge_provider: str | None = None,
 ) -> tuple[list[Metrics], list[CaseResult]]:
+    """`judge_provider`: o mesmo juiz em todos os perfis (#45), para a diferença de qualidade
+    ser do modelo avaliado e não do juiz; sem ele, o juiz é o próprio provedor."""
     llm = guarded(provider) if provider else None
     referee: Judge | None = None
     if judge and provider:
         from aid_evaluation.judge import LLMJudge
 
-        referee = LLMJudge(guarded(provider)())
+        referee = LLMJudge(guarded(judge_provider or provider)())
     prices = json.loads(PRICES.read_text(encoding="utf-8")) if PRICES.exists() else None
     metrics, everything = [], []
     for mode in modes:
@@ -90,9 +96,13 @@ def command_run(args: argparse.Namespace) -> None:
         from aid_diagnosis_engine.llm.registry import PROFILES
 
         args.provider = PROFILES[args.profile]
+        if args.judge and not args.judge_provider:
+            raise SystemExit("com --profile e --judge, fixe o juiz: --judge-provider anthropic")
     cases = dataset(args.dataset)
     cases = cases[: args.limit] if args.limit else cases
-    metrics, results = asyncio.run(evaluate(cases, args.modes, args.provider, args.judge))
+    metrics, results = asyncio.run(
+        evaluate(cases, args.modes, args.provider, args.judge, args.judge_provider)
+    )
     notes = []
     if "hybrid" not in args.modes:
         notes.append(
@@ -239,6 +249,8 @@ def main() -> None:
     runner.add_argument("--provider", choices=["anthropic", "vertex", "vertex_dedicated"])
     # Perfil de IA (ADR-0018): escolhe o provedor dele.
     runner.add_argument("--profile", choices=["standard", "br_region", "dedicated"])
+    # Juiz fixo entre perfis: compare só faz sentido com o mesmo juiz.
+    runner.add_argument("--judge-provider", choices=["anthropic", "vertex"])
     runner.add_argument("--judge", action="store_true")
     runner.add_argument("--limit", type=int)
     runner.add_argument("--report-dir", default=str(ROOT / "reports"))

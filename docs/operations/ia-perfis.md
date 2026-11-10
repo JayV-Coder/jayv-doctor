@@ -21,12 +21,12 @@ No dedicado, a geração manda `X-Vertex-AI-LLM-Request-Type: dedicated`: só a 
 
 - **Barreira:** o `VertexProvider` só aceita `southamerica-east1` e só fala com `southamerica-east1-aiplatform.googleapis.com` e com o servidor de metadados. Outro host é recusado antes de sair (`ai.egress_blocked`).
 - **Logs de egress:** toda chamada de IA registra `ai.egress` com `provider`, `host` e `region`, sem conteúdo. Consulta no Logs Explorer: `jsonPayload.message="ai.egress" AND jsonPayload.provider=~"^vertex"`.
-- **Verificação diária:** o job `ai-verify` (06:15 UTC) chama cada perfil em uso com uma pergunta fixa e grava hosts e região em `doctor.ai_profile_checks`. A tela mostra a última.
+- **Verificação diária:** o job `ai-verify` (06:15 UTC) chama cada perfil em uso com uma pergunta fixa e grava hosts, região e `in_region` em `doctor.ai_profile_checks`. A tela mostra a última. Falha da chamada com os hosts no lugar do perfil (cota, 429 do dedicado) é indisponibilidade (`ok = false`, `in_region = true`, log `ai.profile_check_failed`), não divergência de região.
 - **Alerta:** `IA fora da região do perfil` ([runbook](runbooks/ia-regiao.md)).
 
 ## Troca de perfil e reindexação
 
-Trocar entre `standard` e um perfil do Brasil troca o modelo de embedding. A varredura de hora em hora (`POST /knowledge/reindex`) põe os documentos na fila e a tela mostra "Reindexando a Base: X de Y". Até terminar, a busca (API e RAG do Diagnóstico) também consulta o índice antigo, **se o perfil novo permite**:
+A troca pede confirmação na tela, que diz o que muda (e, saindo do dedicado, que só a operação o liga de novo). Trocar entre `standard` e um perfil do Brasil troca o modelo de embedding. A varredura de hora em hora (`POST /knowledge/reindex`) põe os documentos na fila e a tela mostra "Reindexando a Base: X de Y". Até terminar, a busca (API e RAG do Diagnóstico) também consulta o índice antigo, **se o perfil novo permite**:
 
 - `br_region` ou `dedicated` → `standard`: o índice antigo do Vertex segue consultado;
 - `standard` → `br_region` ou `dedicated`: o índice do Voyage **não** é consultado (a pergunta não vai aos EUA). Os Fragmentos antigos seguem achados pelo texto.
@@ -34,9 +34,9 @@ Trocar entre `standard` e um perfil do Brasil troca o modelo de embedding. A var
 ## Avaliação por perfil
 
 ```bash
-uv run python -m aid_evaluation run --modes hybrid --profile standard --json tests/evaluation/reports/standard.json
-uv run python -m aid_evaluation run --modes hybrid --profile br_region --json tests/evaluation/reports/br_region.json
+uv run python -m aid_evaluation run --modes hybrid --profile standard --judge --judge-provider anthropic --json tests/evaluation/reports/standard.json
+uv run python -m aid_evaluation run --modes hybrid --profile br_region --judge --judge-provider anthropic --json tests/evaluation/reports/br_region.json
 uv run python -m aid_evaluation compare standard=tests/evaluation/reports/standard.json br_region=tests/evaluation/reports/br_region.json
 ```
 
-O `compare` gera `tests/evaluation/reports/perfis-<data>.md` com a precisão (em p.p.), o custo por Diagnóstico e a latência p95 de cada perfil contra o primeiro. Publique o relatório em [avaliacao.md](avaliacao.md) a cada mudança de modelo.
+O juiz é o mesmo nos dois (`--judge-provider`, obrigatório com `--profile` e `--judge`): a diferença na Causa provável é do modelo avaliado, não do juiz. O `compare` gera `tests/evaluation/reports/perfis-<data>.md` com a precisão (em p.p.), o custo por Diagnóstico e a latência p95 de cada perfil contra o primeiro. Publique o relatório em [avaliacao.md](avaliacao.md) a cada mudança de modelo.

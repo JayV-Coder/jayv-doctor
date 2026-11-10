@@ -6,10 +6,11 @@ from pathlib import Path
 from typing import Any
 
 QUALITY = (
-    ("category_accuracy", "Precisão de categoria", True),
-    ("cause_accuracy", "Causa provável correta", True),
-    ("inconclusive_rate", "Inconclusivo correto", True),
-    ("hallucination_rate", "Evidência inventada", False),
+    ("category_accuracy", "Precisão de categoria"),
+    ("cause_accuracy", "Causa provável correta"),
+    ("inconclusive_rate", "Inconclusivo correto"),
+    # Aqui, menos é melhor.
+    ("hallucination_rate", "Evidência inventada (menor é melhor)"),
 )
 
 
@@ -48,7 +49,7 @@ def render(reports: dict[str, dict[str, dict[str, Any]]]) -> str:
         lines += [f"## {mode}", "", "| Métrica | " + " | ".join(names) + " |"]
         lines.append("|---|" + "---|" * len(names))
         base = reports[base_name].get(mode, {})
-        for key, label, _higher in QUALITY:
+        for key, label in QUALITY:
             cells = []
             for name in names:
                 found = reports[name].get(mode, {}).get(key)

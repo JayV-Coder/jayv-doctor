@@ -102,3 +102,43 @@ async def test_perfil_brasil_verificado_e_divergencia_alerta(
     [brazil] = [r for r in results if r["profile"] == "br_region"]
     assert not brazil["ok"]
     assert any(r.getMessage() == "ai.profile_divergence" for r in caplog.records)
+
+
+class Refused(Recording):
+    async def complete_structured(self, **kwargs: Any) -> StructuredResult[Any]:
+        from aid_diagnosis_engine.llm.base import LLMTransientError
+
+        egress.record(self.name, self.host)
+        raise LLMTransientError("Vertex AI respondeu HTTP 429.")
+
+
+class Broken(Recording):
+    async def embed(self, texts: Sequence[str], *, input_type: InputType) -> list[list[float]]:
+        raise KeyError("predictions")
+
+
+@pytest.mark.asyncio
+async def test_falha_no_brasil_nao_e_divergencia_e_erro_nao_para_os_outros(
+    engine: AsyncEngine, tenant: dict[str, str], caplog: pytest.LogCaptureFixture
+) -> None:
+    await run(
+        engine,
+        "update doctor.tenants set ai_profile = 'br_region' where id = :t",
+        t=tenant["tenant"],
+    )
+    providers: dict[str, Any] = {
+        # O dedicado sem capacidade: 429 com o host no Brasil.
+        "vertex": Refused("vertex", "southamerica-east1-aiplatform.googleapis.com"),
+        # O padrão quebra com um erro que não é do LLM: os outros seguem.
+        "anthropic": Broken("anthropic", "api.anthropic.com"),
+        "vertex_dedicated": vertex(),
+    }
+    caplog.set_level(logging.WARNING)
+    results = await verify_profiles(engine, lambda name, project: providers[name])
+    by_profile = {r["profile"]: r for r in results}
+    assert (by_profile["br_region"]["ok"], by_profile["br_region"]["in_region"]) == (False, True)
+    if "standard" in by_profile:
+        assert by_profile["standard"]["ok"] is False
+    messages = {r.getMessage() for r in caplog.records}
+    assert "ai.profile_check_failed" in messages
+    assert "ai.profile_divergence" not in messages

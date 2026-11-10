@@ -21,7 +21,9 @@ alter table doctor.tenants add constraint tenants_ai_project_dedicated_check
   check (ai_profile = 'dedicated' or ai_project is null);
 
 -- Quem cria a Organização ainda escolhe o provedor (`create_organization`): o perfil sai dele.
--- Mudar o perfil muda o provedor junto; provedor desconhecido continua barrado pela restrição.
+-- Mudar o perfil muda o provedor junto, e mudar só o provedor (como no ADR-0007) muda o perfil;
+-- provedor desconhecido continua barrado pela restrição. O mapa perfil → provedor é este e o
+-- `PROFILES` do registro dos provedores.
 create function doctor.sync_ai_profile()
 returns trigger
 language plpgsql
@@ -30,6 +32,11 @@ as $$
 begin
   if tg_op = 'INSERT' and new.ai_profile = 'standard' and new.llm_provider = 'vertex' then
     new.ai_profile := 'br_region';
+  elsif tg_op = 'UPDATE' and new.ai_profile is not distinct from old.ai_profile
+      and new.llm_provider is distinct from old.llm_provider then
+    new.ai_profile := case new.llm_provider
+      when 'anthropic' then 'standard' when 'vertex' then 'br_region'
+      when 'vertex_dedicated' then 'dedicated' else new.ai_profile end;
   elsif tg_op = 'INSERT' or new.ai_profile is distinct from old.ai_profile then
     new.llm_provider := case new.ai_profile
       when 'standard' then case when tg_op = 'UPDATE' or new.llm_provider like 'vertex%'
@@ -45,6 +52,14 @@ $$;
 create trigger tenants_sync_ai_profile
 before insert or update of ai_profile, llm_provider, ai_project on doctor.tenants
 for each row execute function doctor.sync_ai_profile();
+
+-- A troca de perfil tem o registro próprio (`org.ai_profile_changed`): a auditoria genérica da
+-- Organização não a repete.
+drop trigger tenants_audit on doctor.tenants;
+create trigger tenants_audit after update on doctor.tenants
+for each row execute function doctor.audit_change('org', 'auto_diagnose_critical',
+  'deletion_requested_at', 'deletion_requested_by', 'deletion_scheduled_for',
+  'ai_profile', 'llm_provider', 'ai_project');
 
 -- O Owner com MFA troca entre o padrão e o Brasil (o DPA e os subprocessadores mudam junto).
 create function doctor.set_ai_profile(profile text)
@@ -105,6 +120,9 @@ create table doctor.ai_profile_checks (
   target text not null default 'platform' check (char_length(target) <= 64),
   checked_at timestamptz not null default now(),
   ok boolean not null,
+  -- Todos os hosts no lugar do perfil. Falha da chamada (cota, 429 do dedicado) com hosts no
+  -- Brasil é `ok = false` e `in_region = true`: indisponibilidade, não violação de região.
+  in_region boolean not null default true,
   hosts text[] not null default '{}',
   region text check (char_length(region) <= 64),
   detail text check (char_length(detail) <= 500)
@@ -116,13 +134,13 @@ revoke all on doctor.ai_profile_checks from anon, authenticated;
 
 -- A última verificação do perfil desta Organização, para a tela de privacidade.
 create function doctor.ai_profile_status()
-returns table (profile text, checked_at timestamptz, ok boolean, hosts text[], region text, detail text)
+returns table (profile text, checked_at timestamptz, ok boolean, in_region boolean, hosts text[], region text, detail text)
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-  select t.ai_profile, c.checked_at, c.ok, c.hosts, c.region, c.detail
+  select t.ai_profile, c.checked_at, c.ok, c.in_region, c.hosts, c.region, c.detail
   from doctor.tenants t
   left join lateral (
     select * from doctor.ai_profile_checks c

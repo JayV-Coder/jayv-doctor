@@ -1693,6 +1693,8 @@ export interface components {
       checked_at: string;
       /** Ok */
       ok: boolean;
+      /** In Region */
+      in_region: boolean;
       /** Hosts */
       hosts: string[];
       /** Region */

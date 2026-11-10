@@ -7871,6 +7871,10 @@
             "type": "boolean",
             "title": "Ok"
           },
+          "in_region": {
+            "type": "boolean",
+            "title": "In Region"
+          },
           "hosts": {
             "items": {
               "type": "string"
@@ -7902,7 +7906,7 @@
           }
         },
         "type": "object",
-        "required": ["checked_at", "ok", "hosts", "region", "detail"],
+        "required": ["checked_at", "ok", "in_region", "hosts", "region", "detail"],
         "title": "AiCheck",
         "description": "Última verificação diária do perfil (ADR-0018): os hosts e a região efetivos."
       },

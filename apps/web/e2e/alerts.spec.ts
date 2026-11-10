@@ -41,6 +41,8 @@ test("Owner cria o canal e a regra do plantão, desliga e define o silêncio", a
   const toggle = card.getByRole("switch");
   await expect(toggle).toBeChecked();
   await toggle.uncheck();
+  // Desabilitado enquanto salva: recarregar antes perderia a mudança.
+  await expect(toggle).toBeEnabled();
   await page.reload();
   await expect(
     page.getByRole("article", { name: "Incidente crítico em produção" }).getByRole("switch"),

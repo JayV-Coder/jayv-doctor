@@ -43,6 +43,7 @@ export function executionTitle(id: string, keys: Record<string, string[] | undef
 const STRATEGIES: Record<string, string> = {
   execution_id: "por execution_id",
   trace_id: "por trace_id",
+  cross_system: "pelo Mapa entre sistemas",
   business_reference: "pela Referência",
   temporal_proximity: "por proximidade (fraca)",
 };

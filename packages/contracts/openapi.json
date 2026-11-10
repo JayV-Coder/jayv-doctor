@@ -7783,7 +7783,7 @@
           },
           "type": {
             "type": "string",
-            "enum": ["email", "slack", "teams", "webpush"],
+            "enum": ["email", "slack", "teams", "webpush", "jira"],
             "title": "Type"
           },
           "name": {
@@ -7809,7 +7809,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["email", "slack", "teams", "webpush"],
+            "enum": ["email", "slack", "teams", "webpush", "jira"],
             "title": "Type"
           },
           "name": {

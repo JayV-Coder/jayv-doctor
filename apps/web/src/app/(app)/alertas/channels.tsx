@@ -11,6 +11,7 @@ const KINDS: Record<string, string> = {
   email: "E-mail",
   slack: "Slack",
   teams: "Microsoft Teams",
+  jira: "Jira (abre o chamado)",
 };
 
 // Canais da Organização (gestores): o webhook do Slack ou do Teams vai para o Vault e não volta.
@@ -126,6 +127,10 @@ export function Channels({
                 }
               />
             </label>
+          ) : type === "jira" ? (
+            <p className="muted small">
+              Abre um chamado por Incidente no projeto configurado em Chamados (ITSM).
+            </p>
           ) : (
             <label className="field">
               Quem recebe

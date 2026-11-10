@@ -24,3 +24,28 @@ export function ticketText(ticket: {
   if (ticket.status === "failed") return `Não abriu: ${ticket.error ?? "erro do Jira"}`;
   return [ticket.external_key, ticket.external_status].filter(Boolean).join(" · ");
 }
+
+// Campos customizados com valor fixo, um por linha: `customfield_10010=Sustentação`.
+const FIELD = /^(customfield_[0-9]{1,10})\s*=\s*(.+)$/;
+
+export function parseFields(
+  value: string,
+): { ok: true; fields: Record<string, string> } | { ok: false; message: string } {
+  const fields: Record<string, string> = {};
+  const lines = value.split("\n");
+  for (const [index, raw] of lines.entries()) {
+    const line = raw.trim();
+    if (!line) continue;
+    const [, name, found] = FIELD.exec(line) ?? [];
+    if (!name || !found)
+      return { ok: false, message: `Linha ${String(index + 1)}: use customfield_<número>=valor.` };
+    fields[name] = found.trim();
+  }
+  return { ok: true, fields };
+}
+
+export function fieldsText(fields: Record<string, unknown>): string {
+  return Object.entries(fields)
+    .map(([name, value]) => `${name}=${String(value)}`)
+    .join("\n");
+}

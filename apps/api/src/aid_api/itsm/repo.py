@@ -1,7 +1,6 @@
 """Jira dentro de `tenant_tx`. A API troca o código do OAuth pelos tokens e os grava no Vault
 pela função do banco, mas não os lê: quem usa os tokens é o worker `notifier` (ADR-0017)."""
 
-import hashlib
 import json
 import os
 import re
@@ -16,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from aid_api.core.auth import Claims
 from aid_api.core.db import anonymous_tx, translated_tx
 from aid_api.core.errors import ApiError
+from aid_api.core.tokens import token_hash
 from aid_api.itsm.schemas import Authorization, JiraConfig, JiraConnection, Ticket
 
 AUTHORIZE_URL = "https://auth.atlassian.com/authorize"
@@ -31,10 +31,6 @@ TICKET_COLUMNS = (
     "id::text, provider, status, external_key, url, external_status, error, created_at,"
     " last_synced_at"
 )
-
-
-def hashed(value: str) -> str:
-    return hashlib.sha256(value.encode()).hexdigest()
 
 
 ERRORS = {
@@ -84,7 +80,7 @@ class ItsmRepository:
         client_id, _, redirect = client_credentials()
         state = secrets.token_urlsafe(32)
         async with translated_tx(claims, ERRORS, self.engine) as db:
-            await db.execute(text("select doctor.start_itsm_oauth(:s)"), {"s": hashed(state)})
+            await db.execute(text("select doctor.start_itsm_oauth(:s)"), {"s": token_hash(state)})
         query = urlencode(
             {
                 "audience": "api.atlassian.com",
@@ -120,12 +116,15 @@ class ItsmRepository:
                 found = await client.get(
                     RESOURCES_URL, headers={"authorization": f"Bearer {tokens['access_token']}"}
                 )
-            except (httpx.HTTPError, KeyError, ValueError) as exc:
+                resources = found.json() if found.status_code == 200 else []
+            except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
                 raise ApiError(502, "jira_unreachable", "O Atlassian não respondeu.") from exc
         sites = [
             {"id": str(site["id"]), "name": str(site.get("name", "")), "url": str(site["url"])}
-            for site in (found.json() if found.status_code == 200 else [])
-            if isinstance(site, dict) and str(site.get("url", "")).startswith("https://")
+            for site in (resources if isinstance(resources, list) else [])
+            if isinstance(site, dict)
+            and "id" in site
+            and str(site.get("url", "")).startswith("https://")
         ]
         stored = json.dumps(
             {
@@ -137,7 +136,7 @@ class ItsmRepository:
         async with translated_tx(claims, ERRORS, self.engine) as db:
             await db.execute(
                 text("select doctor.finish_itsm_oauth(:s, :t, cast(:sites as jsonb))"),
-                {"s": hashed(state), "t": stored, "sites": json.dumps(sites)},
+                {"s": token_hash(state), "t": stored, "sites": json.dumps(sites)},
             )
         return await self.connection(claims)
 
@@ -192,9 +191,11 @@ class ItsmRepository:
             )
         return await self.tickets(claims, incident)
 
-    async def hook(self, token: str) -> None:
+    async def hook(self, token: str, issue_key: str | None) -> None:
         async with anonymous_tx({}) as db:
-            await db.execute(text("select doctor.jira_hook(:h)"), {"h": hashed(token)})
+            await db.execute(
+                text("select doctor.jira_hook(:h, :k)"), {"h": token_hash(token), "k": issue_key}
+            )
 
 
 def get_itsm_repository() -> ItsmRepository:

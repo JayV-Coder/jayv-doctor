@@ -139,18 +139,38 @@ async def test_conecta_configura_e_abre_o_chamado_uma_vez(
             assert first.status_code == second.status_code == 202
             assert [t["status"] for t in second.json()] == ["creating"]
 
+            # Canal Jira para Regras de alerta: sem configuração nem segredo.
+            channel = await client.post(
+                "/api/v1/notification-channels", json={"type": "jira", "name": "Chamado"}
+            )
+            assert (channel.status_code, channel.json()["config"]) == (201, {}), channel.text
+            assert any(
+                c["type"] == "jira"
+                for c in (await client.get("/api/v1/notification-channels")).json()
+            )
+
             app.dependency_overrides[get_claims] = lambda: as_role(viewer, "viewer")
             assert (await client.post(f"/api/v1/incidents/{incident}/tickets")).status_code == 403
             assert len((await client.get(f"/api/v1/incidents/{incident}/tickets")).json()) == 1
 
         async with engine.begin() as connection:
+            # O token do endereço fica no Vault; a outbox não o leva.
             hook_token = await connection.scalar(
                 text(
-                    "select payload ->> 'hook_token' from doctor.outbox_messages"
-                    " where topic = 'itsm.sync' and tenant_id = cast(:t as uuid)"
+                    "select cast(doctor.get_itsm_tokens(id) as jsonb) ->> 'hook_token'"
+                    " from doctor.itsm_connections where tenant_id = cast(:t as uuid)"
                 ),
                 {"t": tenant},
             )
+            leaked = await connection.scalar(
+                text(
+                    "select count(*) from doctor.outbox_messages where tenant_id = cast(:t as uuid)"
+                    " and payload::text like '%' || cast(:h as text) || '%'"
+                ),
+                {"t": tenant, "h": hook_token},
+            )
+            assert hook_token
+            assert leaked == 0
             tickets = await connection.scalar(
                 text(
                     "select count(*) from doctor.outbox_messages where topic = 'itsm.ticket'"
@@ -165,16 +185,26 @@ async def test_conecta_configura_e_abre_o_chamado_uma_vez(
         ) as client:
             wrong = await client.post("/api/v1/itsm/jira/hooks/" + "x" * 40, json={"forjado": 1})
             right = await client.post(f"/api/v1/itsm/jira/hooks/{hook_token}", json={})
-            assert wrong.status_code == right.status_code == 204
-        async with engine.begin() as connection:
-            syncs = await connection.scalar(
-                text(
-                    "select count(*) from doctor.outbox_messages where topic = 'itsm.sync'"
-                    " and tenant_id = cast(:t as uuid)"
-                ),
-                {"t": tenant},
+            # A rajada do mesmo evento vira uma leitura só; outra issue pede a dela.
+            again = await client.post(f"/api/v1/itsm/jira/hooks/{hook_token}", json={})
+            issue = await client.post(
+                f"/api/v1/itsm/jira/hooks/{hook_token}", json={"issue": {"key": "SUST-881"}}
             )
-        assert syncs == 2
+            assert wrong.status_code == right.status_code == again.status_code == 204
+            assert issue.status_code == 204
+        async with engine.begin() as connection:
+            syncs = [
+                row[0]
+                for row in await connection.execute(
+                    text(
+                        "select payload ->> 'issue_key' from doctor.outbox_messages"
+                        " where topic = 'itsm.sync' and tenant_id = cast(:t as uuid) order by id"
+                    ),
+                    {"t": tenant},
+                )
+            ]
+        # A configuração, o evento sem issue e o da SUST-881.
+        assert syncs == [None, None, "SUST-881"]
     finally:
         async with engine.begin() as connection:
             await connection.execute(

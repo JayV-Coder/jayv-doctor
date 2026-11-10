@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { FormMessage } from "@/components/auth-shell";
 import type { JiraConnection } from "@/lib/api";
 import { useIdempotencyKey } from "@/lib/forms/use-idempotency-key";
+import { fieldsText } from "@/lib/itsm/labels";
 import { configureJira, disconnectJira } from "./actions";
 
 const SEVERITIES = [
@@ -80,6 +81,18 @@ export function JiraConfig({ connection }: { connection: JiraConnection }) {
           ))}
         </div>
       </fieldset>
+      <label className="field">
+        Campos fixos (opcional)
+        <textarea
+          name="fields"
+          rows={2}
+          spellCheck={false}
+          autoCapitalize="none"
+          defaultValue={fieldsText(connection.custom_fields)}
+          placeholder="customfield_10010=Sustentação"
+        />
+        <span className="muted small">Um por linha: customfield_&lt;número&gt;=valor.</span>
+      </label>
       <label className="option">
         <input type="checkbox" role="switch" name="sync" defaultChecked={connection.sync_status} />{" "}
         Sincronizar status e comentários com #doctor

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { send as post, type Outcome } from "@/lib/forms/send";
+import { parseFields } from "@/lib/itsm/labels";
 
 export type { Outcome };
 
@@ -34,6 +35,8 @@ function text(form: FormData, name: string): string {
 }
 
 export async function configureJira(form: FormData, key: string): Promise<Outcome> {
+  const custom = parseFields(text(form, "fields"));
+  if (!custom.ok) return { ok: false, message: custom.message, offline: false };
   return post(
     "/itsm/jira",
     {
@@ -43,6 +46,8 @@ export async function configureJira(form: FormData, key: string): Promise<Outcom
         project_key: text(form, "project").toUpperCase(),
         issue_type: text(form, "issue-type"),
         sync_status: form.get("sync") === "on",
+        // Sempre enviados: salvar a tela não apaga os campos que já estavam.
+        custom_fields: custom.fields,
         priority_map: {
           critical: text(form, "priority-critical") || "Highest",
           high: text(form, "priority-high") || "High",

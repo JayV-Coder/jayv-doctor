@@ -6,8 +6,9 @@ from typing import ClassVar
 
 from aid_api.core.auth import Claims, get_claims
 from aid_api.core.storage import Storage, get_storage
+from aid_api.core.tokens import token_hash
 from aid_api.main import create_app
-from aid_api.reports.repo import ReportRepository, SharedFile, get_report_repository, token_hash
+from aid_api.reports.repo import ReportRepository, SharedFile, get_report_repository
 from aid_api.reports.schemas import ReportQueued, ReportRequest, ReportSummary
 from fastapi.testclient import TestClient
 

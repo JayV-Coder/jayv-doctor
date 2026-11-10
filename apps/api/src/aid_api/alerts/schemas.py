@@ -42,7 +42,7 @@ class AlertRuleChange(BaseModel):
 
 class Channel(BaseModel):
     id: str
-    type: Literal["email", "slack", "teams", "webpush"]
+    type: Literal["email", "slack", "teams", "webpush", "jira"]
     name: str
     config: dict[str, Any]
     created_at: datetime
@@ -51,9 +51,10 @@ class Channel(BaseModel):
 class ChannelIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    type: Literal["email", "slack", "teams", "webpush"]
+    type: Literal["email", "slack", "teams", "webpush", "jira"]
     name: Name
-    # email e webpush: quem recebe (só Usuários da Organização).
+    # email e webpush: quem recebe (só Usuários da Organização). jira: abre o chamado do
+    # Incidente (#43), sem configuração.
     audience: Literal["managers", "all"] = "managers"
     # slack e teams: o webhook, que vai para o Vault e não volta em nenhuma resposta.
     webhook_url: str | None = Field(default=None, max_length=1000)

@@ -2,15 +2,17 @@
 com MFA conectam e configuram o Jira; Analyst ou acima abre o chamado de um Incidente. O
 webhook do Jira entra sem sessão e só pede a sincronização."""
 
+import json
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from aid_api.core.auth import Claims, require_manager, require_role
 from aid_api.core.idempotency import Idempotent, IdempotentRoute
 from aid_api.core.permissions import MANAGE_CONNECTORS, VIEW
-from aid_api.core.rate_limit import rate_limit
+from aid_api.core.rate_limit import TokenBucketLimiter, check_rate, get_limiter, rate_limit
+from aid_api.core.tokens import token_hash
 from aid_api.itsm.repo import ItsmRepository, get_itsm_repository
 from aid_api.itsm.schemas import Authorization, Callback, JiraConfig, JiraConnection, Ticket
 
@@ -20,6 +22,8 @@ router = APIRouter(
     route_class=IdempotentRoute,
     dependencies=[Depends(rate_limit)],
 )
+# O evento do Jira traz a issue inteira; para achar a chave, 256 KB bastam.
+HOOK_BYTES = 256 * 1024
 hooks = APIRouter(prefix="/api/v1/itsm/jira/hooks", tags=["itsm"])
 Viewer = Annotated[Claims, Depends(require_role(*VIEW))]
 Analyst = Annotated[Claims, Depends(require_role("owner", "admin", "analyst"))]
@@ -74,9 +78,37 @@ async def request_ticket(
     return await repository.request(claims, str(target))
 
 
+async def head(request: Request) -> bytes:
+    """Até 256 KB do corpo: evento maior só perde a chave (e relê todos os chamados abertos)."""
+    body = bytearray()
+    async for chunk in request.stream():
+        body += chunk
+        if len(body) > HOOK_BYTES:
+            return b""
+    return bytes(body)
+
+
+def issue_key(body: bytes) -> str | None:
+    """A chave da issue do evento (não confiável: o banco confere o formato e o `notifier`
+    relê o chamado pela API do Jira)."""
+    try:
+        found = json.loads(body)
+    except ValueError:
+        return None
+    issue = found.get("issue") if isinstance(found, dict) else None
+    key = issue.get("key") if isinstance(issue, dict) else None
+    return key[:40] if isinstance(key, str) else None
+
+
 @hooks.post("/{token}", status_code=status.HTTP_204_NO_CONTENT, include_in_schema=False)
-async def jira_hook(token: str, repository: Repository) -> Response:
+async def jira_hook(
+    token: str,
+    request: Request,
+    repository: Repository,
+    limiter: Annotated[TokenBucketLimiter, Depends(get_limiter)],
+) -> Response:
     # Sempre 204: o token errado não ganha resposta diferente.
     if 20 <= len(token) <= 100:
-        await repository.hook(token)
+        check_rate(limiter, f"jira-hook:{token_hash(token)[:16]}")
+        await repository.hook(token, issue_key(await head(request)))
     return Response(status_code=status.HTTP_204_NO_CONTENT)

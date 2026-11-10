@@ -1775,7 +1775,7 @@ export interface components {
        * Type
        * @enum {string}
        */
-      type: "email" | "slack" | "teams" | "webpush";
+      type: "email" | "slack" | "teams" | "webpush" | "jira";
       /** Name */
       name: string;
       /** Config */
@@ -1794,7 +1794,7 @@ export interface components {
        * Type
        * @enum {string}
        */
-      type: "email" | "slack" | "teams" | "webpush";
+      type: "email" | "slack" | "teams" | "webpush" | "jira";
       /** Name */
       name: string;
       /**

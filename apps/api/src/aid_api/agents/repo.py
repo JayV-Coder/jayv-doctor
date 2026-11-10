@@ -1,6 +1,5 @@
 """Agentes da Organização ativa, dentro de `tenant_tx`: o RLS e as funções do banco valem."""
 
-import hashlib
 import secrets
 
 from sqlalchemy import text
@@ -11,6 +10,7 @@ from aid_api.agents.schemas import Agent
 from aid_api.core.auth import Claims
 from aid_api.core.db import translated_tx
 from aid_api.core.errors import ApiError
+from aid_api.core.tokens import token_hash
 
 ERRORS = {
     "42501": lambda: ApiError(403, "forbidden", "Seu Papel não permite esta ação."),
@@ -25,7 +25,7 @@ TOKEN_PREFIX = "aid_reg_"  # noqa: S105 - prefixo, não segredo
 
 def new_token() -> tuple[str, str]:
     token = TOKEN_PREFIX + secrets.token_urlsafe(32)
-    return token, hashlib.sha256(token.encode()).hexdigest()
+    return token, token_hash(token)
 
 
 class AgentRepository:

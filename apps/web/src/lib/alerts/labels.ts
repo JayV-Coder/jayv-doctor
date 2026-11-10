@@ -20,6 +20,7 @@ const CHANNEL: Record<string, string> = {
   email: "E-mail",
   slack: "Slack",
   teams: "Microsoft Teams",
+  jira: "Jira",
 };
 
 function list(value: unknown): string[] {

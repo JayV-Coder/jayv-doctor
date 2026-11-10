@@ -949,14 +949,14 @@ isOneToOne: false
                   ]
                 },"incident_tickets": {
                   Row: {
-                    "comments_synced_at": string | null,"created_at": string,"error": string | null,"external_id": string | null,"external_key": string | null,"external_status": string | null,"id": string,"incident_id": string,"last_synced_at": string | null,"provider": string,"requested_by": string | null,"rule_id": string | null,"status": string,"tenant_id": string,"updated_at": string,"url": string | null
+                    "claimed_at": string | null,"comments_synced_at": string | null,"created_at": string,"error": string | null,"external_id": string | null,"external_key": string | null,"external_status": string | null,"id": string,"incident_id": string,"last_synced_at": string | null,"provider": string,"requested_by": string | null,"rule_id": string | null,"status": string,"tenant_id": string,"updated_at": string,"url": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "comments_synced_at"?: string | null,"created_at"?: string,"error"?: string | null,"external_id"?: string | null,"external_key"?: string | null,"external_status"?: string | null,"id"?: string,"incident_id": string,"last_synced_at"?: string | null,"provider"?: string,"requested_by"?: string | null,"rule_id"?: string | null,"status"?: string,"tenant_id": string,"updated_at"?: string,"url"?: string | null
+                    "claimed_at"?: string | null,"comments_synced_at"?: string | null,"created_at"?: string,"error"?: string | null,"external_id"?: string | null,"external_key"?: string | null,"external_status"?: string | null,"id"?: string,"incident_id": string,"last_synced_at"?: string | null,"provider"?: string,"requested_by"?: string | null,"rule_id"?: string | null,"status"?: string,"tenant_id": string,"updated_at"?: string,"url"?: string | null
                   }
                   Update: {
-                    "comments_synced_at"?: string | null,"created_at"?: string,"error"?: string | null,"external_id"?: string | null,"external_key"?: string | null,"external_status"?: string | null,"id"?: string,"incident_id"?: string,"last_synced_at"?: string | null,"provider"?: string,"requested_by"?: string | null,"rule_id"?: string | null,"status"?: string,"tenant_id"?: string,"updated_at"?: string,"url"?: string | null
+                    "claimed_at"?: string | null,"comments_synced_at"?: string | null,"created_at"?: string,"error"?: string | null,"external_id"?: string | null,"external_key"?: string | null,"external_status"?: string | null,"id"?: string,"incident_id"?: string,"last_synced_at"?: string | null,"provider"?: string,"requested_by"?: string | null,"rule_id"?: string | null,"status"?: string,"tenant_id"?: string,"updated_at"?: string,"url"?: string | null
                   }
                   Relationships: [
                     {
@@ -1905,7 +1905,7 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "jira_hook":
-{ Args: { "token_hash": string }; Returns: boolean
+{ Args: { "issue_key": string,"token_hash": string }; Returns: boolean
                            },
 "list_audit_actors":
 { Args: Record<PropertyKey, never>; Returns: {

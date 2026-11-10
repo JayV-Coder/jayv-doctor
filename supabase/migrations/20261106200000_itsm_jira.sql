@@ -78,6 +78,8 @@ create table doctor.incident_tickets (
   requested_by uuid references auth.users (id) on delete set null,
   -- Regra de alerta que abriu (automático) ou nulo (à mão).
   rule_id uuid,
+  -- Reserva da tentativa de criação (vence em 5 min: o worker pode cair no meio).
+  claimed_at timestamptz,
   last_synced_at timestamptz,
   comments_synced_at timestamptz,
   created_at timestamptz not null default now(),
@@ -157,7 +159,8 @@ as $$
 declare
   tenant uuid := doctor.current_tenant_id();
 begin
-  if not doctor.has_role('owner', 'admin', 'analyst') then
+  -- Papel lido da tabela, não do JWT (a claim pode estar atrasada depois de um rebaixamento).
+  if not doctor.has_member_role('owner', 'admin', 'analyst') then
     raise insufficient_privilege using message = 'exige Analyst ou acima';
   end if;
   if not exists (select 1 from doctor.incidents i where i.id = target and i.tenant_id = tenant) then
@@ -220,8 +223,8 @@ $$;
 
 -- Configuração do Jira (Owner ou Admin com MFA). Com site e projeto, a conexão fica ativa e o
 -- `notifier` registra o webhook do Jira. O token do endereço do webhook só dispara a leitura pela
--- API (nada do corpo é confiado): guarda-se o hash, e o token vai uma vez ao `notifier`, que o
--- põe no endereço registrado no Jira.
+-- API (nada do corpo é confiado): o banco guarda o hash para conferir, e o token em si vai para
+-- o Vault, junto dos tokens do Atlassian, de onde o `notifier` o lê para registrar o endereço.
 create function doctor.configure_jira(
   cloud_id text, project_key text, issue_type text, priority_map jsonb, custom_fields jsonb,
   sync_status boolean, hook_token text
@@ -246,6 +249,10 @@ begin
   if site is null then
     raise exception 'site fora da autorização' using errcode = 'DR082';
   end if;
+  perform vault.update_secret(c.secret_id,
+    (coalesce(s.decrypted_secret, '{}')::jsonb || jsonb_build_object('hook_token', configure_jira.hook_token))::text)
+  from doctor.itsm_connections c left join vault.decrypted_secrets s on s.id = c.secret_id
+  where c.id = connection;
   update doctor.itsm_connections c set cloud_id = configure_jira.cloud_id, site_url = site ->> 'url',
     project_key = configure_jira.project_key, issue_type = configure_jira.issue_type,
     priority_map = configure_jira.priority_map, custom_fields = configure_jira.custom_fields,
@@ -254,8 +261,7 @@ begin
     status = 'active', last_error = null
   where c.id = connection;
   insert into doctor.outbox_messages (tenant_id, topic, payload)
-  values (tenant, 'itsm.sync',
-    jsonb_build_object('connection_id', connection, 'register', true, 'hook_token', configure_jira.hook_token));
+  values (tenant, 'itsm.sync', jsonb_build_object('connection_id', connection, 'register', true));
   perform doctor.record_audit(tenant, 'itsm.configure', connection::text);
 end;
 $$;
@@ -268,21 +274,17 @@ set search_path = ''
 as $$
 declare
   tenant uuid := doctor.current_tenant_id();
-  current_secret uuid;
 begin
   perform doctor.require_manager();
-  delete from doctor.itsm_connections c where c.tenant_id = tenant and c.provider = 'jira'
-  returning c.secret_id into current_secret;
-  if current_secret is not null then
-    delete from vault.secrets s where s.id = current_secret;
-  end if;
+  -- Os tokens saem do Vault pelo trigger `itsm_connections_drop_secret`.
+  delete from doctor.itsm_connections c where c.tenant_id = tenant and c.provider = 'jira';
   perform doctor.record_audit(tenant, 'itsm.disconnect', tenant::text);
 end;
 $$;
 
 -- Webhook do Jira (sem sessão, como `anon`): o token do endereço só identifica a conexão e
 -- pede a sincronização; nada do corpo é confiado.
-create function doctor.jira_hook(token_hash text)
+create function doctor.jira_hook(token_hash text, issue_key text)
 returns boolean
 language plpgsql
 security definer
@@ -290,14 +292,27 @@ set search_path = ''
 as $$
 declare
   found doctor.itsm_connections;
+  wanted jsonb;
 begin
   select * into found from doctor.itsm_connections c
   where c.hook_token_hash = jira_hook.token_hash and c.status = 'active' and c.sync_status;
   if found.id is null then
     return false;
   end if;
-  insert into doctor.outbox_messages (tenant_id, topic, payload)
-  values (found.tenant_id, 'itsm.sync', jsonb_build_object('connection_id', found.id));
+  -- A chave da issue (do corpo, não confiável) só diz qual chamado reler, e só se for desta
+  -- Organização: o `notifier` relê o status pela API do Jira.
+  wanted := jsonb_build_object('connection_id', found.id,
+    'issue_key', case when jira_hook.issue_key ~ '^[A-Z][A-Z0-9_]{1,19}-[0-9]{1,10}$'
+      then jira_hook.issue_key end);
+  -- Rajada de eventos da mesma issue vira uma leitura só enquanto a anterior não saiu.
+  if not exists (
+    select 1 from doctor.outbox_messages o
+    where o.published_at is null and o.tenant_id = found.tenant_id and o.topic = 'itsm.sync'
+      and o.payload = wanted
+  ) then
+    insert into doctor.outbox_messages (tenant_id, topic, payload)
+    values (found.tenant_id, 'itsm.sync', wanted);
+  end if;
   return true;
 end;
 $$;
@@ -366,7 +381,7 @@ revoke all on function doctor.start_itsm_oauth(text) from public, anon, service_
 revoke all on function doctor.finish_itsm_oauth(text, text, jsonb) from public, anon, service_role;
 revoke all on function doctor.configure_jira(text, text, text, jsonb, jsonb, boolean, text) from public, anon, service_role;
 revoke all on function doctor.disconnect_jira() from public, anon, service_role;
-revoke all on function doctor.jira_hook(text) from public, service_role;
+revoke all on function doctor.jira_hook(text, text) from public, service_role;
 revoke all on function doctor.get_itsm_tokens(uuid) from public, anon, authenticated;
 revoke all on function doctor.put_itsm_tokens(uuid, text) from public, anon, authenticated;
 revoke all on function doctor.queue_comment_to_jira() from public, anon, authenticated;
@@ -376,7 +391,7 @@ grant execute on function doctor.start_itsm_oauth(text) to authenticated;
 grant execute on function doctor.finish_itsm_oauth(text, text, jsonb) to authenticated;
 grant execute on function doctor.configure_jira(text, text, text, jsonb, jsonb, boolean, text) to authenticated;
 grant execute on function doctor.disconnect_jira() to authenticated;
-grant execute on function doctor.jira_hook(text) to anon;
+grant execute on function doctor.jira_hook(text, text) to anon;
 grant execute on function doctor.queue_ticket(uuid, uuid, uuid, uuid) to service_role;
 grant execute on function doctor.get_itsm_tokens(uuid) to service_role;
 grant execute on function doctor.put_itsm_tokens(uuid, text) to service_role;

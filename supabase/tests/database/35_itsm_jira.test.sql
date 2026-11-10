@@ -41,8 +41,8 @@ select throws_ok($$select doctor.request_ticket('00000000-0000-4000-8000-0000000
 select tests.clear_authentication();
 
 select tests.authenticate_as_anon();
-select is(doctor.jira_hook(repeat('c', 64)), false, 'webhook com token errado não faz nada');
-select is(doctor.jira_hook(encode(sha256(convert_to(repeat('b', 64), 'UTF8')), 'hex')), true,
+select is(doctor.jira_hook(repeat('c', 64), null), false, 'webhook com token errado não faz nada');
+select is(doctor.jira_hook(encode(sha256(convert_to(repeat('b', 64), 'UTF8')), 'hex'), 'SUST-1'), true,
   'token certo pede a sincronização');
 select tests.clear_authentication();
 

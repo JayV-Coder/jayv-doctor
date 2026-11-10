@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jiraState, ticketText } from "./labels";
+import { fieldsText, jiraState, parseFields, ticketText } from "./labels";
 
 describe("chamados (ITSM)", () => {
   it("estado da conexão", () => {
@@ -11,6 +11,20 @@ describe("chamados (ITSM)", () => {
     });
     expect(jiraState({ status: "needs_reauth", project_key: "SUST" }).label).toBe(
       "Conecte de novo",
+    );
+  });
+
+  it("campos fixos: uma linha customfield_<n>=valor", () => {
+    expect(parseFields("customfield_10010 = Sustentação\n\ncustomfield_2=3")).toEqual({
+      ok: true,
+      fields: { customfield_10010: "Sustentação", customfield_2: "3" },
+    });
+    expect(parseFields("summary=x")).toEqual({
+      ok: false,
+      message: "Linha 1: use customfield_<número>=valor.",
+    });
+    expect(fieldsText({ customfield_10010: "Sustentação", customfield_2: 3 })).toBe(
+      "customfield_10010=Sustentação\ncustomfield_2=3",
     );
   });
 

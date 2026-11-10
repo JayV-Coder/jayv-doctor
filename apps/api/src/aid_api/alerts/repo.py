@@ -195,7 +195,8 @@ class AlertRepository:
         else:
             if new.webhook_url:
                 raise invalid("webhook_url: só para Slack e Teams")
-            config = {"audience": new.audience}
+            if new.type != "jira":
+                config = {"audience": new.audience}
         async with translated_tx(claims, ERRORS, self.engine) as connection:
             created = await connection.scalar(
                 text(

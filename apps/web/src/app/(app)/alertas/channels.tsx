@@ -72,7 +72,11 @@ export function Channels({
         <form
           ref={formRef}
           className="stack"
-          action={(form) => {
+          onSubmit={(event) => {
+            // `onSubmit`, não `action`: o `action` limpa o formulário, e depois de um erro a
+            // pessoa perderia o que digitou.
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
             startTransition(async () => {
               const outcome = await createChannel(form, key());
               settle(outcome);

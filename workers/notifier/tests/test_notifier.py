@@ -8,11 +8,14 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
+import httpx
 import pytest
 import pytest_asyncio
 from aid_alerts import Message
+from aid_alerts.signing import verify
 from aid_notifier.channels import DeliveryError, PushTarget, Senders
 from aid_notifier.notify import evaluate, scan
+from aid_notifier.webhooks import deliver
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -119,6 +122,8 @@ async def org(engine: AsyncEngine) -> AsyncIterator[dict[str, str]]:
     yield ids
     for table in (
         "notification_deliveries",
+        "webhook_deliveries",
+        "webhooks",
         "alert_rules",
         "push_subscriptions",
         "alert_preferences",
@@ -457,3 +462,146 @@ async def test_falha_inesperada_no_canal_vira_failed_e_nao_some(
         t=org["tenant"],
     )
     assert delivery["status"] == "failed"
+
+
+SECRET = "whsec_segredo-de-teste"  # noqa: S105 - segredo de teste
+
+
+async def webhook(engine: AsyncEngine, org: dict[str, str], events: list[str]) -> str:
+    webhook_id = str(uuid4())
+    await run(
+        engine,
+        "insert into doctor.webhooks (id, tenant_id, name, url, events, secret_id) values"
+        " (cast(:w as uuid), :t, :n, 'https://itsm.acme.com.br/aid', cast(:e as text[]),"
+        " vault.create_secret(:s, 'doctor/webhook/' || cast(:w as text)))",
+        w=webhook_id,
+        t=org["tenant"],
+        n=f"ITSM {webhook_id[:6]}",
+        e=events,
+        s=SECRET,
+    )
+    return webhook_id
+
+
+class Receiver:
+    def __init__(self, status: int = 200) -> None:
+        self.status = status
+        self.requests: list[httpx.Request] = []
+
+    def transport(self) -> httpx.MockTransport:
+        def handle(request: httpx.Request) -> httpx.Response:
+            self.requests.append(request)
+            return httpx.Response(self.status, text="ok" if self.status < 300 else "erro do ITSM")
+
+        return httpx.MockTransport(handle)
+
+
+async def deliveries(engine: AsyncEngine, org: dict[str, str]) -> list[Any]:
+    return await rows(
+        engine,
+        "select id::text, status, attempts, response_status, error, body,"
+        " next_attempt_at > now() + interval '50 seconds' as later"
+        " from doctor.webhook_deliveries where tenant_id = cast(:t as uuid) order by created_at",
+        t=org["tenant"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_incidente_aberto_chega_assinado_e_sem_eventos_brutos(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    await webhook(engine, org, ["incident.opened"])
+    found = await incident(engine, org, "critical")
+    [pending] = await deliveries(engine, org)
+    receiver = Receiver()
+    status = await deliver(engine, pending["id"], Fake().senders(), receiver.transport())
+    assert status == "succeeded"
+    [request] = receiver.requests
+    assert verify(SECRET, request.headers["x-aid-signature"], request.content)
+    assert request.headers["x-aid-event"] == "incident.opened"
+    body = json.loads(request.content)
+    assert body["version"] == "webhook.v1"
+    assert body["data"]["incident"]["id"] == found
+    assert body["data"]["incident"]["url"].endswith(f"/incidentes/{found}")
+    assert "events" not in json.dumps(body)
+    [done] = await deliveries(engine, org)
+    assert (done["status"], done["response_status"]) == ("succeeded", 200)
+    # Entregue não se entrega de novo (mensagem repetida do Pub/Sub).
+    assert await deliver(engine, pending["id"], Fake().senders(), receiver.transport()) == "skipped"
+
+
+@pytest.mark.asyncio
+async def test_falha_tenta_de_novo_depois_e_reenviar_usa_o_mesmo_corpo(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    await webhook(engine, org, ["incident.opened"])
+    await incident(engine, org, "high")
+    [pending] = await deliveries(engine, org)
+    receiver = Receiver(503)
+    assert await deliver(engine, pending["id"], Fake().senders(), receiver.transport()) == "pending"
+    [retry] = await deliveries(engine, org)
+    assert (retry["attempts"], retry["response_status"], retry["error"]) == (1, 503, "HTTP 503")
+    assert retry["later"]
+    # Ainda não venceu: a varredura não tenta antes da hora.
+    assert await deliver(engine, pending["id"], Fake().senders(), receiver.transport()) == "skipped"
+    await run(
+        engine,
+        "update doctor.webhook_deliveries set created_at = now() - interval '25 hours',"
+        " next_attempt_at = now() where id = cast(:d as uuid)",
+        d=pending["id"],
+    )
+    assert (
+        await deliver(engine, pending["id"], Fake().senders(), receiver.transport()) == "abandoned"
+    )
+    await run(
+        engine,
+        "select doctor.queue_webhooks(cast(:t as uuid), 'incident.opened', '{}')",
+        t=org["tenant"],
+    )
+    original = (await deliveries(engine, org))[0]
+    await run(
+        engine,
+        "insert into doctor.webhook_deliveries (tenant_id, webhook_id, event, subject, body,"
+        " resent_from) select tenant_id, webhook_id, event, subject, body, id"
+        " from doctor.webhook_deliveries where id = cast(:d as uuid)",
+        d=original["id"],
+    )
+    resent = await rows(
+        engine,
+        "select id::text from doctor.webhook_deliveries where resent_from = cast(:d as uuid)",
+        d=original["id"],
+    )
+    ok = Receiver()
+    assert await deliver(engine, resent[0]["id"], Fake().senders(), ok.transport()) == "succeeded"
+    assert json.loads(ok.requests[0].content)["id"] == original["id"]
+
+
+@pytest.mark.asyncio
+async def test_50_falhas_seguidas_desligam_e_avisam_os_admins(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    hook = await webhook(engine, org, ["incident.opened"])
+    await run(
+        engine, "update doctor.webhooks set failure_count = 49 where id = cast(:w as uuid)", w=hook
+    )
+    await incident(engine, org, "high")
+    [pending] = await deliveries(engine, org)
+    fake = Fake()
+    assert (
+        await deliver(engine, pending["id"], fake.senders(), Receiver(500).transport())
+        == "abandoned"
+    )
+    [state] = await rows(
+        engine,
+        "select enabled, failure_count, disabled_reason from doctor.webhooks"
+        " where id = cast(:w as uuid)",
+        w=hook,
+    )
+    assert dict(state) == {
+        "enabled": False,
+        "failure_count": 50,
+        "disabled_reason": "50 falhas seguidas",
+    }
+    [(to, subject, _)] = fake.emails
+    assert to == [f"plantao-{org['admin'][:8]}@acme.test"]
+    assert subject == "Webhook desligado após 50 falhas seguidas"

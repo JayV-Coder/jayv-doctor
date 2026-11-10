@@ -32,3 +32,12 @@ A privada vai para o Secret Manager (`vapid-private-key`), em PEM como sai daqui
 ## Conteúdo
 
 Só título, severidade, Integração, Ambiente e link. Nunca log, Evidência, Referência de negócio ou mensagem de erro do sistema do cliente.
+
+## Webhooks de saída (#42)
+
+Mesmo worker, tópico `webhook.deliver` (primeira tentativa) e a varredura `POST /alerts/scan` (as seguintes). Rotas, payload e verificação da assinatura em [docs/api/webhooks.md](../api/webhooks.md).
+
+- Os triggers em `incidents`, `diagnoses` e `diagnosis_feedback` criam uma entrega por webhook ligado e inscrito no evento. A contagem de Execuções do Incidente não gera `incident.updated`.
+- Cada tentativa reserva a entrega por 2 min, monta o corpo `webhook.v1` na primeira vez, assina (`X-AID-Signature`) e envia pela rede que só conecta em IP público, sem seguir redirecionamento, com prazo de 10 s.
+- Falhou: tenta de novo em 1, 2, 4… até 60 min, por até 24 h (`abandoned` depois). 50 falhas seguidas desligam o webhook e mandam e-mail aos Owners e Admins; religar pela tela zera a contagem.
+- O segredo de cada webhook fica no Vault (`doctor/webhook/<id>`) e sai junto quando o webhook ou a Organização é apagada.

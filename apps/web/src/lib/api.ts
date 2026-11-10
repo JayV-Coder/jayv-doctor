@@ -23,6 +23,9 @@ export type Connector = Schemas["Connector"];
 export type AlertRule = Schemas["AlertRule"];
 export type NotificationChannel = Schemas["Channel"];
 export type PushSubscriptionInfo = Schemas["PushSubscription"];
+export type Webhook = Schemas["Webhook"];
+export type WebhookSecret = Schemas["WebhookSecret"];
+export type WebhookDelivery = Schemas["Delivery"];
 export type Agent = Schemas["Agent"];
 export type RegistrationToken = Schemas["RegistrationToken"];
 export type ConnectorSync = Schemas["ConnectorSync"];
@@ -98,6 +101,15 @@ async function getOne<T>(path: string): Promise<T | "not_found" | null> {
 async function getList<T>(path: string): Promise<T | null> {
   const response = await apiFetch(path).catch(() => null);
   return response?.ok ? ((await response.json()) as T) : null;
+}
+
+// Webhooks de saída (#42), só para gestores; `null` se a API não respondeu ou recusou.
+export async function listWebhooks(): Promise<Webhook[] | null> {
+  return getList<Webhook[]>("/webhooks");
+}
+
+export async function listWebhookDeliveries(id: string): Promise<WebhookDelivery[] | null> {
+  return getList<WebhookDelivery[]>(`/webhooks/${encodeURIComponent(id)}/deliveries`);
 }
 
 // Tela 20 (#41): Regras, canais, push e silêncio; `null` se a API não respondeu.

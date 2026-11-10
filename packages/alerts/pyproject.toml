@@ -3,7 +3,9 @@ name = "aid-alerts"
 version = "0.1.0"
 description = "Regras de alerta: condições, horário de silêncio e mensagens sem dados sensíveis"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "httpx>=0.28",
+]
 
 [build-system]
 requires = ["uv_build>=0.9.5,<0.10"]

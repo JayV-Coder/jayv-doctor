@@ -1559,6 +1559,58 @@ isOneToOne: false
       referencedColumns: ["tenant_id","user_id"]
     }
                   ]
+                },"webhook_deliveries": {
+                  Row: {
+                    "attempts": number,"body": Json | null,"created_at": string,"delivered_at": string | null,"error": string | null,"event": string,"id": string,"latency_ms": number | null,"next_attempt_at": string | null,"resent_from": string | null,"response_excerpt": string | null,"response_status": number | null,"status": string,"subject": NonNullable<Json>,"tenant_id": string,"updated_at": string,"webhook_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attempts"?: number,"body"?: Json | null,"created_at"?: string,"delivered_at"?: string | null,"error"?: string | null,"event": string,"id"?: string,"latency_ms"?: number | null,"next_attempt_at"?: string | null,"resent_from"?: string | null,"response_excerpt"?: string | null,"response_status"?: number | null,"status"?: string,"subject": NonNullable<Json>,"tenant_id": string,"updated_at"?: string,"webhook_id": string
+                  }
+                  Update: {
+                    "attempts"?: number,"body"?: Json | null,"created_at"?: string,"delivered_at"?: string | null,"error"?: string | null,"event"?: string,"id"?: string,"latency_ms"?: number | null,"next_attempt_at"?: string | null,"resent_from"?: string | null,"response_excerpt"?: string | null,"response_status"?: number | null,"status"?: string,"subject"?: NonNullable<Json>,"tenant_id"?: string,"updated_at"?: string,"webhook_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "webhook_deliveries_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "webhook_deliveries_tenant_id_resent_from_fkey"
+      columns: ["tenant_id","resent_from"]
+isOneToOne: false
+      referencedRelation: "webhook_deliveries"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "webhook_deliveries_tenant_id_webhook_id_fkey"
+      columns: ["tenant_id","webhook_id"]
+isOneToOne: false
+      referencedRelation: "webhooks"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"webhooks": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"disabled_reason": string | null,"enabled": boolean,"events": (string)[],"failure_count": number,"id": string,"last_delivery_at": string | null,"last_status": number | null,"name": string,"secret_id": string,"tenant_id": string,"updated_at": string,"url": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"disabled_reason"?: string | null,"enabled"?: boolean,"events": (string)[],"failure_count"?: number,"id"?: string,"last_delivery_at"?: string | null,"last_status"?: number | null,"name": string,"secret_id": string,"tenant_id": string,"updated_at"?: string,"url": string
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"disabled_reason"?: string | null,"enabled"?: boolean,"events"?: (string)[],"failure_count"?: number,"id"?: string,"last_delivery_at"?: string | null,"last_status"?: number | null,"name"?: string,"secret_id"?: string,"tenant_id"?: string,"updated_at"?: string,"url"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "webhooks_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 }
           }
           Views: {
@@ -1643,6 +1695,9 @@ isOneToOne: false
               "expires_at": string,"id": string
             }[]
                            },
+"create_webhook":
+{ Args: { "events": (string)[],"name": string,"secret": string,"url": string }; Returns: string
+                           },
 "current_aal":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
@@ -1662,6 +1717,9 @@ isOneToOne: false
 { Args: { "target": string }; Returns: string
                            },
 "delete_notification_channel":
+{ Args: { "target": string }; Returns: undefined
+                           },
+"delete_webhook":
 { Args: { "target": string }; Returns: undefined
                            },
 "diagnosis_is_final":
@@ -1716,6 +1774,9 @@ isOneToOne: false
 { Args: { "target": string }; Returns: string
                            },
 "get_connector_secret":
+{ Args: { "target": string }; Returns: string
+                           },
+"get_webhook_secret":
 { Args: { "target": string }; Returns: string
                            },
 "has_alert_rules":
@@ -1850,6 +1911,9 @@ isOneToOne: false
 "put_connector_secret":
 { Args: { "secret": string,"target": string }; Returns: undefined
                            },
+"queue_webhooks":
+{ Args: { "event": string,"subject": Json,"tenant": string }; Returns: undefined
+                           },
 "quota_recipients":
 { Args: { "tenant": string }; Returns: {
               "email": string,"organization": string
@@ -1910,6 +1974,9 @@ isOneToOne: false
               "email": string,"organization": string
             }[]
                            },
+"resend_webhook_delivery":
+{ Args: { "target": string }; Returns: string
+                           },
 "reserve_llm_quota":
 { Args: { "diagnosis": string,"provider": string,"tenant": string }; Returns: boolean
                            },
@@ -1948,6 +2015,9 @@ isOneToOne: false
                            },
 "rotate_agent":
 { Args: { "target": string,"token_hash": string }; Returns: undefined
+                           },
+"rotate_webhook_secret":
+{ Args: { "secret": string,"target": string }; Returns: undefined
                            },
 "set_auto_diagnosis":
 { Args: { "enabled": boolean }; Returns: undefined
@@ -1996,6 +2066,9 @@ isOneToOne: false
                            },
 "update_member_role":
 { Args: { "role": string,"target": string }; Returns: undefined
+                           },
+"update_webhook":
+{ Args: { "enabled": boolean,"events": (string)[],"target": string,"url": string }; Returns: undefined
                            },
 "usage_period":
 { Args: { "at"?: string,"resource": string }; Returns: string

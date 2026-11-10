@@ -53,6 +53,12 @@ requires-dist = [
 name = "aid-alerts"
 version = "0.1.0"
 source = { editable = "packages/alerts" }
+dependencies = [
+    { name = "httpx" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "httpx", specifier = ">=0.28" }]
 
 [[package]]
 name = "aid-api"

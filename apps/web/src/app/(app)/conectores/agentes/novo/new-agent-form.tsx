@@ -27,7 +27,11 @@ export function NewAgentForm({ integrations }: { integrations: Option[] }) {
   return (
     <form
       className="stack"
-      action={(form) => {
+      onSubmit={(event) => {
+        // `onSubmit`, não `action`: o `action` limpa o formulário, e depois de um erro a
+        // pessoa perderia o que digitou.
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
         startTransition(async () => {
           const issued = await createAgent(form, key.current);
           if (!issued.ok && !issued.offline) key.current = crypto.randomUUID();

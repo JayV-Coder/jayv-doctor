@@ -36,6 +36,8 @@ locals {
     "connector.sync"   = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
     # Alertas (#41): Incidente, Diagnóstico e Conector em falha, por trigger na outbox.
     "alert.evaluate" = { worker = "notifier", publishers = ["relay"], ack_deadline = 300 }
+    # Webhooks de saída (#42): a primeira tentativa; as seguintes saem da varredura.
+    "webhook.deliver" = { worker = "notifier", publishers = ["relay"], ack_deadline = 300 }
   }
 
   # voyage-api-key: a busca da Base de conhecimento gera o embedding da pergunta (#23).

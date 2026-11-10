@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aid_notifier.channels import Senders
 from aid_notifier.notify import evaluate, scan
+from aid_notifier.webhooks import deliver, due
 
 Handler = Callable[[Mapping[str, Any]], Awaitable[None]]
 
@@ -24,12 +25,20 @@ async def alert_evaluate(payload: Mapping[str, Any]) -> None:
     await evaluate(engine(), payload, Senders())
 
 
-TOPICS: dict[str, Handler] = {"alert.evaluate": alert_evaluate}
+async def webhook_deliver(payload: Mapping[str, Any]) -> None:
+    await deliver(engine(), str(payload["delivery_id"]), Senders())
+
+
+TOPICS: dict[str, Handler] = {"alert.evaluate": alert_evaluate, "webhook.deliver": webhook_deliver}
 
 router = APIRouter()
 
 
-# A cada minuto (Cloud Scheduler): taxa de erro e Diagnóstico aguardando revisão.
+# A cada minuto (Cloud Scheduler): taxa de erro, Diagnóstico aguardando revisão e as novas
+# tentativas dos webhooks (#42).
 @router.post("/alerts/scan")
 async def alerts_scan() -> dict[str, int]:
-    return {"sent": await scan(engine(), Senders())}
+    return {
+        "sent": await scan(engine(), Senders()),
+        "webhooks": await due(engine(), Senders()),
+    }

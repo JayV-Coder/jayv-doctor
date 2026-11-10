@@ -72,3 +72,20 @@ class AgentConfig(BaseModel):
     config: dict[str, Any]
     config_version: int
     update: AgentUpdate | None = None
+
+
+class AgentLlmRequest(BaseModel):
+    """Pedido ao modelo local (#46): o corpo de `POST /v1/chat/completions`, já sanitizado."""
+
+    id: str
+    request: dict[str, Any]
+    # O mesmo prazo que o worker espera: depois dele, a resposta não serve a ninguém.
+    timeout_seconds: int
+
+
+class AgentLlmResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # A resposta do servidor do cliente, ou o erro (só um dos dois).
+    response: dict[str, Any] | None = None
+    error: str | None = Field(default=None, max_length=500)

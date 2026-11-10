@@ -447,6 +447,27 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/agent/llm": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Llm Next
+     * @description Long-poll do próximo pedido ao modelo local (#46, ADR-0019): o agente leva o prompt ao
+     *     servidor da rede do cliente e devolve a resposta em `POST /llm/{id}`.
+     */
+    get: operations["llm_next_api_v1_agent_llm_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/agents": {
     parameters: {
       query?: never;
@@ -1648,6 +1669,20 @@ export interface components {
         [key: string]: unknown;
       };
     };
+    /**
+     * AgentLlmRequest
+     * @description Pedido ao modelo local (#46): o corpo de `POST /v1/chat/completions`, já sanitizado.
+     */
+    AgentLlmRequest: {
+      /** Id */
+      id: string;
+      /** Request */
+      request: {
+        [key: string]: unknown;
+      };
+      /** Timeout Seconds */
+      timeout_seconds: number;
+    };
     /** AgentRegistered */
     AgentRegistered: {
       /** Agent Id */
@@ -1708,7 +1743,7 @@ export interface components {
        * Profile
        * @enum {string}
        */
-      profile: "standard" | "br_region" | "dedicated";
+      profile: "standard" | "br_region" | "dedicated" | "local";
     };
     /** AlertRule */
     AlertRule: {
@@ -3423,12 +3458,12 @@ export interface components {
        * Llm Provider
        * @enum {string}
        */
-      llm_provider: "anthropic" | "vertex" | "vertex_dedicated";
+      llm_provider: "anthropic" | "vertex" | "vertex_dedicated" | "local";
       /**
        * Ai Profile
        * @enum {string}
        */
-      ai_profile: "standard" | "br_region" | "dedicated";
+      ai_profile: "standard" | "br_region" | "dedicated" | "local";
       /** Ai Project */
       ai_project: string | null;
       ai_check: components["schemas"]["AiCheck"] | null;
@@ -5115,6 +5150,46 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["IngestionResult"];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  llm_next_api_v1_agent_llm_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "x-aid-timestamp"?: string | null;
+        "x-aid-signature"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AgentLlmRequest"];
+        };
+      };
+      /** @description sem pedido */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Validation Error */
       422: {

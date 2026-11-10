@@ -6,6 +6,7 @@ import argparse
 import json
 import logging
 import os
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -16,7 +17,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from aid_agent import __version__
 from aid_agent.buffer import Buffer
-from aid_agent.client import BatchRejectedError, Platform, PlatformError, register
+from aid_agent.client import BatchRejectedError, LocalModel, Platform, PlatformError, register
 from aid_agent.collectors import (
     DirectoryCollector,
     RfcConnection,
@@ -30,6 +31,7 @@ from aid_agent.identity import (
     public_key,
     save_registration,
 )
+from aid_agent.local_llm import serve
 from aid_agent.updater import RESTART, apply
 
 log = logging.getLogger("aid_agent")
@@ -153,6 +155,15 @@ def run(once: bool = False) -> int:
     buffer = Buffer(state / "buffer.sqlite3")
     # A última config fica na fila em disco: reiniciado sem rede, o agente continua coletando.
     saved = json.loads(buffer.checkpoint("config") or "null") or {"config_version": 0}
+    # Modelo local (#46): uma thread própria, com cliente próprio, segue a config atual.
+    stop = threading.Event()
+    if not once:
+        local = LocalModel(Platform(credentials, load_key(state), state))
+        threading.Thread(
+            target=serve,
+            args=(local, lambda: dict(saved.get("config") or {}).get("llm"), stop),
+            daemon=True,
+        ).start()
     while True:
         try:
             found = platform.config(int(saved["config_version"]), __version__)

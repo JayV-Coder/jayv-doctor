@@ -50,3 +50,12 @@ Sem sessão de Usuário. Fora o registro, toda chamada leva:
 - Corpo acima de 1 MB em `/events` (4 KB nas outras): `413 batch_too_large`, recusado sem ler o resto. O agente divide o lote; um lote recusado por inteiro de outro jeito vai para a quarentena local (`rejected` em `buffer.sqlite3`).
 - Cota de Eventos esgotada: `429 quota_exceeded`. O agente mantém a fila e tenta na próxima rodada.
 - `update` (quando a plataforma tem `AID_AGENT_RELEASE`): `{ version, url, sha256, signature }`, com a assinatura Ed25519 de `"{version}\n{sha256}\n{url}"` pela chave de release.
+
+## Modelo local (#46)
+
+| Rota | Efeito |
+|---|---|
+| `GET /api/v1/agent/llm` | Long-poll (até 25 s) do próximo pedido ao modelo local da Organização: `200 { id, request, timeout_seconds }` (o corpo de um chat completion, já sanitizado, e o prazo da resposta) ou `204` |
+| `POST /api/v1/agent/llm/{id}` | `{ "response": {...} }` (a resposta do servidor local) ou `{ "error": "..." }`. `204`; `404` se o pedido não é deste agente ou já foi respondido |
+
+As duas rotas são assinadas como as outras do agente. O bloco `llm` da config (`base_url` `http(s)://servidor[:porta]/v1`) diz para onde o agente leva os pedidos. Operação em [docs/operations/ia-local.md](../operations/ia-local.md).

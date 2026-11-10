@@ -21,7 +21,7 @@ class Deletion(BaseModel):
     scheduled_for: datetime
 
 
-AiProfile = Literal["standard", "br_region", "dedicated"]
+AiProfile = Literal["standard", "br_region", "dedicated", "local"]
 
 
 class AiCheck(BaseModel):
@@ -47,7 +47,7 @@ class Reindex(BaseModel):
 class PrivacySettings(BaseModel):
     retention: list[Retention]
     llm_enabled: bool
-    llm_provider: Literal["anthropic", "vertex", "vertex_dedicated"]
+    llm_provider: Literal["anthropic", "vertex", "vertex_dedicated", "local"]
     ai_profile: AiProfile
     # Projeto do GCP com a capacidade dedicada (nulo: o da plataforma).
     ai_project: str | None
@@ -66,7 +66,7 @@ class RetentionChange(BaseModel):
 class AiProfileChange(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    # O dedicado é contratado com a plataforma (a API recusa com 422).
+    # O dedicado e o local são contratados com a plataforma (a API recusa com 422).
     profile: AiProfile
 
 

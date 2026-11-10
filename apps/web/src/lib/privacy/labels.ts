@@ -29,10 +29,19 @@ export const AI_PROFILES: Record<string, { title: string; detail: string }> = {
     title: "Dedicado",
     detail: "Vertex AI no Brasil com capacidade provisionada só para esta Organização",
   },
+  local: {
+    title: "Local",
+    detail: "Modelo na rede da sua Organização; a Base de conhecimento busca só pelo texto",
+  },
 };
+
+// Perfis que só a operação da plataforma liga (o Owner pode sair deles).
+export const CONTRACTED = ["dedicated", "local"];
 
 // O que o DPA diz sobre a IA em cada perfil.
 export function dpaText(profile: string): string {
+  if (profile === "local")
+    return "A IA roda na rede da Organização: nenhum subprocessador de IA recebe as Evidências.";
   return profile === "standard"
     ? "Transferência internacional para a Anthropic e a Voyage AI (Estados Unidos), coberta pelas cláusulas-padrão do DPA."
     : "Processamento de IA no Brasil (southamerica-east1), sem transferência internacional para a IA.";
@@ -77,6 +86,10 @@ export function profileChangeText(current: string, next: string): string {
   ];
   if (current === "dedicated")
     parts.push("Sair do dedicado libera a capacidade: só a operação da plataforma liga de novo.");
+  if (current === "local")
+    parts.push(
+      "Sair do modo local manda as Evidências sanitizadas para fora da sua rede: só a operação da plataforma liga o local de novo.",
+    );
   return parts.join(" ");
 }
 
@@ -100,6 +113,7 @@ export function subprocessors(profile: string): Subprocessor[] {
       region: "Brasil (southamerica-east1)",
     },
   ];
+  if (profile === "local") return base;
   if (profile !== "standard") {
     return [
       ...base,

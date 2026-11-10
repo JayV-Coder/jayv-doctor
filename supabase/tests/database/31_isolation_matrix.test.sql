@@ -86,6 +86,10 @@ begin
   insert into doctor.agents (tenant_id, integration_id, name, status, secret_hash, public_key)
   values (t, integration, 'Agente', 'active', encode(sha256(('agente' || t::text)::bytea), 'hex'),
     repeat('A', 43) || '=');
+  insert into doctor.local_ai_settings (tenant_id, transport, endpoint_url, model)
+  values (t, 'private_endpoint', 'https://llm.interno.test/v1', 'llama');
+  insert into doctor.local_llm_requests (tenant_id, agent_id, request)
+  values (t, (select a.id from doctor.agents a where a.tenant_id = t limit 1), '{}');
   insert into doctor.reports (id, tenant_id, incident_id, diagnosis_id, format, status, storage_path,
     content_sha256, processing_key)
   values (report, t, incident, diagnosis, 'pdf', 'ready', t::text || '/r.pdf', repeat('c', 64), 'r-' || t::text);

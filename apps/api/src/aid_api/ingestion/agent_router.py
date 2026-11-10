@@ -5,9 +5,12 @@ agente: nada aqui abre conexão para dentro da rede do cliente."""
 import asyncio
 import time
 from typing import Annotated, Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request, Response, status
+from pydantic import ValidationError
 
+from aid_api.core.errors import ApiError
 from aid_api.core.rate_limit import TokenBucketLimiter, check_rate, get_limiter
 from aid_api.ingestion import service
 from aid_api.ingestion.agent import (
@@ -23,6 +26,8 @@ from aid_api.ingestion.agent import (
 )
 from aid_api.ingestion.schemas import (
     AgentConfig,
+    AgentLlmRequest,
+    AgentLlmResult,
     AgentRegistered,
     AgentRegistration,
     AgentUpdate,
@@ -35,6 +40,8 @@ Repository = Annotated[AgentRepository, Depends(get_agent_repository)]
 # de proxy na rede do cliente), olhando o banco a cada 5 s.
 LONG_POLL_SECONDS = 25.0
 POLL_STEP = 5.0
+# O modelo local está esperando: o pedido sai em até 1 s.
+LLM_POLL_STEP = 1.0
 # Só `/events` tem corpo de verdade; as outras rotas assinam um corpo vazio.
 SMALL_BODY = 4096
 
@@ -54,7 +61,9 @@ async def authenticated(
     identity = await repository.identify(secret_hash(secret))
     # O corpo é lido com o mesmo teto da ingestão por API, sem passar dele na memória, e fica
     # guardado para a rota.
-    limit = service.MAX_BYTES if request.url.path.endswith("/events") else SMALL_BODY
+    # O lote de Eventos e a resposta do modelo local têm corpo de verdade.
+    large = request.url.path.endswith("/events") or "/llm/" in request.url.path
+    limit = service.MAX_BYTES if large else SMALL_BODY
     body = await service.read_limited(request, limit)
     request.state.body = body
     verify(
@@ -118,3 +127,40 @@ async def events(
     if accepted:
         await repository.accept(identity.secret_hash, accepted)
     return IngestionResult(accepted=len(accepted), rejected=rejected)
+
+
+@agent.get(
+    "/llm",
+    response_model=AgentLlmRequest,
+    responses={204: {"description": "sem pedido"}},
+)
+async def llm_next(identity: Agent, repository: Repository) -> Any:
+    """Long-poll do próximo pedido ao modelo local (#46, ADR-0019): o agente leva o prompt ao
+    servidor da rede do cliente e devolve a resposta em `POST /llm/{id}`."""
+    deadline = time.monotonic() + LONG_POLL_SECONDS
+    while True:
+        found = await repository.claim_llm(identity.secret_hash)
+        if found is not None:
+            return AgentLlmRequest(id=found[0], request=found[1], timeout_seconds=found[2])
+        if time.monotonic() + LLM_POLL_STEP >= deadline:
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
+        await asyncio.sleep(LLM_POLL_STEP)
+
+
+# Fora do schema público, como os webhooks de ITSM: autenticada pelo agente, não pelo JWT da
+# Organização (o isolamento entre agentes é do banco: `finish_local_llm` só aceita o próprio).
+@agent.post("/llm/{target}", status_code=status.HTTP_204_NO_CONTENT, include_in_schema=False)
+async def llm_result(
+    target: UUID, request: Request, identity: Agent, repository: Repository
+) -> Response:
+    try:
+        body = AgentLlmResult.model_validate_json(request.state.body or b"{}")
+    except ValidationError as exc:
+        raise ApiError(422, "validation_error", "Resposta do modelo local inválida.") from exc
+    if (body.response is None) == (body.error is None):
+        raise ApiError(422, "validation_error", "Mande a resposta ou o erro.")
+    if not await repository.finish_llm(
+        identity.secret_hash, str(target), body.response, body.error
+    ):
+        raise ApiError(404, "not_found", "Pedido não encontrado ou já respondido.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

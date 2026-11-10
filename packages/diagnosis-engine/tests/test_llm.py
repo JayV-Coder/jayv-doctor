@@ -533,3 +533,75 @@ def test_anthropic_e_voyage_registram_o_egress(
     asyncio.run(voyage.embed(["x"], input_type="query"))
     [logged] = [r for r in caplog.records if r.getMessage() == "ai.egress"]
     assert logged.fields == {"provider": "voyage", "host": "api.voyageai.com", "region": "us"}  # type: ignore[attr-defined]
+
+
+# --- Modelo local (#46, ADR-0019). ---
+
+
+class FakeLocal:
+    def __init__(self, answer: dict[str, Any]) -> None:
+        self.answer = answer
+        self.bodies: list[dict[str, Any]] = []
+
+    async def chat(self, body: dict[str, Any]) -> dict[str, Any]:
+        self.bodies.append(body)
+        return self.answer
+
+
+def test_modelo_local_pede_json_pelo_schema_e_valida_a_resposta() -> None:
+    from aid_diagnosis_engine.llm.local import LocalProvider
+
+    local = FakeLocal(
+        {
+            "choices": [{"message": {"content": GOOD}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 40, "completion_tokens": 9},
+        }
+    )
+    result = complete(LocalProvider(local, "llama-3.1-70b"))
+    assert result.output.evidence_ids == ["e1"]
+    assert result.usage.provider == "local"
+    [body] = local.bodies
+    assert body["model"] == "llama-3.1-70b"
+    assert body["response_format"]["type"] == "json_schema"
+    assert body["messages"][0]["role"] == "system"
+    cut = FakeLocal({"choices": [{"message": {"content": "{"}, "finish_reason": "length"}]})
+    with pytest.raises(LLMInvalidOutputError):
+        complete(LocalProvider(cut, "m"))
+    with pytest.raises(LLMUnavailableError):
+        asyncio.run(LocalProvider(local, "m").embed(["x"], input_type="query"))
+
+
+def test_endpoint_privado_so_fala_com_o_host_dele_e_registro_nao_monta_o_local() -> None:
+    from aid_diagnosis_engine.llm.local import LocalProvider, PrivateEndpoint
+    from aid_diagnosis_engine.llm.registry import provider_for
+
+    sent: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": GOOD}, "finish_reason": "stop"}]}
+        )
+
+    endpoint = PrivateEndpoint(
+        "https://llm.cliente.internal/v1", transport=httpx.MockTransport(handler)
+    )
+    complete(LocalProvider(endpoint, "m"))
+    assert [r.url.host for r in sent] == ["llm.cliente.internal"]
+    assert sent[0].url.path == "/v1/chat/completions"
+    # Falha fechada: o registro dos provedores em nuvem nunca monta o perfil local.
+    with pytest.raises(LLMUnavailableError):
+        provider_for("local", None)
+
+
+def test_resposta_malformada_do_servidor_local_e_erro_de_llm() -> None:
+    """A resposta vem do servidor do cliente: forma estranha não derruba o worker."""
+    from aid_diagnosis_engine.llm.local import LocalProvider
+
+    for answer in (
+        {"usage": {"prompt_tokens": None}, "choices": [{"message": "texto"}]},
+        {"choices": "nada"},
+        {"choices": [{"message": {"content": 42}}]},
+    ):
+        with pytest.raises((LLMUnavailableError, LLMInvalidOutputError)):
+            complete(LocalProvider(FakeLocal(answer), "m"))

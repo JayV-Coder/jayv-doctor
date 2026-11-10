@@ -456,3 +456,168 @@ async def test_envio_ao_llm_desligado_nao_chama_o_provedor(
     # Nenhuma chamada ao provedor: nem completar, nem embedding (o FakeProvider guarda tudo).
     assert provider.requests == []
     assert provider.embeds == []
+
+
+# --- Modelo local (#46): o conteúdo dos Eventos nunca vai a um provedor externo. ---
+
+
+def cloud(name: str, project: str | None) -> Any:
+    raise AssertionError(f"o perfil local chamou o provedor em nuvem {name}")
+
+
+async def local_tenant(engine: AsyncEngine, ids: dict[str, str], timeout: int = 10) -> str:
+    agent = str(uuid4())
+    await run(
+        engine,
+        "insert into doctor.agents (id, tenant_id, integration_id, name, status, secret_hash,"
+        " public_key) values (:a, :t, :i, 'SAP', 'active', :h, :k)",
+        a=agent,
+        t=ids["tenant"],
+        i=ids["integration"],
+        h=uuid4().hex + uuid4().hex,
+        k="A" * 43 + "=",
+    )
+    await run(
+        engine,
+        "select doctor.set_local_ai(cast(:t as uuid), 'agent', cast(:a as uuid), null,"
+        " 'llama-3.1-70b', :s)",
+        t=ids["tenant"],
+        a=agent,
+        s=timeout,
+    )
+    return agent
+
+
+async def drop_local(engine: AsyncEngine, ids: dict[str, str]) -> None:
+    for table in ("local_llm_requests", "local_ai_settings", "agents"):
+        await run(engine, f"delete from doctor.{table} where tenant_id = :t", t=ids["tenant"])  # noqa: S608
+
+
+@pytest.mark.asyncio
+async def test_perfil_local_usa_so_o_modelo_do_cliente_pelo_agente(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    """Critério do #46: no modo local, nada vai a provedor externo; o prompt passa pela fila
+    do agente e sai dela quando a resposta volta."""
+    import asyncio
+
+    from aid_diagnosis_engine.llm import egress
+
+    await local_tenant(engine, tenant)
+    try:
+        found = await incident_with_timeout(engine, tenant)
+        diagnosis = await request(engine, tenant, found["incident"], "hybrid")
+        seen: list[dict[str, Any]] = []
+
+        async def agent_answers() -> None:
+            # O agente: pega o pedido e devolve a resposta do servidor local.
+            while not seen:
+                pending = await rows(
+                    engine,
+                    "select id::text, request from doctor.local_llm_requests"
+                    " where tenant_id = cast(:t as uuid) and status = 'queued'",
+                    t=tenant["tenant"],
+                )
+                for item in pending:
+                    seen.append(dict(item["request"]))
+                    content = answer([found["rule_match"], found["event"]])
+                    await run(
+                        engine,
+                        "update doctor.local_llm_requests set status = 'done', request = '{}',"
+                        " response = cast(:r as jsonb) where id = cast(:i as uuid)",
+                        i=item["id"],
+                        r=json.dumps(
+                            {
+                                "choices": [
+                                    {"message": {"content": content}, "finish_reason": "stop"}
+                                ]
+                            }
+                        ),
+                    )
+                await asyncio.sleep(0.2)
+
+        responder = asyncio.create_task(agent_answers())
+        with egress.recording() as hosts:
+            status = await diagnose(engine, {"diagnosis_id": diagnosis}, cloud)
+        await responder
+        assert status == "inconclusive"
+        # Nenhuma chamada de rede de IA saiu da plataforma.
+        assert hosts == []
+        [request_body] = seen
+        assert request_body["model"] == "llama-3.1-70b"
+        [saved] = await rows(
+            engine, "select provider from doctor.diagnoses where id = cast(:d as uuid)", d=diagnosis
+        )
+        assert saved["provider"] == "local"
+        left = await rows(
+            engine,
+            "select count(*) as n from doctor.local_llm_requests"
+            " where tenant_id = cast(:t as uuid)",
+            t=tenant["tenant"],
+        )
+        assert left[0]["n"] == 0
+    finally:
+        await drop_local(engine, tenant)
+
+
+@pytest.mark.asyncio
+async def test_perfil_local_sem_resposta_fica_so_com_as_regras_nunca_em_nuvem(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    await local_tenant(engine, tenant, timeout=10)
+    try:
+        found = await incident_with_timeout(engine, tenant)
+        diagnosis = await request(engine, tenant, found["incident"], "hybrid")
+        assert await diagnose(engine, {"diagnosis_id": diagnosis}, cloud) == "failed_llm"
+        left = await rows(
+            engine,
+            "select count(*) as n from doctor.local_llm_requests"
+            " where tenant_id = cast(:t as uuid)",
+            t=tenant["tenant"],
+        )
+        assert left[0]["n"] == 0
+        # Sem configuração do modelo local: só as Regras, com o aviso.
+        await run(
+            engine, "delete from doctor.local_ai_settings where tenant_id = :t", t=tenant["tenant"]
+        )
+        # Nova versão do mesmo Incidente (a mesma falha cai no Incidente aberto).
+        again = str(uuid4())
+        await run(
+            engine,
+            "insert into doctor.diagnoses (id, tenant_id, incident_id, version, requested_mode,"
+            " mode, processing_key) values (:d, :t, :i, 2, 'hybrid', 'hybrid', :k)",
+            d=again,
+            t=tenant["tenant"],
+            i=found["incident"],
+            k=f"teste:{again}",
+        )
+        assert await diagnose(engine, {"diagnosis_id": again}, cloud) in (
+            "inconclusive",
+            "published",
+        )
+        [saved] = await rows(
+            engine,
+            "select mode, verification_notes from doctor.diagnoses where id = cast(:d as uuid)",
+            d=again,
+        )
+        assert saved["mode"] == "rules_only"
+        assert any("Modelo local não configurado" in note for note in saved["verification_notes"])
+    finally:
+        await drop_local(engine, tenant)
+
+
+def test_local_tem_disjuntor_por_organizacao_e_uma_tentativa_com_o_prazo_dele() -> None:
+    from aid_diagnosis_engine.llm.local import LocalProvider
+    from aid_diagnosis_worker.diagnose import guarded
+
+    class Never:
+        async def chat(self, body: dict[str, Any]) -> dict[str, Any]:
+            raise AssertionError("não chamado")
+
+    a = guarded(LocalProvider(Never(), "m", timeout=300), "tenant-a")
+    b = guarded(LocalProvider(Never(), "m", timeout=300), "tenant-b")
+    assert a.breaker is not b.breaker
+    assert (a.policy.attempts, a.policy.timeout_seconds) == (1, 315)
+    # Os provedores em nuvem seguem com o disjuntor e as tentativas de sempre.
+    cloud = guarded(FakeProvider(), "tenant-a")
+    assert cloud.policy.attempts == 3

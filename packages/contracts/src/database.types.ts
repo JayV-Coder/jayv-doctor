@@ -1297,6 +1297,58 @@ isOneToOne: false
       referencedColumns: ["tenant_id","id"]
     }
                   ]
+                },"local_ai_settings": {
+                  Row: {
+                    "agent_id": string | null,"created_at": string,"endpoint_url": string | null,"id": string,"model": string,"tenant_id": string,"timeout_seconds": number,"transport": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "agent_id"?: string | null,"created_at"?: string,"endpoint_url"?: string | null,"id"?: string,"model": string,"tenant_id": string,"timeout_seconds"?: number,"transport": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "agent_id"?: string | null,"created_at"?: string,"endpoint_url"?: string | null,"id"?: string,"model"?: string,"tenant_id"?: string,"timeout_seconds"?: number,"transport"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "local_ai_settings_tenant_id_agent_id_fkey"
+      columns: ["tenant_id","agent_id"]
+isOneToOne: false
+      referencedRelation: "agents"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "local_ai_settings_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: true
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"local_llm_requests": {
+                  Row: {
+                    "agent_id": string,"claimed_at": string | null,"completed_at": string | null,"created_at": string,"error": string | null,"id": string,"request": NonNullable<Json>,"response": Json | null,"status": string,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "agent_id": string,"claimed_at"?: string | null,"completed_at"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"request": NonNullable<Json>,"response"?: Json | null,"status"?: string,"tenant_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "agent_id"?: string,"claimed_at"?: string | null,"completed_at"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"request"?: NonNullable<Json>,"response"?: Json | null,"status"?: string,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "local_llm_requests_tenant_id_agent_id_fkey"
+      columns: ["tenant_id","agent_id"]
+isOneToOne: false
+      referencedRelation: "agents"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "local_llm_requests_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"memberships": {
                   Row: {
                     "created_at": string,"id": string,"role": string,"tenant_id": string,"updated_at": string,"user_id": string,"require_other_owner": undefined | null
@@ -1823,6 +1875,11 @@ isOneToOne: false
 "cancel_tenant_deletion":
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
+"claim_local_llm":
+{ Args: { "secret_hash": string }; Returns: {
+              "id": string,"request": Json,"timeout_seconds": number
+            }[]
+                           },
 "claim_push_endpoint":
 { Args: { "endpoint": string }; Returns: undefined
                            },
@@ -1942,6 +1999,9 @@ isOneToOne: false
                            },
 "finish_knowledge_upload":
 { Args: { "target": string }; Returns: undefined
+                           },
+"finish_local_llm":
+{ Args: { "error": string,"request_id": string,"response": Json,"secret_hash": string }; Returns: boolean
                            },
 "finish_report":
 { Args: { "digest": string,"path": string,"report": string,"size": number }; Returns: undefined
@@ -2233,6 +2293,9 @@ isOneToOne: false
                            },
 "set_llm_enabled":
 { Args: { "enabled": boolean }; Returns: undefined
+                           },
+"set_local_ai":
+{ Args: { "agent": string,"endpoint_url": string,"model": string,"tenant": string,"timeout_seconds": number,"transport": string }; Returns: undefined
                            },
 "set_retention_policy":
 { Args: { "data_class": string,"days": number }; Returns: undefined

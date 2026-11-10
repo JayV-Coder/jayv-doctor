@@ -105,8 +105,8 @@ select is(
 select is(
   (select array_agg(p.proname::text order by p.proname) from pg_proc p
    where p.pronamespace = 'doctor'::regnamespace and has_function_privilege('anon', p.oid, 'execute')),
-  array['accept_agent_batch', 'accept_ingestion_batch', 'agent_seen', 'open_report_share', 'record_report_share_access', 'register_agent', 'resolve_agent', 'resolve_ingestion_token'],
-  'anon só executa as funções por token (ingestão, link do Relatório e agente, #39)'
+  array['accept_agent_batch', 'accept_ingestion_batch', 'agent_seen', 'jira_hook', 'open_report_share', 'record_report_share_access', 'register_agent', 'resolve_agent', 'resolve_ingestion_token'],
+  'anon só executa as funções por token (ingestão, link do Relatório, agente e webhook do Jira)'
 );
 
 -- O inventário pega a tabela nova fora do padrão (é o que bloqueia o merge): as mesmas views.

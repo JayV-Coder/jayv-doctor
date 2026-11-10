@@ -121,3 +121,9 @@ variable "vapid_subject" {
   type        = string
   default     = "mailto:alertas@jayv.dev"
 }
+
+variable "atlassian_client_id" {
+  description = "Client ID do app OAuth 2.0 (3LO) da plataforma no Atlassian (#43). Vazio desliga o Jira; o secret vai em atlassian-client-secret."
+  type        = string
+  default     = ""
+}

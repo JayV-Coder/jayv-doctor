@@ -24,6 +24,8 @@ export type AlertRule = Schemas["AlertRule"];
 export type NotificationChannel = Schemas["Channel"];
 export type PushSubscriptionInfo = Schemas["PushSubscription"];
 export type Webhook = Schemas["Webhook"];
+export type JiraConnection = Schemas["JiraConnection"];
+export type IncidentTicket = Schemas["Ticket"];
 export type WebhookSecret = Schemas["WebhookSecret"];
 export type WebhookDelivery = Schemas["Delivery"];
 export type Agent = Schemas["Agent"];
@@ -101,6 +103,17 @@ async function getOne<T>(path: string): Promise<T | "not_found" | null> {
 async function getList<T>(path: string): Promise<T | null> {
   const response = await apiFetch(path).catch(() => null);
   return response?.ok ? ((await response.json()) as T) : null;
+}
+
+// Chamados (#43): a conexão do Jira (nula sem conexão) e os chamados de um Incidente.
+export async function getJira(): Promise<JiraConnection | null | undefined> {
+  const response = await apiFetch("/itsm/jira").catch(() => null);
+  if (!response?.ok) return undefined;
+  return (await response.json()) as JiraConnection | null;
+}
+
+export async function listTickets(incident: string): Promise<IncidentTicket[] | null> {
+  return getList<IncidentTicket[]>(`/incidents/${encodeURIComponent(incident)}/tickets`);
 }
 
 // Webhooks de saída (#42), só para gestores; `null` se a API não respondeu ou recusou.

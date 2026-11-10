@@ -15,6 +15,7 @@ from aid_api.incidents import router as incidents
 from aid_api.ingestion import agent_router
 from aid_api.ingestion import router as ingestion
 from aid_api.integrations import router as integrations
+from aid_api.itsm import router as itsm
 from aid_api.knowledge import router as knowledge
 from aid_api.orgs import router as orgs
 from aid_api.privacy import router as privacy
@@ -41,6 +42,8 @@ def create_app() -> FastAPI:
     app.include_router(agents.router)
     app.include_router(alerts.router)
     app.include_router(webhooks.router)
+    app.include_router(itsm.router)
+    app.include_router(itsm.hooks)
     app.include_router(connectors.router)
     app.include_router(executions.router)
     app.include_router(incidents.router)

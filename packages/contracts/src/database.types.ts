@@ -845,14 +845,14 @@ isOneToOne: false
                   ]
                 },"incident_comments": {
                   Row: {
-                    "author_id": string | null,"body_md": string,"created_at": string,"edited_at": string | null,"id": string,"incident_id": string,"mentions": (string)[],"tenant_id": string,"updated_at": string
+                    "author_id": string | null,"body_md": string,"created_at": string,"edited_at": string | null,"external_author": string | null,"external_id": string | null,"id": string,"incident_id": string,"mentions": (string)[],"tenant_id": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "author_id"?: string | null,"body_md": string,"created_at"?: string,"edited_at"?: string | null,"id"?: string,"incident_id": string,"mentions"?: (string)[],"tenant_id": string,"updated_at"?: string
+                    "author_id"?: string | null,"body_md": string,"created_at"?: string,"edited_at"?: string | null,"external_author"?: string | null,"external_id"?: string | null,"id"?: string,"incident_id": string,"mentions"?: (string)[],"tenant_id": string,"updated_at"?: string
                   }
                   Update: {
-                    "author_id"?: string | null,"body_md"?: string,"created_at"?: string,"edited_at"?: string | null,"id"?: string,"incident_id"?: string,"mentions"?: (string)[],"tenant_id"?: string,"updated_at"?: string
+                    "author_id"?: string | null,"body_md"?: string,"created_at"?: string,"edited_at"?: string | null,"external_author"?: string | null,"external_id"?: string | null,"id"?: string,"incident_id"?: string,"mentions"?: (string)[],"tenant_id"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -944,6 +944,38 @@ isOneToOne: false
       columns: ["tenant_id","incident_id"]
 isOneToOne: false
       referencedRelation: "incidents"
+      referencedColumns: ["tenant_id","id"]
+    }
+                  ]
+                },"incident_tickets": {
+                  Row: {
+                    "comments_synced_at": string | null,"created_at": string,"error": string | null,"external_id": string | null,"external_key": string | null,"external_status": string | null,"id": string,"incident_id": string,"last_synced_at": string | null,"provider": string,"requested_by": string | null,"rule_id": string | null,"status": string,"tenant_id": string,"updated_at": string,"url": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "comments_synced_at"?: string | null,"created_at"?: string,"error"?: string | null,"external_id"?: string | null,"external_key"?: string | null,"external_status"?: string | null,"id"?: string,"incident_id": string,"last_synced_at"?: string | null,"provider"?: string,"requested_by"?: string | null,"rule_id"?: string | null,"status"?: string,"tenant_id": string,"updated_at"?: string,"url"?: string | null
+                  }
+                  Update: {
+                    "comments_synced_at"?: string | null,"created_at"?: string,"error"?: string | null,"external_id"?: string | null,"external_key"?: string | null,"external_status"?: string | null,"id"?: string,"incident_id"?: string,"last_synced_at"?: string | null,"provider"?: string,"requested_by"?: string | null,"rule_id"?: string | null,"status"?: string,"tenant_id"?: string,"updated_at"?: string,"url"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "incident_tickets_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "incident_tickets_tenant_id_incident_id_fkey"
+      columns: ["tenant_id","incident_id"]
+isOneToOne: false
+      referencedRelation: "incidents"
+      referencedColumns: ["tenant_id","id"]
+    },{
+      foreignKeyName: "incident_tickets_tenant_id_rule_id_fkey"
+      columns: ["tenant_id","rule_id"]
+isOneToOne: false
+      referencedRelation: "alert_rules"
       referencedColumns: ["tenant_id","id"]
     }
                   ]
@@ -1083,6 +1115,46 @@ isOneToOne: false
                   Relationships: [
                     {
       foreignKeyName: "invitations_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"itsm_connections": {
+                  Row: {
+                    "cloud_id": string | null,"created_at": string,"created_by": string | null,"custom_fields": NonNullable<Json>,"hook_token_hash": string | null,"id": string,"issue_type": string | null,"jira_webhook_expires_at": string | null,"jira_webhook_id": number | null,"last_error": string | null,"priority_map": NonNullable<Json>,"project_key": string | null,"provider": string,"secret_id": string | null,"site_url": string | null,"sites": NonNullable<Json>,"status": string,"sync_status": boolean,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "cloud_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"custom_fields"?: NonNullable<Json>,"hook_token_hash"?: string | null,"id"?: string,"issue_type"?: string | null,"jira_webhook_expires_at"?: string | null,"jira_webhook_id"?: number | null,"last_error"?: string | null,"priority_map"?: NonNullable<Json>,"project_key"?: string | null,"provider"?: string,"secret_id"?: string | null,"site_url"?: string | null,"sites"?: NonNullable<Json>,"status"?: string,"sync_status"?: boolean,"tenant_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "cloud_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"custom_fields"?: NonNullable<Json>,"hook_token_hash"?: string | null,"id"?: string,"issue_type"?: string | null,"jira_webhook_expires_at"?: string | null,"jira_webhook_id"?: number | null,"last_error"?: string | null,"priority_map"?: NonNullable<Json>,"project_key"?: string | null,"provider"?: string,"secret_id"?: string | null,"site_url"?: string | null,"sites"?: NonNullable<Json>,"status"?: string,"sync_status"?: boolean,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "itsm_connections_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"itsm_oauth_states": {
+                  Row: {
+                    "created_at": string,"expires_at": string,"id": string,"state_hash": string,"tenant_id": string,"used_at": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"expires_at"?: string,"id"?: string,"state_hash": string,"tenant_id": string,"used_at"?: string | null,"user_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"expires_at"?: string,"id"?: string,"state_hash"?: string,"tenant_id"?: string,"used_at"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "itsm_oauth_states_tenant_id_fkey"
       columns: ["tenant_id"]
 isOneToOne: false
       referencedRelation: "tenants"
@@ -1665,6 +1737,12 @@ isOneToOne: false
 "claim_push_endpoint":
 { Args: { "endpoint": string }; Returns: undefined
                            },
+"comment_author_name":
+{ Args: { "target": string }; Returns: string
+                           },
+"configure_jira":
+{ Args: { "cloud_id": string,"custom_fields": Json,"hook_token": string,"issue_type": string,"priority_map": Json,"project_key": string,"sync_status": boolean }; Returns: undefined
+                           },
 "create_agent":
 { Args: { "config": Json,"integration_id": string,"name": string,"token_hash": string }; Returns: string
                            },
@@ -1728,6 +1806,9 @@ isOneToOne: false
 "diagnosis_snapshot":
 { Args: { "target": string }; Returns: Json
                            },
+"disconnect_jira":
+{ Args: Record<PropertyKey, never>; Returns: undefined
+                           },
 "drop_expired_partitions":
 { Args: Record<PropertyKey, never>; Returns: (string)[]
                            },
@@ -1761,6 +1842,9 @@ isOneToOne: false
 "finish_import":
 { Args: { "reason": string,"stored_size": number,"target": string }; Returns: undefined
                            },
+"finish_itsm_oauth":
+{ Args: { "sites": Json,"state_hash": string,"tokens": string }; Returns: string
+                           },
 "finish_knowledge_upload":
 { Args: { "target": string }; Returns: undefined
                            },
@@ -1777,6 +1861,9 @@ isOneToOne: false
 { Args: { "target": string }; Returns: string
                            },
 "get_connector_secret":
+{ Args: { "target": string }; Returns: string
+                           },
+"get_itsm_tokens":
 { Args: { "target": string }; Returns: string
                            },
 "get_webhook_secret":
@@ -1816,6 +1903,9 @@ isOneToOne: false
                            },
 "is_manager":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"jira_hook":
+{ Args: { "token_hash": string }; Returns: boolean
                            },
 "list_audit_actors":
 { Args: Record<PropertyKey, never>; Returns: {
@@ -1917,6 +2007,12 @@ isOneToOne: false
 "put_connector_secret":
 { Args: { "secret": string,"target": string }; Returns: undefined
                            },
+"put_itsm_tokens":
+{ Args: { "target": string,"tokens": string }; Returns: undefined
+                           },
+"queue_ticket":
+{ Args: { "incident": string,"requester": string,"rule": string,"tenant": string }; Returns: string
+                           },
 "queue_webhooks":
 { Args: { "event": string,"subject": Json,"tenant": string }; Returns: undefined
                            },
@@ -1968,6 +2064,9 @@ isOneToOne: false
                            },
 "request_tenant_deletion":
 { Args: { "confirmation": string }; Returns: string
+                           },
+"request_ticket":
+{ Args: { "target": string }; Returns: string
                            },
 "require_manager":
 { Args: Record<PropertyKey, never>; Returns: string
@@ -2036,6 +2135,9 @@ isOneToOne: false
                            },
 "set_usage":
 { Args: { "resource": string,"tenant": string,"value": number }; Returns: undefined
+                           },
+"start_itsm_oauth":
+{ Args: { "state_hash": string }; Returns: undefined
                            },
 "submit_diagnosis_feedback":
 { Args: { "comment": string,"correct_category": string,"correct_cause": string,"responsible_system": string,"target": string,"verdict": string }; Returns: {

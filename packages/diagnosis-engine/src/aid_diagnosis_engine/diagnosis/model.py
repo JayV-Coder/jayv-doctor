@@ -11,7 +11,8 @@ from aid_diagnosis_engine.rules.base import EventView
 Stage = Literal["validation", "correlation", "rules", "knowledge", "llm", "verification"]
 Mode = Literal["hybrid", "rules_only"]
 Status = Literal["published", "inconclusive", "failed_llm"]
-EvidenceKind = Literal["event", "chunk", "global_chunk", "rule_match"]
+EvidenceKind = Literal["event", "chunk", "global_chunk", "rule_match", "enrichment"]
+EnrichmentOutcome = Literal["found", "not_found", "failed"]
 RecommendationKind = Literal["investigate", "fix", "verify"]
 
 
@@ -56,6 +57,27 @@ class KnowledgeItem:
     title: str
     heading: str | None
     content: str
+
+
+@dataclass(frozen=True)
+class EnrichmentItem:
+    """Consulta de leitura no sistema de destino feita na etapa 2 (ticket #40): o registro com
+    `field` igual à Referência existe em `entity`?"""
+
+    id: str
+    system: str
+    entity: str
+    field: str
+    reference: str
+    outcome: EnrichmentOutcome
+    record_id: str | None
+    record_status: str | None
+    checked_at: datetime
+
+
+class EnrichmentPending(Exception):  # noqa: N818 - não é erro: o Diagnóstico espera a consulta
+    """As consultas foram pedidas e ainda não voltaram: o Diagnóstico volta à fila e retoma
+    quando o worker de Conectores responder."""
 
 
 @dataclass(frozen=True)
@@ -105,5 +127,9 @@ class Loader(Protocol):
     async def correlation(self) -> Sequence[EventItem]: ...
 
     async def rules(self) -> Sequence[RuleItem]: ...
+
+    async def enrichment(self) -> Sequence[EnrichmentItem]:
+        """Consultas da etapa 2; `EnrichmentPending` quando ainda não voltaram."""
+        ...
 
     async def knowledge(self, query: str) -> Sequence[KnowledgeItem]: ...

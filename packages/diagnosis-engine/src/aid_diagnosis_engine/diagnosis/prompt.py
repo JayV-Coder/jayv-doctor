@@ -4,7 +4,13 @@ GuardedLLM, em ordem de relevância (Regras, Eventos de erro, demais Eventos, Ba
 import json
 from collections.abc import Sequence
 
-from aid_diagnosis_engine.diagnosis.model import EventItem, IncidentInfo, KnowledgeItem, RuleItem
+from aid_diagnosis_engine.diagnosis.model import (
+    EnrichmentItem,
+    EventItem,
+    IncidentInfo,
+    KnowledgeItem,
+    RuleItem,
+)
 from aid_diagnosis_engine.llm.guards import Untrusted
 
 MAX_EVENT_CHARS = 1500
@@ -48,7 +54,10 @@ def _event_content(item: EventItem) -> str:
 
 
 def untrusted(
-    rules: Sequence[RuleItem], events: Sequence[EventItem], knowledge: Sequence[KnowledgeItem]
+    rules: Sequence[RuleItem],
+    events: Sequence[EventItem],
+    knowledge: Sequence[KnowledgeItem],
+    enrichment: Sequence[EnrichmentItem] = (),
 ) -> list[Untrusted]:
     items = [
         Untrusted(
@@ -70,6 +79,27 @@ def untrusted(
     ]
     ordered = [item for item in events if item.strong] + [i for i in events if not i.strong]
     items += [Untrusted("event", item.view.id, _event_content(item)) for item in ordered]
+    # A consulta no destino (#40): o que existe lá agora, não o que os logs dizem.
+    items += [
+        Untrusted(
+            "enrichment",
+            item.id,
+            json.dumps(
+                {
+                    "system": item.system,
+                    "entity": item.entity,
+                    "field": item.field,
+                    "reference": item.reference,
+                    "outcome": item.outcome,
+                    "record_status": item.record_status,
+                    "checked_at": item.checked_at.isoformat(),
+                },
+                ensure_ascii=False,
+            ),
+        )
+        for item in enrichment
+        if item.outcome != "failed"
+    ]
     items += [
         Untrusted(
             "knowledge",

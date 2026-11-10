@@ -114,7 +114,7 @@ async def load(engine: AsyncEngine, report: Any) -> ReportData:
                 connection,
                 "select rank, kind, label, finding, event_id::text, event_timestamp,"
                 " coalesce(event_id, raw_log_object_id, chunk_id, global_chunk_id,"
-                " rule_match_id)::text as reference"
+                " rule_match_id, enrichment_id)::text as reference"
                 " from doctor.diagnosis_evidence where diagnosis_id = cast(:d as uuid)"
                 " order by rank",
                 d=report.diagnosis_id,

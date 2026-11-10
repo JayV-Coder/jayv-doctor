@@ -36,6 +36,8 @@ locals {
     "connector.sync"   = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
     # Alertas (#41): Incidente, Diagnóstico e Conector em falha, por trigger na outbox.
     "alert.evaluate" = { worker = "notifier", publishers = ["relay"], ack_deadline = 300 }
+    # Consultas de leitura do enriquecimento (#40): só o worker de Conectores lê credenciais.
+    "enrichment.requested" = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
   }
 
   # voyage-api-key: a busca da Base de conhecimento gera o embedding da pergunta (#23).
@@ -506,6 +508,28 @@ resource "google_cloud_scheduler_job" "alerts_scan" {
     oidc_token {
       service_account_email = google_service_account.scheduler.email
       audience              = module.workers["notifier"].uri
+    }
+  }
+
+  depends_on = [module.project]
+}
+
+# Enriquecimento (#40): a cada 5 min, consulta sem resposta vira `failed` e o Diagnóstico segue.
+resource "google_cloud_scheduler_job" "enrichment_expire" {
+  project          = var.project_id
+  region           = var.region
+  name             = "${local.name_prefix}-enrichment-expire"
+  schedule         = "*/5 * * * *"
+  time_zone        = "Etc/UTC"
+  attempt_deadline = "120s"
+
+  http_target {
+    http_method = "POST"
+    uri         = "${module.workers["diagnosis"].uri}/enrichment/expire"
+
+    oidc_token {
+      service_account_email = google_service_account.scheduler.email
+      audience              = module.workers["diagnosis"].uri
     }
   }
 

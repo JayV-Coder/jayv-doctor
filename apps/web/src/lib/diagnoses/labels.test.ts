@@ -100,6 +100,13 @@ describe("Diagnóstico", () => {
       evidenceHref({ ...event, kind: "global_chunk", event_id: null, execution_id: null }),
     ).toBe("/conhecimento?aba=global");
     expect(evidenceHref({ ...rule, event_id: null, execution_id: null })).toBeNull();
+    const lookup = {
+      ...rule,
+      kind: "enrichment" as const,
+      label: "Consulta ao SAP · A_SalesOrder",
+    };
+    expect(evidenceChip(lookup)).toBe("Consulta");
+    expect(evidenceHref(lookup)).toBeNull();
   });
 
   it("diferenças entre versões", () => {

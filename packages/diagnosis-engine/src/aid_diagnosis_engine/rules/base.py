@@ -49,6 +49,9 @@ class ExecutionView:
     last_event_at: datetime
     # Quando a avaliação acontece (o fechamento): base do "sem confirmação em X min".
     evaluated_at: datetime
+    # Eventos da origem cuja chave do Mapa com `reconcile` não apareceu no destino (#40),
+    # calculados pelo worker com o Mapa e os sistemas da Integração.
+    unreconciled: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

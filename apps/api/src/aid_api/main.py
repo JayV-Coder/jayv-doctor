@@ -6,6 +6,7 @@ from aid_api.alerts import router as alerts
 from aid_api.audit import router as audit
 from aid_api.connectors import router as connectors
 from aid_api.core import errors, request_meta, telemetry
+from aid_api.correlation import router as correlation
 from aid_api.dashboard import router as dashboard
 from aid_api.diagnoses import router as diagnoses
 from aid_api.executions import router as executions
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(orgs.router)
     app.include_router(integrations.router)
+    app.include_router(correlation.router)
     app.include_router(imports.router)
     app.include_router(ingestion.tokens)
     app.include_router(ingestion.events)

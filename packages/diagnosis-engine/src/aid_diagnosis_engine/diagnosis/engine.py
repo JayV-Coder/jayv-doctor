@@ -4,6 +4,7 @@ esgotada e a falha do LLM caem nele também, com a nota e, na falha, o status `f
 
 from collections.abc import Awaitable, Callable
 
+from aid_diagnosis_engine.diagnosis.enrichment import apply_enrichment
 from aid_diagnosis_engine.diagnosis.model import DiagnosisDraft, Loader, Mode, Stage
 from aid_diagnosis_engine.diagnosis.prompt import SYSTEM, instructions, knowledge_query, untrusted
 from aid_diagnosis_engine.diagnosis.rules_only import rules_draft
@@ -59,6 +60,9 @@ class DiagnosisEngine:
 
         await on_stage("correlation")
         events = list(await loader.correlation())
+        # Consulta de leitura no destino (#40): `EnrichmentPending` sobe e o worker devolve o
+        # Diagnóstico à fila até o worker de Conectores responder.
+        enrichment = list(await loader.enrichment())
 
         await on_stage("rules")
         rules = list(await loader.rules())
@@ -73,7 +77,7 @@ class DiagnosisEngine:
             await on_stage("verification")
             draft = rules_draft(incident, events, rules, mode="rules_only")
             draft.verification_notes[:0] = notes
-            return draft
+            return apply_enrichment(draft, enrichment, incident)
 
         knowledge = []
         if include_knowledge_base:
@@ -90,7 +94,7 @@ class DiagnosisEngine:
                 scope=self.scope,
                 system=SYSTEM,
                 instructions=instructions(incident),
-                untrusted=untrusted(rules, events, knowledge),
+                untrusted=untrusted(rules, events, knowledge, enrichment),
                 schema=LLMDiagnosis,
                 tier="reasoning",
                 max_tokens=MAX_TOKENS,
@@ -102,12 +106,12 @@ class DiagnosisEngine:
                 *notes,
                 "O modelo de IA falhou: Diagnóstico só com as Regras.",
             ]
-            return self._with_usage(draft)
+            return self._with_usage(apply_enrichment(draft, enrichment, incident))
 
         await on_stage("verification")
-        draft = verify(result.output, incident, events, rules, knowledge)
+        draft = verify(result.output, incident, events, rules, knowledge, enrichment)
         draft.verification_notes[:0] = notes
-        return self._with_usage(draft)
+        return self._with_usage(apply_enrichment(draft, enrichment, incident))
 
     def _with_usage(self, draft: DiagnosisDraft) -> DiagnosisDraft:
         billed = [usage for usage in self.usage if not usage.cached]

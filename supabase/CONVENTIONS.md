@@ -29,7 +29,7 @@ using (tenant_id = (select doctor.current_tenant_id()))
 - [ ] FKs para outras tabelas de tenant são **compostas**: `foreign key (tenant_id, x_id) references x (tenant_id, id)`
 - [ ] `alter table … enable row level security` e políticas por operação e Papel
 - [ ] `revoke all … from anon, authenticated` seguido só dos `grant` necessários (de coluna, quando couber)
-- [ ] índices começam por `tenant_id`
+- [ ] índices começam por `tenant_id` (exceção: índice GIN, que não aceita `tenant_id` na frente sem a extensão `btree_gin`. A chave indexada precisa carregar algo da Organização, e a consulta filtra `tenant_id` também. Caso atual: `events_cross_keys_idx`, cuja chave começa pelo id do Mapa)
 - [ ] `updated_at` com o trigger `doctor.set_updated_at()`
 - [ ] teste pgTAP de isolamento em `tests/database/`: outro tenant não lê, não altera e não referencia
 - [ ] funções com `set search_path = ''` e nomes qualificados; `security definer` só com justificativa e `revoke execute … from public`

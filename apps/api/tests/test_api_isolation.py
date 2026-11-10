@@ -45,6 +45,15 @@ BODY_CASES: list[tuple[str, str, dict[str, Any]]] = [
             "channels": ["{channel}"],
         },
     ),
+    (
+        "POST",
+        "/api/v1/integrations/{own_integration}/correlation-mappings",
+        {
+            "name": "Pedido",
+            "keys": [{"system": "sap", "field": "execution_id"}],
+            "lookup": {"connector_id": "{connector}", "entity": "Order", "field": "OrderNumber"},
+        },
+    ),
 ]
 
 # (método, caminho, recurso de B no parâmetro, corpo)
@@ -60,6 +69,15 @@ ROUTES: list[tuple[str, str, str, dict[str, Any] | None]] = [
     ("DELETE", "/api/v1/alert-rules/{target}", "alert_rule", None),
     ("DELETE", "/api/v1/notification-channels/{target}", "channel", None),
     ("DELETE", "/api/v1/push-subscriptions/{target}", "push", None),
+    ("GET", "/api/v1/integrations/{target}/correlation-mappings", "integration", None),
+    (
+        "POST",
+        "/api/v1/integrations/{target}/correlation-mappings",
+        "integration",
+        {"name": "Invasor", "keys": [{"system": "sap", "field": "execution_id"}]},
+    ),
+    ("PATCH", "/api/v1/correlation-mappings/{target}", "mapping", {"name": "Invadido"}),
+    ("DELETE", "/api/v1/correlation-mappings/{target}", "mapping", None),
     ("POST", "/api/v1/imports/{target}/upload-url", "import", None),
     ("POST", "/api/v1/imports/{target}/complete", "import", None),
     ("POST", "/api/v1/ingestion-tokens/{target}/revoke", "token", None),
@@ -169,6 +187,7 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
             "alert_rule",
             "channel",
             "push",
+            "mapping",
             "document",
             "own_integration",
             "own_incident",
@@ -229,6 +248,9 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
         "insert into doctor.push_subscriptions (id, tenant_id, user_id, endpoint, p256dh, auth)"
         " values (:push, :tenant, :user_b, 'https://fcm.googleapis.com/fcm/send/b',"
         " repeat('p', 87), repeat('a', 22))",
+        "insert into doctor.correlation_mappings (id, tenant_id, integration_id, name, keys)"
+        " values (:mapping, :tenant, :integration, 'Pedido',"
+        ' \'[{"system": "sap", "field": "execution_id"}]\')',
         "insert into doctor.agents (id, tenant_id, integration_id, name, registration_token_hash,"
         " registration_expires_at) values (:agent, :tenant, :integration, 'Agente',"
         " repeat('a', 64), now() + interval '1 day')",

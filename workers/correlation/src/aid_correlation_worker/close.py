@@ -63,3 +63,47 @@ async def close_idle(engine: AsyncEngine, idle: timedelta = IDLE) -> int:
             ],
         )
         return len(due)
+
+
+async def reconcile_due(engine: AsyncEngine) -> int:
+    """Divergência pelo Mapa (INT-008, #40): a Execução fechada de uma Integração com Mapa de
+    `reconcile` é avaliada de novo quando a maior janela desses Mapas já passou desde o último
+    Evento. Antes disso, a ausência do destino não prova nada (ele pode chegar em lote)."""
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        due = list(
+            await connection.execute(
+                text(
+                    "with due as ("
+                    " select x.id, x.tenant_id, x.integration_id from doctor.executions x"
+                    " join lateral (select max(m.window_minutes) as window"
+                    "  from doctor.correlation_mappings m where m.tenant_id = x.tenant_id"
+                    "  and m.integration_id = x.integration_id and m.reconcile) r on true"
+                    " where x.reconciled_at is null and x.closed_at is not null"
+                    " and x.merged_into is null and r.window is not null"
+                    " and x.last_event_at < now() - make_interval(mins => r.window)"
+                    " order by x.last_event_at limit :batch for update of x skip locked)"
+                    " update doctor.executions x set reconciled_at = now() from due"
+                    " where x.id = due.id"
+                    " returning x.id::text, x.tenant_id::text, x.integration_id::text"
+                ),
+                {"batch": BATCH},
+            )
+        )
+        if due:
+            await connection.execute(
+                text(
+                    "insert into doctor.outbox_messages (tenant_id, topic, payload)"
+                    " values (cast(:t as uuid), 'rules.evaluate', cast(:p as jsonb))"
+                ),
+                [
+                    {
+                        "t": row.tenant_id,
+                        "p": json.dumps(
+                            {"execution_id": row.id, "integration_id": row.integration_id}
+                        ),
+                    }
+                    for row in due
+                ],
+            )
+        return len(due)

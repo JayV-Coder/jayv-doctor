@@ -72,12 +72,16 @@ begin
   values (diagnosis, t, incident, 1, 'running', 'verification', 'hybrid', 'hybrid', 'k-' || t::text);
   insert into doctor.diagnosis_hypotheses (tenant_id, diagnosis_id, rank, statement)
   values (t, diagnosis, 1, 'Gateway lento.');
+  insert into doctor.enrichments (tenant_id, diagnosis_id, reference, system, entity, field, outcome, checked_at)
+  values (t, diagnosis, '801XX0001', 'sap', 'A_SalesOrder', 'PurchaseOrderByCustomer', 'found', now());
   insert into doctor.diagnosis_recommendations (tenant_id, diagnosis_id, rank, text, kind)
   values (t, diagnosis, 1, 'Confira o SAP.', 'verify');
   insert into doctor.diagnosis_evidence (tenant_id, diagnosis_id, rank, kind, rule_match_id, label, finding)
   values (t, diagnosis, 1, 'rule_match', match, 'INT-003', '504');
   update doctor.diagnoses set status = 'published', stage = 'done', published_at = now() where id = diagnosis;
   insert into doctor.diagnosis_feedback (tenant_id, diagnosis_id, verdict) values (t, diagnosis, 'accepted');
+  insert into doctor.correlation_mappings (tenant_id, integration_id, name, keys)
+  values (t, integration, 'Pedido', '[{"system": "sap", "field": "execution_id"}]');
   insert into doctor.agents (tenant_id, integration_id, name, status, secret_hash, public_key)
   values (t, integration, 'Agente', 'active', encode(sha256(('agente' || t::text)::bytea), 'hex'),
     repeat('A', 43) || '=');

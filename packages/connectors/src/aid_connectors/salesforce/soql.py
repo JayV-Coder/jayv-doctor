@@ -115,3 +115,13 @@ def select(
         f"SELECT {', '.join(source.fields)} FROM {source.object}{where}"  # noqa: S608
         f" ORDER BY SystemModstamp, Id LIMIT {limit}"
     )
+
+
+def lookup(entity: str, field: str, value: str, status_field: str | None) -> str:
+    """`SELECT Id[, status] FROM <entity> WHERE <field> = '<valor escapado>' LIMIT 1`: a consulta
+    do enriquecimento (#40). Nomes só no padrão de identificador; o valor sai de `literal`."""
+    names = [entity, field, *([status_field] if status_field else [])]
+    if not all(IDENTIFIER.match(name) for name in names):
+        raise QueryNotAllowedError("objeto ou campo fora do padrão")
+    columns = ", ".join(dict.fromkeys(["Id", *([status_field] if status_field else [])]))
+    return f"SELECT {columns} FROM {entity} WHERE {field} = {literal(value)} LIMIT 1"  # noqa: S608

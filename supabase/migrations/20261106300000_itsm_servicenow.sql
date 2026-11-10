@@ -106,8 +106,9 @@ $$;
 
 -- Configuração do ServiceNow (Owner ou Admin com MFA). O secret só é exigido na primeira vez ou
 -- quando a instância ou o client id mudam (o secret de uma instância não vai para outra). O
--- token do endereço do webhook é novo só quando a API o manda (primeira vez ou "gerar outro"):
--- o banco guarda só o hash, e a API o mostra uma vez para a Business Rule do cliente.
+-- token do endereço do webhook é novo só quando a API o manda (primeira vez, instância nova ou
+-- "gerar outro"): o banco guarda só o hash, e a API o mostra uma vez para a Business Rule.
+-- `impact_map` nulo mantém o atual (a tela não o edita).
 create function doctor.configure_servicenow(
   instance_url text, client_id text, client_secret text, impact_map jsonb,
   assignment_groups jsonb, default_group text, sync_status boolean, hook_token text
@@ -135,8 +136,18 @@ begin
       or found.client_id is distinct from configure_servicenow.client_id) then
     raise exception 'informe o client secret' using errcode = 'DR084';
   end if;
-  if found.id is null and configure_servicenow.hook_token is null then
-    raise exception 'falta o token do webhook' using errcode = 'DR084';
+  -- A API manda o token quando vê a conexão nova ou a instância trocada; duas configurações ao
+  -- mesmo tempo podem discordar disso, e a segunda tenta de novo.
+  if configure_servicenow.hook_token is null and (found.id is null
+      or found.instance_url is distinct from configure_servicenow.instance_url) then
+    raise exception 'a configuração mudou ao mesmo tempo' using errcode = 'DR085';
+  end if;
+  -- Instância nova: os chamados abertos apontam para a antiga (sys_id, número e link). Viram
+  -- `failed` com o motivo e podem ser abertos de novo na instância nova.
+  if found.id is not null and found.instance_url is distinct from configure_servicenow.instance_url then
+    update doctor.incident_tickets t set status = 'failed',
+      error = 'A instância do ServiceNow mudou: abra o chamado de novo.'
+    where t.tenant_id = tenant and t.provider = 'servicenow' and t.status in ('creating', 'open');
   end if;
   if found.id is null then
     insert into doctor.itsm_connections (tenant_id, provider, secret_id, created_by)
@@ -152,7 +163,8 @@ begin
       - 'access_token' - 'expires_at')::text);
   end if;
   update doctor.itsm_connections c set instance_url = configure_servicenow.instance_url,
-    client_id = configure_servicenow.client_id, impact_map = configure_servicenow.impact_map,
+    client_id = configure_servicenow.client_id,
+    impact_map = coalesce(configure_servicenow.impact_map, c.impact_map),
     assignment_groups = configure_servicenow.assignment_groups,
     default_group = nullif(btrim(configure_servicenow.default_group), ''),
     sync_status = configure_servicenow.sync_status,
@@ -162,7 +174,8 @@ begin
   where c.id = found.id;
   -- O `notifier` confere as credenciais pedindo um token (falhou: `needs_reauth` com o motivo).
   insert into doctor.outbox_messages (tenant_id, topic, payload)
-  values (tenant, 'itsm.sync', jsonb_build_object('connection_id', found.id, 'check', true));
+  values (tenant, 'itsm.sync',
+    jsonb_build_object('connection_id', found.id, 'provider', 'servicenow', 'check', true));
   perform doctor.record_audit(tenant, 'itsm.configure', found.id::text);
   return found.id;
 end;
@@ -202,9 +215,41 @@ begin
   if found.id is null then
     return false;
   end if;
-  wanted := jsonb_build_object('connection_id', found.id,
+  wanted := jsonb_build_object('connection_id', found.id, 'provider', 'servicenow',
     'issue_key', case when servicenow_hook.number ~ '^[A-Z]{2,8}[0-9]{7,12}$'
       then servicenow_hook.number end);
+  if not exists (
+    select 1 from doctor.outbox_messages o
+    where o.published_at is null and o.tenant_id = found.tenant_id and o.topic = 'itsm.sync'
+      and o.payload = wanted
+  ) then
+    insert into doctor.outbox_messages (tenant_id, topic, payload)
+    values (found.tenant_id, 'itsm.sync', wanted);
+  end if;
+  return true;
+end;
+$$;
+
+-- Os tokens dos dois webhooks dividem a coluna `hook_token_hash`: o do Jira só aceita o do Jira.
+create or replace function doctor.jira_hook(token_hash text, issue_key text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  found doctor.itsm_connections;
+  wanted jsonb;
+begin
+  select * into found from doctor.itsm_connections c
+  where c.hook_token_hash = jira_hook.token_hash and c.provider = 'jira'
+    and c.status = 'active' and c.sync_status;
+  if found.id is null then
+    return false;
+  end if;
+  wanted := jsonb_build_object('connection_id', found.id, 'provider', 'jira',
+    'issue_key', case when jira_hook.issue_key ~ '^[A-Z][A-Z0-9_]{1,19}-[0-9]{1,10}$'
+      then jira_hook.issue_key end);
   if not exists (
     select 1 from doctor.outbox_messages o
     where o.published_at is null and o.tenant_id = found.tenant_id and o.topic = 'itsm.sync'

@@ -15,7 +15,7 @@ Tickets #43 (Jira) e #44 (ServiceNow). Exigem `Authorization: Bearer <JWT do Sup
 | `GET /api/v1/incidents/{id}/tickets` | todo Papel | Chamados do Incidente: `provider`, `status` (`creating`, `open`, `done`, `failed`), `external_key`, `url`, `external_status`, `assignment_group` |
 | `POST /api/v1/incidents/{id}/tickets?provider=jira\|servicenow` | Analyst ou acima | "Abrir chamado" → `202`; uma vez por Incidente e provedor (repetir não abre outro). Sem `provider`, Jira |
 
-- `409 jira_not_configured`: sem conexão ativa com projeto. `400 invalid_state`: `state` usado, vencido ou de outra sessão. `503 jira_unavailable`: o app OAuth da plataforma não está configurado.
+- `409 itsm_not_configured`: sem conexão ativa (Jira com projeto, ServiceNow com instância) do provedor pedido. `409 conflict`: duas configurações do ServiceNow ao mesmo tempo. `400 invalid_state`: `state` usado, vencido ou de outra sessão. `503 jira_unavailable`: o app OAuth da plataforma não está configurado.
 - ServiceNow: `instance_url` só `https://<instância>.service-now.com`. `client_secret` é obrigatório na primeira vez e quando a instância ou o client id mudam (`422 secret_required`); em branco, mantém o do Vault. `assignment_groups`: `{ "sap" | "salesforce" | "gcp" | "other": "<nome ou sys_id do grupo>" }`; `default_group` vale para "Indeterminado" e Sistemas sem grupo. `impact_map`: severidade → `{ impact, urgency }` (1 a 3). `hook_url` volta só na primeira configuração ou com `rotate_hook: true` (o anterior deixa de valer).
 - `custom_fields`: `{ "customfield_10010": "valor" }`, só ids `customfield_<número>`, com valor fixo.
 - `priority_map`: severidade → nome da prioridade no Jira (padrão `Highest`, `High`, `Medium`, `Low`).

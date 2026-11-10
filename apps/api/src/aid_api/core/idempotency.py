@@ -190,7 +190,10 @@ def redacted(body: bytes) -> str:
         return text_body
     if not isinstance(found, dict) or not SECRET_FIELDS & found.keys():
         return text_body
-    return json.dumps({k: REDACTED if k in SECRET_FIELDS else v for k, v in found.items()})
+    # Só o segredo presente: um campo nulo (nada foi exibido) volta nulo na repetição.
+    return json.dumps(
+        {k: REDACTED if k in SECRET_FIELDS and v is not None else v for k, v in found.items()}
+    )
 
 
 class IdempotentRoute(APIRoute):

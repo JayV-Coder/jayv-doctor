@@ -59,15 +59,6 @@ class Weights(BaseModel):
     urgency: int = Field(ge=1, le=3)
 
 
-def default_weights() -> dict[Severity, Weights]:
-    return {
-        "critical": Weights(impact=1, urgency=1),
-        "high": Weights(impact=2, urgency=1),
-        "medium": Weights(impact=2, urgency=2),
-        "low": Weights(impact=3, urgency=3),
-    }
-
-
 class ServiceNowConnection(BaseModel):
     status: Literal["pending", "active", "needs_reauth"]
     instance_url: str | None
@@ -87,7 +78,8 @@ class ServiceNowConfig(BaseModel):
     client_id: str = Field(min_length=1, max_length=200)
     # Obrigatório na primeira vez e quando a instância ou o client id mudam; vai para o Vault.
     client_secret: str | None = Field(default=None, min_length=1, max_length=500)
-    impact_map: dict[Severity, Weights] = Field(default_factory=default_weights)
+    # Nulo mantém o atual (na primeira vez, o padrão do banco: crítica 1/1 … baixa 3/3).
+    impact_map: dict[Severity, Weights] | None = None
     # Sistema responsável → grupo de atendimento (nome ou sys_id).
     assignment_groups: dict[System, str] = Field(default_factory=dict)
     # Para "Indeterminado" e Sistemas sem grupo.

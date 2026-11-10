@@ -9,22 +9,19 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from aid_notifier import jira, servicenow
+from aid_notifier.tickets import claim
 
 
 async def create_ticket(
     engine: AsyncEngine, ticket: str, transport: httpx.AsyncBaseTransport | None = None
 ) -> str:
-    async with engine.begin() as db:
-        await platform_role(db)
-        provider = await db.scalar(
-            text("select provider from doctor.incident_tickets where id = cast(:t as uuid)"),
-            {"t": ticket},
-        )
-    if provider == "servicenow":
-        return await servicenow.create_ticket(engine, ticket, transport)
-    if provider == "jira":
-        return await jira.create_ticket(engine, ticket, transport)
-    return "skipped"
+    # A reserva já diz o provedor: nada de consulta à parte.
+    claimed = await claim(engine, ticket)
+    if claimed is None:
+        return "skipped"
+    if claimed.provider == "servicenow":
+        return await servicenow.open_incident(engine, claimed, transport)
+    return await jira.open_issue(engine, claimed, transport)
 
 
 async def sync(
@@ -32,12 +29,15 @@ async def sync(
     payload: Mapping[str, Any],
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> int:
-    async with engine.begin() as db:
-        await platform_role(db)
-        provider = await db.scalar(
-            text("select provider from doctor.itsm_connections where id = cast(:c as uuid)"),
-            {"c": str(payload["connection_id"])},
-        )
+    provider = payload.get("provider")
+    if provider is None:
+        # Mensagens de antes do provedor no payload (configuração do Jira).
+        async with engine.begin() as db:
+            await platform_role(db)
+            provider = await db.scalar(
+                text("select provider from doctor.itsm_connections where id = cast(:c as uuid)"),
+                {"c": str(payload["connection_id"])},
+            )
     if provider == "servicenow":
         return await servicenow.sync(engine, payload, transport)
     if provider == "jira":

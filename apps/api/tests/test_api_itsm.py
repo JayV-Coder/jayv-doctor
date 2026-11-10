@@ -128,7 +128,7 @@ async def test_conecta_configura_e_abre_o_chamado_uma_vez(
             )
             assert (again.status_code, again.json()["code"]) == (400, "invalid_state")
             early = await client.post(f"/api/v1/incidents/{incident}/tickets")
-            assert (early.status_code, early.json()["code"]) == (409, "jira_not_configured")
+            assert (early.status_code, early.json()["code"]) == (409, "itsm_not_configured")
             configured = await client.put(
                 "/api/v1/itsm/jira",
                 json={"cloud_id": "cloud-1", "project_key": "SUST", "issue_type": "Incidente"},

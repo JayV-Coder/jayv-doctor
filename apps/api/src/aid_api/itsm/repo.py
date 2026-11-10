@@ -48,7 +48,9 @@ SERVICENOW_COLUMNS = (
 ERRORS = {
     "42501": lambda: ApiError(403, "forbidden", "Seu Papel não permite esta ação."),
     "P0002": lambda: ApiError(404, "not_found", "Incidente ou conexão do Jira não encontrada."),
-    "DR080": lambda: ApiError(409, "jira_not_configured", "Conecte e configure o Jira antes."),
+    "DR080": lambda: ApiError(
+        409, "itsm_not_configured", "Conecte e configure o ITSM em Chamados (ITSM) antes."
+    ),
     "DR081": lambda: ApiError(
         400, "invalid_state", "A autorização do Jira venceu ou não é desta sessão: tente de novo."
     ),
@@ -58,6 +60,9 @@ ERRORS = {
     ),
     "DR084": lambda: ApiError(
         422, "secret_required", "Informe o client secret (primeira vez ou instância nova)."
+    ),
+    "DR085": lambda: ApiError(
+        409, "conflict", "A configuração mudou ao mesmo tempo em outra sessão: tente de novo."
     ),
 }
 
@@ -234,8 +239,10 @@ class ItsmRepository:
         self, claims: Claims, config: ServiceNowConfig
     ) -> ServiceNowSaved:
         current = await self.servicenow(claims)
-        # Endereço novo só na primeira vez ou a pedido: a Business Rule do cliente guarda o atual.
-        token = secrets.token_urlsafe(32) if current is None or config.rotate_hook else None
+        # Endereço novo só na primeira vez, a pedido ou com instância nova (a Business Rule da
+        # instância antiga para de valer); fora isso, a Business Rule guarda o atual.
+        fresh = current is None or config.rotate_hook or current.instance_url != config.instance_url
+        token = secrets.token_urlsafe(32) if fresh else None
         async with translated_tx(claims, ERRORS, self.engine) as db:
             await db.execute(
                 text(
@@ -246,7 +253,10 @@ class ItsmRepository:
                     "u": config.instance_url,
                     "c": config.client_id.strip(),
                     "s": config.client_secret,
-                    "m": json.dumps(
+                    # Nulo mantém o mapa atual (a tela não o edita).
+                    "m": None
+                    if config.impact_map is None
+                    else json.dumps(
                         {key: value.model_dump() for key, value in config.impact_map.items()}
                     ),
                     "g": json.dumps(

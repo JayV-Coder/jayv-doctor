@@ -3721,7 +3721,7 @@ export interface components {
       /** Impact Map */
       impact_map?: {
         [key: string]: components["schemas"]["Weights"];
-      };
+      } | null;
       /** Assignment Groups */
       assignment_groups?: {
         [key: string]: string;

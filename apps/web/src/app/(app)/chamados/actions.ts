@@ -10,7 +10,7 @@ export type { Outcome };
 const OPTIONS = {
   page: "/chamados",
   messages: {
-    jira_not_configured: "Conecte e configure o Jira antes.",
+    itsm_not_configured: "Conecte e configure o ITSM em Chamados (ITSM) antes.",
     invalid_site: "O site escolhido não está na autorização.",
     jira_unavailable: "O app do Jira não está configurado na plataforma.",
     not_found: "Conexão não encontrada.",

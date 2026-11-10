@@ -15,6 +15,7 @@ incident; o webhook só dispara a leitura pela Table API, e a varredura lê o qu
 
 import json
 import logging
+import re
 import time
 from collections.abc import Mapping, Sequence
 from types import TracebackType
@@ -27,14 +28,16 @@ from aid_db import platform_role
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from aid_notifier.jira import CLAIM, SYNC_BATCH, SYNC_EVERY, SYNC_SECONDS, confidence_text
+from aid_notifier.jira import SYNC_BATCH, SYNC_EVERY, SYNC_SECONDS, confidence_text
 from aid_notifier.notify import app_url
+from aid_notifier.tickets import CLAIM, Claimed, claim, ticket_failed, touch
 
 log = logging.getLogger(__name__)
 # Resolvido, Fechado e Cancelado no ServiceNow.
 DONE_STATES = {"6", "7", "8"}
 SYSTEMS = {"sap": "SAP", "salesforce": "Salesforce", "gcp": "GCP", "other": "Outro"}
 DEFAULT_IMPACT = {"impact": 2, "urgency": 2}
+SYS_ID = re.compile(r"[0-9a-f]{32}")
 
 
 class ServiceNowError(Exception):
@@ -209,56 +212,35 @@ async def create_ticket(
     engine: AsyncEngine, ticket: str, transport: httpx.AsyncBaseTransport | None = None
 ) -> str:
     """Cria o incident reservado; devolve o status final ('skipped' se não era a vez)."""
+    claimed = await claim(engine, ticket, "servicenow")
+    return await open_incident(engine, claimed, transport) if claimed else "skipped"
+
+
+async def group_id(servicenow: ServiceNow, group: str) -> str:
+    """sys_id do grupo de atendimento: a regra guarda o nome (ou já o sys_id)."""
+    if SYS_ID.fullmatch(group):
+        return group
+    if "^" in group:
+        raise ServiceNowError(f"nome de grupo inválido: {group}")
+    found = await servicenow.call(
+        "GET",
+        "/api/now/table/sys_user_group",
+        {"sysparm_query": f"name={group}", "sysparm_fields": "sys_id", "sysparm_limit": "1"},
+    )
+    if not isinstance(found, list) or not found or not isinstance(found[0], dict):
+        raise ServiceNowError(f"o grupo {group} não existe no ServiceNow")
+    return str(found[0]["sys_id"])
+
+
+async def open_incident(
+    engine: AsyncEngine, claimed: Claimed, transport: httpx.AsyncBaseTransport | None = None
+) -> str:
+    """O incident do chamado já reservado (procura pelo `correlation_id` antes de criar)."""
     async with engine.begin() as db:
         await platform_role(db)
-        row = (
-            await db.execute(
-                text(
-                    "update doctor.incident_tickets set claimed_at = now()"
-                    " where id = cast(:t as uuid) and status = 'creating'"
-                    " and provider = 'servicenow'"
-                    " and (claimed_at is null or claimed_at < now() - cast(:claim as interval))"
-                    " returning id::text, tenant_id::text, incident_id::text"
-                ),
-                {"t": ticket, "claim": CLAIM},
-            )
-        ).first()
-        if row is None:
-            return "skipped"
-        connection = await connection_of(db, row.tenant_id)
-        incident = (
-            await db.execute(
-                text(
-                    "select i.id::text, i.number, i.title, i.severity, i.category,"
-                    " g.name as integration, g.environment from doctor.incidents i"
-                    " join doctor.integrations g on g.tenant_id = i.tenant_id"
-                    " and g.id = i.integration_id where i.id = cast(:i as uuid)"
-                ),
-                {"i": row.incident_id},
-            )
-        ).first()
-        diagnosis = (
-            await db.execute(
-                text(
-                    "select id::text, classification, probable_cause, confidence::float,"
-                    " responsible_system from doctor.diagnoses"
-                    " where incident_id = cast(:i as uuid)"
-                    " and status in ('published', 'inconclusive', 'failed_llm')"
-                    " order by version desc limit 1"
-                ),
-                {"i": row.incident_id},
-            )
-        ).first()
-        recommendations = [
-            found[0]
-            for found in await db.execute(
-                text(
-                    "select text from doctor.diagnosis_recommendations"
-                    " where diagnosis_id = cast(:d as uuid) order by rank"
-                ),
-                {"d": diagnosis.id if diagnosis else "00000000-0000-0000-0000-000000000000"},
-            )
-        ]
+        connection = await connection_of(db, claimed.tenant_id)
+    ticket, incident = claimed.id, claimed.incident
+    diagnosis, recommendations = claimed.diagnosis, claimed.recommendations
     if connection is None or incident is None:
         return await ticket_failed(engine, ticket, "ServiceNow não configurado")
     group = assignment_group(connection, diagnosis)
@@ -272,8 +254,6 @@ async def create_ticket(
         "correlation_display": "Integration AI Doctor",
         "work_notes": summary(incident, diagnosis, recommendations),
     }
-    if group:
-        fields["assignment_group"] = group
     try:
         async with ServiceNow(engine, connection, transport) as servicenow:
             found = await servicenow.call(
@@ -286,12 +266,12 @@ async def create_ticket(
                 },
             )
             existing = found[0] if isinstance(found, list) and found else None
-            # Nome do grupo ou sys_id: com display value, a Table API aceita os dois.
+            if existing is None and group:
+                fields["assignment_group"] = await group_id(servicenow, group)
+            # Valores crus (impact e urgency 1 a 3, o sys_id do grupo): sem o modo display value,
+            # que trocaria os números pelos rótulos da instância.
             created = existing or await servicenow.call(
-                "POST",
-                "/api/now/table/incident",
-                {"sysparm_input_display_value": "true", "sysparm_fields": "sys_id,number"},
-                fields,
+                "POST", "/api/now/table/incident", {"sysparm_fields": "sys_id,number"}, fields
             )
         number, sys_id = str(created["number"]), str(created["sys_id"])
     except ServiceNowError as exc:
@@ -317,19 +297,6 @@ async def create_ticket(
             },
         )
     return "open"
-
-
-async def ticket_failed(engine: AsyncEngine, ticket: str, error: str) -> str:
-    async with engine.begin() as db:
-        await platform_role(db)
-        await db.execute(
-            text(
-                "update doctor.incident_tickets set status = 'failed', error = :e"
-                " where id = cast(:t as uuid) and status = 'creating'"
-            ),
-            {"e": error[:500], "t": ticket},
-        )
-    return "failed"
 
 
 async def read_ticket(servicenow: ServiceNow, ticket: Any) -> bool:
@@ -409,6 +376,7 @@ async def sync(
                 changed += await read_ticket(servicenow, ticket)
             except ServiceNowError as exc:
                 log.warning("incident %s não sincronizou: %s", ticket.external_key, exc)
+                await touch(engine, ticket.id)
     return changed
 
 

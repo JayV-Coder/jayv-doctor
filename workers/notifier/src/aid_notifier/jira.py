@@ -31,6 +31,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from aid_notifier.notify import app_url
+from aid_notifier.tickets import CLAIM, Claimed, claim, ticket_failed, touch
 
 log = logging.getLogger(__name__)
 AUTH_URL = "https://auth.atlassian.com/oauth/token"
@@ -40,7 +41,6 @@ PREFIX_IN = re.compile(r"^\s*#doctor\b\s*", re.IGNORECASE)
 PREFIX_OUT = re.compile(r"^\s*#jira\b\s*", re.IGNORECASE)
 WEBHOOK_EVENTS = ["jira:issue_updated", "comment_created"]
 SYNC_EVERY = timedelta(minutes=15)
-CLAIM = timedelta(minutes=5)
 SYNC_BATCH = 20
 SYNC_SECONDS = 120.0
 
@@ -318,56 +318,19 @@ async def create_ticket(
     engine: AsyncEngine, ticket: str, transport: httpx.AsyncBaseTransport | None = None
 ) -> str:
     """Cria o chamado reservado; devolve o status final ('skipped' se não era a vez)."""
+    claimed = await claim(engine, ticket, "jira")
+    return await open_issue(engine, claimed, transport) if claimed else "skipped"
+
+
+async def open_issue(
+    engine: AsyncEngine, claimed: Claimed, transport: httpx.AsyncBaseTransport | None = None
+) -> str:
+    """A issue do chamado já reservado (procura pelo rótulo antes de criar)."""
     async with engine.begin() as db:
         await platform_role(db)
-        # A reserva vale 5 min: duas entregas da mesma mensagem não criam ao mesmo tempo, e
-        # um worker que caiu no meio não prende o chamado (a varredura tenta de novo).
-        row = (
-            await db.execute(
-                text(
-                    "update doctor.incident_tickets set claimed_at = now()"
-                    " where id = cast(:t as uuid) and status = 'creating' and provider = 'jira'"
-                    " and (claimed_at is null or claimed_at < now() - cast(:claim as interval))"
-                    " returning id::text, tenant_id::text, incident_id::text"
-                ),
-                {"t": ticket, "claim": CLAIM},
-            )
-        ).first()
-        if row is None:
-            return "skipped"
-        connection = await connection_of(db, row.tenant_id)
-        incident = (
-            await db.execute(
-                text(
-                    "select i.id::text, i.number, i.title, i.severity, i.category,"
-                    " g.name as integration, g.environment from doctor.incidents i"
-                    " join doctor.integrations g on g.tenant_id = i.tenant_id"
-                    " and g.id = i.integration_id where i.id = cast(:i as uuid)"
-                ),
-                {"i": row.incident_id},
-            )
-        ).first()
-        diagnosis = (
-            await db.execute(
-                text(
-                    "select id::text, classification, probable_cause, confidence::float"
-                    " from doctor.diagnoses where incident_id = cast(:i as uuid)"
-                    " and status in ('published', 'inconclusive', 'failed_llm')"
-                    " order by version desc limit 1"
-                ),
-                {"i": row.incident_id},
-            )
-        ).first()
-        recommendations = [
-            found[0]
-            for found in await db.execute(
-                text(
-                    "select text from doctor.diagnosis_recommendations"
-                    " where diagnosis_id = cast(:d as uuid) order by rank"
-                ),
-                {"d": diagnosis.id if diagnosis else "00000000-0000-0000-0000-000000000000"},
-            )
-        ]
+        connection = await connection_of(db, claimed.tenant_id)
+    ticket, incident = claimed.id, claimed.incident
+    diagnosis, recommendations = claimed.diagnosis, claimed.recommendations
     if connection is None or incident is None:
         return await ticket_failed(engine, ticket, "Jira não configurado")
     fields: dict[str, Any] = {
@@ -409,19 +372,6 @@ async def create_ticket(
             },
         )
     return "open"
-
-
-async def ticket_failed(engine: AsyncEngine, ticket: str, error: str) -> str:
-    async with engine.begin() as db:
-        await platform_role(db)
-        await db.execute(
-            text(
-                "update doctor.incident_tickets set status = 'failed', error = :e"
-                " where id = cast(:t as uuid) and status = 'creating'"
-            ),
-            {"e": error[:500], "t": ticket},
-        )
-    return "failed"
 
 
 async def register_webhook(jira: Jira) -> None:
@@ -582,6 +532,7 @@ async def sync(
                 changed += await read_ticket(jira, str(tenant), ticket)
             except JiraError as exc:
                 log.warning("chamado %s não sincronizou: %s", ticket.external_key, exc)
+                await touch(engine, ticket.id)
     return changed
 
 

@@ -1138,6 +1138,8 @@ class FakeServiceNow:
         self.state = {"value": "2", "display_value": "In Progress"}
         self.token_status = 200
         self.reads: list[str] = []
+        self.groups = {"SAP Basis": "1" * 32, "Service Desk": "2" * 32, "CRM": "3" * 32}
+        self.read_status = 200
 
     def transport(self) -> httpx.MockTransport:
         def handle(request: httpx.Request) -> httpx.Response:
@@ -1148,15 +1150,24 @@ class FakeServiceNow:
                     return httpx.Response(self.token_status, json={"error": "invalid_client"})
                 return httpx.Response(200, json={"access_token": "sn", "expires_in": 1800})
             assert request.headers["authorization"] == "Bearer sn"
+            if path == "/api/now/table/sys_user_group":
+                name = request.url.params["sysparm_query"].removeprefix("name=")
+                found = [{"sys_id": self.groups[name]}] if name in self.groups else []
+                return httpx.Response(200, json={"result": found})
             if path == "/api/now/table/incident" and request.method == "GET":
                 return httpx.Response(200, json={"result": self.existing})
             if path == "/api/now/table/incident" and request.method == "POST":
+                assert "sysparm_input_display_value" not in request.url.params
                 self.created.append(json.loads(request.content))
                 return httpx.Response(
                     201, json={"result": {"sys_id": "a" * 32, "number": "INC0010001"}}
                 )
             if path.startswith("/api/now/table/incident/"):
                 self.reads.append(path.rsplit("/", 1)[-1])
+                if self.read_status != 200:
+                    return httpx.Response(
+                        self.read_status, json={"error": {"message": "No Record"}}
+                    )
                 return httpx.Response(200, json={"result": {"state": self.state}})
             return httpx.Response(404)
 
@@ -1225,8 +1236,9 @@ async def test_sistema_responsavel_sap_vai_para_o_grupo_mapeado_para_sap(
     instance = FakeServiceNow()
     assert await create_ticket_any(engine, ticket, instance) == "open"
     [created] = instance.created
+    # O grupo vai pelo sys_id; impact e urgency pelos valores crus.
     assert (created["assignment_group"], created["impact"], created["urgency"]) == (
-        "SAP Basis",
+        "1" * 32,
         "1",
         "1",
     )
@@ -1263,7 +1275,7 @@ async def test_indeterminado_vai_para_o_grupo_padrao(
     for system in (None, "gcp"):
         ticket = await servicenow_ticket(engine, org, system)
         await create_ticket_any(engine, ticket, instance)
-    assert [c["assignment_group"] for c in instance.created] == ["Service Desk", "Service Desk"]
+    assert [c["assignment_group"] for c in instance.created] == ["2" * 32, "2" * 32]
     assert "Diagnóstico ainda não publicado." in instance.created[0]["work_notes"]
 
 
@@ -1344,3 +1356,44 @@ async def test_regra_com_canal_servicenow_abre_o_incident(
         i=found,
     )
     assert (ticket["provider"], ticket["status"]) == ("servicenow", "creating")
+
+
+@pytest.mark.asyncio
+async def test_grupo_que_nao_existe_falha_o_chamado_com_o_motivo(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    await servicenow_connection(engine, org)
+    ticket = await servicenow_ticket(engine, org, "sap")
+    instance = FakeServiceNow()
+    del instance.groups["SAP Basis"]
+    assert await create_ticket_any(engine, ticket, instance) == "failed"
+    [row] = await rows(
+        engine, "select error from doctor.incident_tickets where id = cast(:t as uuid)", t=ticket
+    )
+    assert "SAP Basis" in row["error"]
+    assert instance.created == []
+
+
+@pytest.mark.asyncio
+async def test_leitura_que_falha_vai_para_o_fim_da_fila(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    connection = await servicenow_connection(engine, org)
+    ticket = await servicenow_ticket(engine, org, "sap")
+    instance = FakeServiceNow()
+    await create_ticket_any(engine, ticket, instance)
+    await run(
+        engine,
+        "update doctor.incident_tickets set last_synced_at = now() - interval '1 day'"
+        " where id = cast(:t as uuid)",
+        t=ticket,
+    )
+    instance.read_status = 404
+    await servicenow.sync(engine, {"connection_id": connection}, instance.transport())
+    [row] = await rows(
+        engine,
+        "select status, last_synced_at > now() - interval '1 minute' as touched"
+        " from doctor.incident_tickets where id = cast(:t as uuid)",
+        t=ticket,
+    )
+    assert (row["status"], row["touched"]) == ("open", True)

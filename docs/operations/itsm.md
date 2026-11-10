@@ -22,14 +22,14 @@ O refresh token do Atlassian gira a cada renovação; o `notifier` renova sob um
 
 ### Conexão
 
-1. Na instância do cliente, um administrador cria em **System OAuth → Application Registry** um *OAuth API endpoint for external clients* com o grant **Client Credentials** (Washington DC ou mais nova; propriedade `glide.oauth.inbound.client.credential.grant_type.enabled = true`) e um usuário de integração com os papéis `itil` (criar e ler `incident`) e acesso aos grupos de atendimento.
-2. Owner ou Admin com MFA informa em **Mais → Chamados (ITSM)** a instância (`https://<instância>.service-now.com`; outro domínio é recusado), o client id e o client secret, a regra de grupos por Sistema responsável e o grupo padrão. O secret vai para o Vault (`doctor/itsm-servicenow/<tenant>`) e não volta em nenhuma resposta; trocar a instância ou o client id exige o secret de novo.
+1. Na instância do cliente, um administrador cria em **System OAuth → Application Registry** um *OAuth API endpoint for external clients* com o grant **Client Credentials** (Washington DC ou mais nova; propriedade `glide.oauth.inbound.client.credential.grant_type.enabled = true`) e um usuário de integração com o papel `itil` (criar e ler `incident`, ler `sys_user_group`).
+2. Owner ou Admin com MFA informa em **Mais → Chamados (ITSM)** a instância (`https://<instância>.service-now.com`; outro domínio é recusado), o client id e o client secret, a regra de grupos por Sistema responsável e o grupo padrão. O secret vai para o Vault (`doctor/itsm-servicenow/<tenant>`) e não volta em nenhuma resposta; trocar a instância ou o client id exige o secret de novo. Instância nova gera outro endereço para a Business Rule e marca os chamados abertos da antiga como `failed` ("A instância do ServiceNow mudou"), para serem abertos de novo na nova.
 3. O `notifier` confere as credenciais pedindo um token (`oauth_token.do`). Recusou: a conexão fica `needs_reauth` com o motivo, e a tela pede para conferir. O token de acesso fica só na memória da rodada.
 
 ### Incident
 
 - **Abrir:** à mão no Incidente ("Abrir chamado no ServiceNow") ou por Regra de alerta com canal `servicenow`, pela mesma reserva única de `incident_tickets` do Jira (um por Incidente e provedor).
-- **Grupo:** o Sistema responsável do último Diagnóstico (SAP, Salesforce, GCP, Outro) escolhe o grupo pela regra da Organização; sem Sistema ("Indeterminado") ou sem grupo para ele, vai o grupo padrão. Nome ou sys_id: a criação usa `sysparm_input_display_value=true`.
+- **Grupo:** o Sistema responsável do último Diagnóstico (SAP, Salesforce, GCP, Outro) escolhe o grupo pela regra da Organização; sem Sistema ("Indeterminado") ou sem grupo para ele, vai o grupo padrão. A regra guarda o nome (ou o sys_id); o `notifier` busca o sys_id em `sys_user_group` (o usuário de integração precisa ler os grupos) e cria o incident com valores crus, sem o modo display value. Grupo que não existe faz o chamado falhar com o nome no motivo.
 - **Conteúdo:** `short_description` `[Doctor] <título>`, `impact` e `urgency` pela severidade, `correlation_id` com o id do chamado e, nas `work_notes`, a Classificação, a Causa provável com **Confiança heurística**, o Sistema responsável, as Recomendações e o link. Nunca Eventos brutos.
 - **Sem duplicar:** a tentativa reserva o chamado por 5 min e, antes do POST, procura o incident pelo `correlation_id`; achou, adota.
 

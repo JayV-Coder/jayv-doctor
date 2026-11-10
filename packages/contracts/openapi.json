@@ -13249,13 +13249,20 @@
             "title": "Client Secret"
           },
           "impact_map": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/Weights"
-            },
-            "propertyNames": {
-              "enum": ["low", "medium", "high", "critical"]
-            },
-            "type": "object",
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/Weights"
+                },
+                "propertyNames": {
+                  "enum": ["low", "medium", "high", "critical"]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Impact Map"
           },
           "assignment_groups": {

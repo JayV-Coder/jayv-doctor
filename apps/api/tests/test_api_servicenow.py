@@ -125,11 +125,33 @@ async def test_configura_abre_o_incident_e_recebe_a_business_rule(
                 },
             )
             assert (moved.status_code, moved.json()["code"]) == (422, "secret_required")
+            # Repetição idempotente de quem não gerou endereço: nulo, não a máscara do segredo.
+            replay_body = {k: v for k, v in CONFIG.items() if k != "client_secret"}
+            headers = {"Idempotency-Key": "servicenow-grupos-1"}
+            once = await client.put("/api/v1/itsm/servicenow", json=replay_body, headers=headers)
+            twice = await client.put("/api/v1/itsm/servicenow", json=replay_body, headers=headers)
+            assert once.json()["hook_url"] is None
+            assert twice.json()["hook_url"] is None
+            # Sem Jira: a mensagem fala do ITSM, não do Jira.
+            no_jira = await client.post(f"/api/v1/incidents/{incident}/tickets?provider=jira")
+            assert (no_jira.status_code, no_jira.json()["code"]) == (409, "itsm_not_configured")
             opened = await client.post(f"/api/v1/incidents/{incident}/tickets?provider=servicenow")
             assert opened.status_code == 202, opened.text
             assert [(t["provider"], t["status"]) for t in opened.json()] == [
                 ("servicenow", "creating")
             ]
+
+            # Instância nova: secret e endereço novos; o chamado da antiga pode ser aberto de novo.
+            moved_ok = await client.put(
+                "/api/v1/itsm/servicenow",
+                json={**CONFIG, "instance_url": "https://nova.service-now.com"},
+            )
+            assert moved_ok.status_code == 200, moved_ok.text
+            new_hook = moved_ok.json()["hook_url"]
+            assert new_hook
+            assert new_hook != hook_url
+            listed = (await client.get(f"/api/v1/incidents/{incident}/tickets")).json()
+            assert [t["status"] for t in listed] == ["failed"]
 
             app.dependency_overrides[get_claims] = lambda: as_role(viewer, "viewer")
             assert (await client.put("/api/v1/itsm/servicenow", json=CONFIG)).status_code == 403
@@ -141,12 +163,14 @@ async def test_configura_abre_o_incident_e_recebe_a_business_rule(
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=anonymous), base_url="http://api.test"
         ) as client:
-            path = hook_url.removeprefix("https://api.test")
+            old = hook_url.removeprefix("https://api.test")
+            path = new_hook.removeprefix("https://api.test")
             wrong = await client.post(
                 "/api/v1/itsm/servicenow/hooks/" + "x" * 40, json={"number": "INC0010001"}
             )
+            stale = await client.post(old, json={"number": "INC0010002"})
             right = await client.post(path, json={"number": "INC0010001"})
-            assert wrong.status_code == right.status_code == 204
+            assert wrong.status_code == stale.status_code == right.status_code == 204
         async with engine.begin() as connection:
             syncs = [
                 row[0]
@@ -158,8 +182,10 @@ async def test_configura_abre_o_incident_e_recebe_a_business_rule(
                     {"t": tenant},
                 )
             ]
-        assert [s.get("check") for s in syncs[:3]] == [True, True, None]
-        assert syncs[-1]["issue_key"] == "INC0010001"
+        # Só o endereço atual pede leitura (o da instância antiga, não).
+        keys = [s.get("issue_key") for s in syncs if s.get("issue_key")]
+        assert keys == ["INC0010001"]
+        assert all(s.get("provider") == "servicenow" for s in syncs)
     finally:
         async with engine.begin() as connection:
             await connection.execute(

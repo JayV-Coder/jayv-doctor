@@ -98,7 +98,7 @@ def test_config_so_da_allowlist() -> None:
     assert ok["collections"][1]["fields"][0] == "DOCNUM"
     # Modelo local (#46): o servidor da rede do cliente, HTTP vale.
     local = validate({"collections": [], "llm": {"base_url": "http://vllm.interno:8000/v1"}})
-    assert local["llm"] == {"base_url": "http://vllm.interno:8000/v1", "timeout_seconds": 120}
+    assert local["llm"] == {"base_url": "http://vllm.interno:8000/v1"}
     for bad in (
         {"collections": [{"type": "rfc_table", "table": "USR02"}]},
         {
@@ -117,7 +117,7 @@ def test_config_so_da_allowlist() -> None:
         {"collections": [], "llm": {"base_url": "file:///etc/passwd"}},
         {
             "collections": [],
-            "llm": {"base_url": "http://vllm.interno:8000/v1", "timeout_seconds": 1},
+            "llm": {"base_url": "http://vllm.interno:8000"},
         },
     ):
         with pytest.raises(ApiError):
@@ -236,6 +236,8 @@ async def test_registro_lote_assinado_e_revogacao_na_proxima_chamada(
             )
             assert (pulled.status_code, pulled.json()["id"]) == (200, request_id)
             assert pulled.json()["request"] == {"model": "llama"}
+            # O prazo do pedido é o da configuração do modelo local (uma fonte só).
+            assert pulled.json()["timeout_seconds"] == 60
             result = json.dumps({"response": {"choices": []}}).encode()
             path = f"/api/v1/agent/llm/{request_id}"
             answered = await agent.post(

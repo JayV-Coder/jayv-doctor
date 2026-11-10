@@ -24,7 +24,8 @@ def handle(local: LocalModel, found: dict[str, Any], llm: dict[str, Any], post: 
         response = post(
             f"{llm['base_url']}/chat/completions",
             json=body,
-            timeout=float(llm.get("timeout_seconds", 120)),
+            # O prazo do pedido, o mesmo que o worker espera.
+            timeout=float(found.get("timeout_seconds") or 120),
         )
         response.raise_for_status()
         result: dict[str, Any] = {"response": response.json()}
@@ -57,4 +58,8 @@ def serve(
             stop.wait(60)
         except httpx.HTTPError:
             log.warning("sem rede com a plataforma para o modelo local")
+            stop.wait(10)
+        except Exception:
+            # Resposta inesperada (ex.: proxy devolvendo HTML): a thread não morre por isso.
+            log.exception("falha no modelo local; tentando de novo")
             stop.wait(10)

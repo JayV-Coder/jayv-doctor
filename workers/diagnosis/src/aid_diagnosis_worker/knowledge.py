@@ -10,7 +10,7 @@ from typing import Any, Protocol
 
 from aid_db import platform_role
 from aid_diagnosis_engine.llm.base import LLMError, LLMProvider, LLMTransientError
-from aid_diagnosis_engine.llm.registry import EMBEDDING_MODELS
+from aid_diagnosis_engine.llm.registry import EMBEDDING_MODELS, has_embeddings
 from aid_knowledge.extract import ExtractionError
 from aid_knowledge.index import index_document
 from aid_knowledge.store import store_chunks
@@ -76,7 +76,7 @@ async def index(
     # ao LLM desligado.
     provider = (
         provider_for(document.llm_provider, document.ai_project)
-        if document.llm_enabled and document.llm_provider != "local"
+        if document.llm_enabled and has_embeddings(document.llm_provider)
         else None
     )
     model = provider.embedding_model if provider is not None else None

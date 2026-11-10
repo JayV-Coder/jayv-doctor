@@ -62,8 +62,18 @@ class PrivateEndpoint:
             raise LLMUnavailableError(
                 f"O modelo local recusou o pedido (HTTP {response.status_code})."
             )
-        found: dict[str, Any] = response.json()
+        try:
+            found = response.json()
+        except ValueError as exc:
+            raise LLMUnavailableError("O modelo local respondeu algo que não é JSON.") from exc
+        if not isinstance(found, dict):
+            raise LLMUnavailableError("O modelo local respondeu fora do formato.")
         return found
+
+
+def count(metadata: Any, key: str) -> int:
+    value = metadata.get(key) if isinstance(metadata, dict) else None
+    return value if isinstance(value, int) and value >= 0 else 0
 
 
 class LocalProvider:
@@ -72,9 +82,11 @@ class LocalProvider:
     embedding_model = "local-text-only"
     embedding_dimensions = 0
 
-    def __init__(self, transport: LocalTransport, model: str) -> None:
+    def __init__(self, transport: LocalTransport, model: str, timeout: float = 120.0) -> None:
         self.transport = transport
         self.model = model
+        # O prazo de uma resposta: o worker usa para a política de tentativas (uma só).
+        self.timeout = timeout
 
     async def complete_structured(
         self,
@@ -101,22 +113,26 @@ class LocalProvider:
             "temperature": 0,
         }
         found = await self.transport.chat(body)
-        metadata = found.get("usage") or {}
+        # A resposta vem do servidor do cliente: não confiável, conferida campo a campo.
+        metadata = found.get("usage") if isinstance(found, dict) else None
         usage = Usage(
             provider=self.name,
             model=self.model,
-            input_tokens=int(metadata.get("prompt_tokens", 0)),
-            output_tokens=int(metadata.get("completion_tokens", 0)),
+            input_tokens=count(metadata, "prompt_tokens"),
+            output_tokens=count(metadata, "completion_tokens"),
             latency_ms=round((time.monotonic() - start) * 1000),
         )
-        choices = found.get("choices") or []
-        if not choices or not isinstance(choices[0], dict):
+        choices = found.get("choices") if isinstance(found, dict) else None
+        first = choices[0] if isinstance(choices, list) and choices else None
+        if not isinstance(first, dict):
             raise LLMUnavailableError("O modelo local não devolveu resposta.", usage)
-        first = choices[0]
         if first.get("finish_reason") == "length":
             raise LLMInvalidOutputError("resposta cortada pelo limite de tokens", usage)
-        text = str((first.get("message") or {}).get("content") or "")
-        return StructuredResult(validate_output(schema, text, usage), usage)
+        message = first.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(content, str):
+            raise LLMInvalidOutputError("resposta sem texto", usage)
+        return StructuredResult(validate_output(schema, content, usage), usage)
 
     async def embed(self, texts: Sequence[str], *, input_type: InputType) -> list[list[float]]:
         raise LLMUnavailableError("O perfil local não gera embeddings: a busca é pelo texto.")

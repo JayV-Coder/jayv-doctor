@@ -42,6 +42,13 @@ EMBEDDING_MODELS: dict[str, str | None] = {
     # Sem índice vetorial: a Base fica só no texto.
     "local": None,
 }
+
+
+def has_embeddings(name: str) -> bool:
+    """O provedor gera embeddings? O local não: a Base dele fica só no texto (ADR-0019)."""
+    return EMBEDDING_MODELS.get(name) is not None
+
+
 # Quem gera o embedding de cada índice (o do Vertex é sempre o compartilhado no Brasil).
 INDEX_PROVIDERS = {VOYAGE_MODEL: "anthropic", EMBEDDING_MODEL: "vertex"}
 

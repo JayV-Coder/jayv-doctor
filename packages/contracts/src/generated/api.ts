@@ -1680,6 +1680,8 @@ export interface components {
       request: {
         [key: string]: unknown;
       };
+      /** Timeout Seconds */
+      timeout_seconds: number;
     };
     /** AgentRegistered */
     AgentRegistered: {

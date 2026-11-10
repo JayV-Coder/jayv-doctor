@@ -216,15 +216,18 @@ class AgentRepository:
             )
             return str(await connection.scalar(statement, {"h": hashed, "events": events}))
 
-    async def claim_llm(self, hashed: str) -> tuple[str, dict[str, Any]] | None:
+    async def claim_llm(self, hashed: str) -> tuple[str, dict[str, Any], int] | None:
         """O próximo pedido ao modelo local desta Organização para este agente (#46)."""
         async with anonymous_tx(ERRORS) as connection:
             found = (
                 await connection.execute(
-                    text("select id::text, request from doctor.claim_local_llm(:h)"), {"h": hashed}
+                    text(
+                        "select id::text, request, timeout_seconds from doctor.claim_local_llm(:h)"
+                    ),
+                    {"h": hashed},
                 )
             ).first()
-        return (str(found.id), dict(found.request)) if found else None
+        return (str(found.id), dict(found.request), int(found.timeout_seconds)) if found else None
 
     async def finish_llm(
         self, hashed: str, request: str, response: dict[str, Any] | None, error: str | None

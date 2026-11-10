@@ -6,6 +6,7 @@ Pelo endpoint privado, a chamada é direta, só para aquele host."""
 import asyncio
 import json
 import time
+from functools import cache
 from typing import Any
 
 from aid_db import platform_role
@@ -91,9 +92,28 @@ async def local_provider(engine: AsyncEngine, tenant: str) -> LocalProvider | No
         ).first()
     if found is None:
         return None
+    timeout = float(found.timeout_seconds)
     if found.transport == "agent":
-        relay = AgentRelay(engine, tenant, found.agent_id, float(found.timeout_seconds))
-        return LocalProvider(relay, found.model)
-    return LocalProvider(
-        PrivateEndpoint(found.endpoint_url, float(found.timeout_seconds)), found.model
-    )
+        relay = AgentRelay(engine, tenant, found.agent_id, timeout)
+        return LocalProvider(relay, found.model, timeout)
+    return LocalProvider(endpoint(found.endpoint_url, timeout), found.model, timeout)
+
+
+@cache
+def endpoint(url: str, timeout: float) -> PrivateEndpoint:
+    """Um cliente HTTP por endereço privado e processo, como o registro dos provedores."""
+    return PrivateEndpoint(url, timeout)
+
+
+async def purge_local_requests(engine: AsyncEngine) -> int:
+    """Pedidos esquecidos (worker derrubado no meio da espera): o prompt não fica no banco. O
+    prazo máximo é de 10 min; passados 15, ninguém espera mais por eles."""
+    async with engine.begin() as db:
+        await platform_role(db)
+        result = await db.execute(
+            text(
+                "delete from doctor.local_llm_requests"
+                " where created_at < now() - interval '15 minutes'"
+            )
+        )
+    return result.rowcount or 0

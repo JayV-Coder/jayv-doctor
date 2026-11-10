@@ -6,6 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 from aid_diagnosis_engine.llm import LLMProvider, provider_for
+from aid_diagnosis_engine.llm.registry import has_embeddings
 from aid_knowledge.vectors import query_vectors
 from fastapi import APIRouter, Depends, Response, status
 
@@ -107,7 +108,7 @@ async def search_knowledge(
     # Perfil local (#46): sem embeddings, a pergunta não sai da plataforma; busca só no texto.
     provider = (
         providers(choice.provider, choice.project)
-        if choice.provider and choice.provider != "local"
+        if choice.provider and has_embeddings(choice.provider)
         else None
     )
     vectors = await query_vectors(

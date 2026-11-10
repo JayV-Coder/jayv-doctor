@@ -3,10 +3,12 @@ recebe toma posse do Diagnóstico (`queued` → `running`), e entregas repetidas
 segundo. O contexto é lido com a claim do tenant do Incidente (RLS, como na API): nada de outra
 Organização entra no prompt nem vira Evidência. A publicação grava tudo numa transação só."""
 
+import asyncio
 import json
 import logging
 import os
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import Any, cast
 
@@ -26,6 +28,9 @@ from aid_diagnosis_engine.diagnosis import (
 from aid_diagnosis_engine.diagnosis.model import Mode
 from aid_diagnosis_engine.llm.base import LLMProvider, LLMUnavailableError
 from aid_diagnosis_engine.llm.client import GuardedLLM
+from aid_diagnosis_engine.llm.local import LocalProvider
+from aid_diagnosis_engine.llm.registry import has_embeddings
+from aid_diagnosis_engine.llm.resilience import RetryPolicy, breaker_for
 from aid_diagnosis_engine.rules.base import EventView
 from aid_diagnosis_engine.rules.catalog import RULES, RULESET_VERSION
 from aid_knowledge.store import previous_models, search
@@ -113,6 +118,44 @@ def estimate_cost(model: str | None, input_tokens: int, output_tokens: int) -> f
     if price is None:
         return None
     return round(input_tokens / 1e6 * price[0] + output_tokens / 1e6 * price[1], 6)
+
+
+def guarded(provider: LLMProvider, tenant: str) -> GuardedLLM:
+    """O local tem prazo e disjuntor da própria Organização (cada uma tem o seu servidor), com
+    uma tentativa só: repetir mandaria o mesmo prompt de novo ao agente, que atende um por vez."""
+    if isinstance(provider, LocalProvider):
+        return GuardedLLM(
+            provider,
+            breaker=breaker_for(f"local:{tenant}"),
+            policy=RetryPolicy(attempts=1, timeout_seconds=provider.timeout + 15),
+        )
+    return GuardedLLM(provider)
+
+
+@asynccontextmanager
+async def keep_lease(engine: AsyncEngine, diagnosis: str, *, enabled: bool) -> AsyncIterator[None]:
+    if not enabled:
+        yield
+        return
+
+    async def renew() -> None:
+        while True:
+            await asyncio.sleep(LEASE.total_seconds() / 3)
+            async with engine.begin() as connection:
+                await platform_role(connection)
+                await connection.execute(
+                    text(
+                        "update doctor.diagnoses set started_at = now()"
+                        " where id = cast(:d as uuid) and status = 'running'"
+                    ),
+                    {"d": diagnosis},
+                )
+
+    task = asyncio.create_task(renew())
+    try:
+        yield
+    finally:
+        task.cancel()
 
 
 def no_others(name: str) -> LLMProvider:
@@ -631,14 +674,15 @@ async def diagnose(
         )
         hybrid = diagnosis.requested_mode == "hybrid"
         enabled = await llm_enabled(engine, diagnosis.tenant_id)
+        # O local roda no hardware do cliente: não gasta a Cota de IA da plataforma.
         allowed = (
             hybrid
             and enabled
             and provider is not None
-            and await reserve_llm(engine, diagnosis, provider.name)
+            and (local or await reserve_llm(engine, diagnosis, provider.name))
         )
         motor = DiagnosisEngine(
-            GuardedLLM(provider) if allowed and provider is not None else None,
+            guarded(provider, diagnosis.tenant_id) if allowed and provider is not None else None,
             scope=diagnosis.tenant_id,
             without_ai=LLM_DISABLED
             if not enabled
@@ -653,17 +697,20 @@ async def diagnose(
             diagnosis.tenant_id,
             diagnosis.incident_id,
             # O local não gera embeddings: a Base vai só pelo texto.
-            provider if enabled and not local else None,
+            provider if enabled and has_embeddings(diagnosis.llm_provider) else None,
             diagnosis.id,
             profile=diagnosis.ai_profile,
             others=lambda name: provider_for(name, None),
         )
-        draft = await motor.run(
-            loader,
-            mode=cast("Mode", diagnosis.requested_mode),
-            include_knowledge_base=diagnosis.include_knowledge_base,
-            on_stage=on_stage,
-        )
+        # O modelo local pode levar até 10 min: a posse é renovada enquanto ele pensa, para uma
+        # reentrega do Pub/Sub não tomar o Diagnóstico no meio.
+        async with keep_lease(engine, diagnosis.id, enabled=local):
+            draft = await motor.run(
+                loader,
+                mode=cast("Mode", diagnosis.requested_mode),
+                include_knowledge_base=diagnosis.include_knowledge_base,
+                on_stage=on_stage,
+            )
         published = await publish(engine, diagnosis, draft)
     except EnrichmentPending:
         await wait_enrichment(engine, diagnosis)

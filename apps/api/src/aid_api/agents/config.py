@@ -125,7 +125,5 @@ def validate_llm(llm: Any) -> dict[str, Any]:
     base_url = str(llm.get("base_url", ""))
     if not LLM_URL.match(base_url):
         raise invalid("llm.base_url: http(s)://servidor[:porta]/v1, sem usuário na URL")
-    timeout = llm.get("timeout_seconds", 120)
-    if not isinstance(timeout, int) or not 10 <= timeout <= 600:
-        raise invalid("llm.timeout_seconds: de 10 a 600")
-    return {"base_url": base_url, "timeout_seconds": timeout}
+    # O prazo vem com cada pedido (o mesmo que o worker espera): não fica na config.
+    return {"base_url": base_url}

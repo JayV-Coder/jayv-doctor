@@ -604,3 +604,20 @@ async def test_perfil_local_sem_resposta_fica_so_com_as_regras_nunca_em_nuvem(
         assert any("Modelo local não configurado" in note for note in saved["verification_notes"])
     finally:
         await drop_local(engine, tenant)
+
+
+def test_local_tem_disjuntor_por_organizacao_e_uma_tentativa_com_o_prazo_dele() -> None:
+    from aid_diagnosis_engine.llm.local import LocalProvider
+    from aid_diagnosis_worker.diagnose import guarded
+
+    class Never:
+        async def chat(self, body: dict[str, Any]) -> dict[str, Any]:
+            raise AssertionError("não chamado")
+
+    a = guarded(LocalProvider(Never(), "m", timeout=300), "tenant-a")
+    b = guarded(LocalProvider(Never(), "m", timeout=300), "tenant-b")
+    assert a.breaker is not b.breaker
+    assert (a.policy.attempts, a.policy.timeout_seconds) == (1, 315)
+    # Os provedores em nuvem seguem com o disjuntor e as tentativas de sempre.
+    cloud = guarded(FakeProvider(), "tenant-a")
+    assert cloud.policy.attempts == 3

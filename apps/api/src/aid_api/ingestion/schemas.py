@@ -79,6 +79,8 @@ class AgentLlmRequest(BaseModel):
 
     id: str
     request: dict[str, Any]
+    # O mesmo prazo que o worker espera: depois dele, a resposta não serve a ninguém.
+    timeout_seconds: int
 
 
 class AgentLlmResult(BaseModel):

@@ -18,6 +18,7 @@ from aid_diagnosis_worker.backup import GcsTarget, StorageSource, backup_storage
 from aid_diagnosis_worker.diagnose import diagnose, expire_enrichment, open_automatic
 from aid_diagnosis_worker.evaluate import evaluate_execution
 from aid_diagnosis_worker.knowledge import index, reindex_stale
+from aid_diagnosis_worker.local_ai import purge_local_requests
 from aid_diagnosis_worker.notify import mailer_from_env, notify_threshold
 from aid_diagnosis_worker.platform_metrics import push_metrics
 from aid_diagnosis_worker.report import generate_report
@@ -93,7 +94,11 @@ async def reindex() -> dict[str, int]:
 # Diagnóstico (#40).
 @router.post("/enrichment/expire")
 async def enrichment_expire() -> dict[str, int]:
-    return {"resumed": await expire_enrichment(engine())}
+    # Na mesma rodada de 5 min: pedidos ao modelo local esquecidos saem do banco (#46).
+    return {
+        "resumed": await expire_enrichment(engine()),
+        "local_purged": await purge_local_requests(engine()),
+    }
 
 
 # Diário (Cloud Scheduler): o endpoint e a região efetivos de cada perfil de IA em uso (#45).

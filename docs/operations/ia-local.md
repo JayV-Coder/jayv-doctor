@@ -17,13 +17,13 @@ CPU de 16 vCPUs, 64 GB de RAM e 200 GB de disco para os pesos. Os modelos recome
 ## Ligar pelo agente
 
 1. Suba o servidor na rede do cliente, alcançável pela máquina do agente (ex.: `http://vllm.interno:8000/v1`).
-2. Na config do agente (Mais → Conectores → Agentes), acrescente o bloco `llm`:
+2. Acrescente o bloco `llm` à config do agente pela API (`PATCH /api/v1/agents/{id}` com a config inteira; a tela de Agentes ainda não edita esse bloco):
 
    ```json
-   { "collections": [...], "llm": { "base_url": "http://vllm.interno:8000/v1", "timeout_seconds": 120 } }
+   { "config": { "collections": [...], "llm": { "base_url": "http://vllm.interno:8000/v1" } } }
    ```
 
-   HTTP vale, porque é a rede interna do cliente. A URL não aceita usuário e senha.
+   HTTP vale, porque é a rede interna do cliente. A URL não aceita usuário e senha. O prazo de cada resposta não fica aqui: vem com cada pedido, igual ao que o worker espera (`timeout_seconds` de `set_local_ai`).
 3. Com `service_role`: `select doctor.set_local_ai('<tenant>', 'agent', '<agent_id>', null, '<modelo servido>', 120);`
 4. Peça um Diagnóstico híbrido de teste. No log do agente aparecem os pedidos atendidos; na plataforma, nenhum `ai.egress` dessa Organização.
 
@@ -33,7 +33,7 @@ Com Private Service Connect até o servidor do cliente: `select doctor.set_local
 
 ## Degradação
 
-Sem configuração, sem o agente ou sem resposta dentro do prazo, o Diagnóstico sai só com as Regras e avisa no card. Ele nunca vai a um provedor em nuvem. A Base de conhecimento desse perfil busca só pelo texto.
+Sem configuração, sem o agente ou sem resposta dentro do prazo, o Diagnóstico sai só com as Regras e avisa no card. Ele nunca vai a um provedor em nuvem. Há uma tentativa só por pedido (o agente atende um por vez) e um disjuntor por Organização. Enquanto espera, o worker renova a posse do Diagnóstico. Pedidos esquecidos saem da fila em até 15 min (job de 5 min). A Base de conhecimento desse perfil busca só pelo texto, e o modo local não gasta a Cota de IA da plataforma.
 
 ## Worker inteiro no cliente (alternativa)
 

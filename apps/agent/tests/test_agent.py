@@ -445,12 +445,17 @@ def test_modelo_local_leva_so_o_chat_e_devolve_resposta_ou_erro() -> None:
     sent: list[tuple[str, dict[str, object]]] = []
 
     def post(url: str, json: dict[str, object], timeout: float) -> httpx.Response:
+        assert timeout == 60
         sent.append((url, json))
         return httpx.Response(200, json={"choices": []}, request=httpx.Request("POST", url))
 
     local = Local()
-    llm = {"base_url": "http://vllm.interno:8000/v1", "timeout_seconds": 60}
-    found = {"id": "r1", "request": {"model": "m", "messages": [], "tools": ["x"], "url": "y"}}
+    llm = {"base_url": "http://vllm.interno:8000/v1"}
+    found = {
+        "id": "r1",
+        "timeout_seconds": 60,
+        "request": {"model": "m", "messages": [], "tools": ["x"], "url": "y"},
+    }
     assert handle(local, found, llm, post)  # type: ignore[arg-type]
     [(url, body)] = sent
     assert url == "http://vllm.interno:8000/v1/chat/completions"

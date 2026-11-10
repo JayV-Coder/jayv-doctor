@@ -141,7 +141,7 @@ async def llm_next(identity: Agent, repository: Repository) -> Any:
     while True:
         found = await repository.claim_llm(identity.secret_hash)
         if found is not None:
-            return AgentLlmRequest(id=found[0], request=found[1])
+            return AgentLlmRequest(id=found[0], request=found[1], timeout_seconds=found[2])
         if time.monotonic() + LLM_POLL_STEP >= deadline:
             return Response(status_code=status.HTTP_204_NO_CONTENT)
         await asyncio.sleep(LLM_POLL_STEP)

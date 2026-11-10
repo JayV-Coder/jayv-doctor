@@ -55,7 +55,7 @@ Sem sessão de Usuário. Fora o registro, toda chamada leva:
 
 | Rota | Efeito |
 |---|---|
-| `GET /api/v1/agent/llm` | Long-poll (até 25 s) do próximo pedido ao modelo local da Organização: `200 { id, request }` (o corpo de um chat completion, já sanitizado) ou `204` |
+| `GET /api/v1/agent/llm` | Long-poll (até 25 s) do próximo pedido ao modelo local da Organização: `200 { id, request, timeout_seconds }` (o corpo de um chat completion, já sanitizado, e o prazo da resposta) ou `204` |
 | `POST /api/v1/agent/llm/{id}` | `{ "response": {...} }` (a resposta do servidor local) ou `{ "error": "..." }`. `204`; `404` se o pedido não é deste agente ou já foi respondido |
 
-As duas rotas são assinadas como as outras do agente. O bloco `llm` da config (`base_url` `http(s)://servidor[:porta]/v1`, `timeout_seconds` de 10 a 600) diz para onde o agente leva os pedidos. Operação em [docs/operations/ia-local.md](../operations/ia-local.md).
+As duas rotas são assinadas como as outras do agente. O bloco `llm` da config (`base_url` `http(s)://servidor[:porta]/v1`) diz para onde o agente leva os pedidos. Operação em [docs/operations/ia-local.md](../operations/ia-local.md).

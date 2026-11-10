@@ -592,3 +592,16 @@ def test_endpoint_privado_so_fala_com_o_host_dele_e_registro_nao_monta_o_local()
     # Falha fechada: o registro dos provedores em nuvem nunca monta o perfil local.
     with pytest.raises(LLMUnavailableError):
         provider_for("local", None)
+
+
+def test_resposta_malformada_do_servidor_local_e_erro_de_llm() -> None:
+    """A resposta vem do servidor do cliente: forma estranha não derruba o worker."""
+    from aid_diagnosis_engine.llm.local import LocalProvider
+
+    for answer in (
+        {"usage": {"prompt_tokens": None}, "choices": [{"message": "texto"}]},
+        {"choices": "nada"},
+        {"choices": [{"message": {"content": 42}}]},
+    ):
+        with pytest.raises((LLMUnavailableError, LLMInvalidOutputError)):
+            complete(LocalProvider(FakeLocal(answer), "m"))

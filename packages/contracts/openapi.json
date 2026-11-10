@@ -7877,10 +7877,14 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Request"
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "title": "Timeout Seconds"
           }
         },
         "type": "object",
-        "required": ["id", "request"],
+        "required": ["id", "request", "timeout_seconds"],
         "title": "AgentLlmRequest",
         "description": "Pedido ao modelo local (#46): o corpo de `POST /v1/chat/completions`, já sanitizado."
       },

@@ -1325,14 +1325,14 @@ isOneToOne: true
                   ]
                 },"local_llm_requests": {
                   Row: {
-                    "agent_id": string,"claimed_at": string | null,"completed_at": string | null,"created_at": string,"error": string | null,"id": string,"request": NonNullable<Json>,"response": Json | null,"status": string,"tenant_id": string
+                    "agent_id": string,"claimed_at": string | null,"completed_at": string | null,"created_at": string,"error": string | null,"id": string,"request": NonNullable<Json>,"response": Json | null,"status": string,"tenant_id": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "agent_id": string,"claimed_at"?: string | null,"completed_at"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"request": NonNullable<Json>,"response"?: Json | null,"status"?: string,"tenant_id": string
+                    "agent_id": string,"claimed_at"?: string | null,"completed_at"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"request": NonNullable<Json>,"response"?: Json | null,"status"?: string,"tenant_id": string,"updated_at"?: string
                   }
                   Update: {
-                    "agent_id"?: string,"claimed_at"?: string | null,"completed_at"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"request"?: NonNullable<Json>,"response"?: Json | null,"status"?: string,"tenant_id"?: string
+                    "agent_id"?: string,"claimed_at"?: string | null,"completed_at"?: string | null,"created_at"?: string,"error"?: string | null,"id"?: string,"request"?: NonNullable<Json>,"response"?: Json | null,"status"?: string,"tenant_id"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -1877,7 +1877,7 @@ isOneToOne: false
                            },
 "claim_local_llm":
 { Args: { "secret_hash": string }; Returns: {
-              "id": string,"request": Json
+              "id": string,"request": Json,"timeout_seconds": number
             }[]
                            },
 "claim_push_endpoint":

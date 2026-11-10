@@ -92,12 +92,17 @@ create table doctor.local_llm_requests (
   created_at timestamptz not null default now(),
   claimed_at timestamptz,
   completed_at timestamptz,
+  updated_at timestamptz not null default now(),
   unique (tenant_id, id),
   foreign key (tenant_id, agent_id) references doctor.agents (tenant_id, id) on delete cascade
 );
 comment on table doctor.local_llm_requests is 'Fila curta de pedidos ao modelo local pelo agente; a linha sai ao ser lida.';
-create index local_llm_requests_queue_idx on doctor.local_llm_requests (agent_id, created_at)
+create index local_llm_requests_queue_idx on doctor.local_llm_requests (tenant_id, agent_id, created_at)
   where status = 'queued';
+
+create trigger local_llm_requests_set_updated_at
+before update on doctor.local_llm_requests
+for each row execute function doctor.set_updated_at();
 alter table doctor.local_llm_requests enable row level security;
 revoke all on doctor.local_llm_requests from anon, authenticated;
 grant select, insert, update, delete on doctor.local_llm_requests to service_role;
@@ -131,9 +136,10 @@ begin
 end;
 $$;
 
--- O agente busca o próximo pedido da sua Organização (como `anon`, pelo hash do segredo).
+-- O agente busca o próximo pedido da sua Organização (como `anon`, pelo hash do segredo). O
+-- prazo vem junto: é o mesmo que o worker espera (uma fonte só, `local_ai_settings`).
 create function doctor.claim_local_llm(secret_hash text)
-returns table (id uuid, request jsonb)
+returns table (id uuid, request jsonb, timeout_seconds integer)
 language plpgsql
 security definer
 set search_path = ''
@@ -146,14 +152,18 @@ begin
     raise exception 'agente inválido ou revogado' using errcode = 'DR071';
   end if;
   return query
-  update doctor.local_llm_requests r set status = 'claimed', claimed_at = now()
-  where r.id = (
-    select q.id from doctor.local_llm_requests q
-    where q.agent_id = found_agent.agent_id and q.tenant_id = found_agent.tenant_id
-      and q.status = 'queued'
-    order by q.created_at limit 1 for update skip locked
+  with claimed as (
+    update doctor.local_llm_requests r set status = 'claimed', claimed_at = now()
+    where r.id = (
+      select q.id from doctor.local_llm_requests q
+      where q.tenant_id = found_agent.tenant_id and q.agent_id = found_agent.agent_id
+        and q.status = 'queued'
+      order by q.created_at limit 1 for update skip locked
+    )
+    returning r.id, r.request, r.tenant_id
   )
-  returning r.id, r.request;
+  select c.id, c.request, coalesce(s.timeout_seconds, 120)
+  from claimed c left join doctor.local_ai_settings s on s.tenant_id = c.tenant_id;
 end;
 $$;
 

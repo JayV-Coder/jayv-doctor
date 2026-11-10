@@ -77,3 +77,11 @@ def test_endpoint_fora_dos_navegadores_nem_e_chamado(service: str) -> None:
     message = Message("t", "b", "u")
     assert asyncio.run(send_push(device(service), message)) is False
     assert received == {}
+
+
+def test_texto_do_slack_escapa_o_que_vem_do_cliente() -> None:
+    from aid_notifier.channels import slack_escape
+
+    assert slack_escape("Pedidos <!channel> & <https://evil.test|Clique>") == (
+        "Pedidos &lt;!channel&gt; &amp; &lt;https://evil.test|Clique&gt;"
+    )

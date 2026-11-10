@@ -201,6 +201,8 @@ class Message:
     title: str
     body: str
     url: str
+    # Texto do link (o destino muda: Incidente, Conectores, Execuções).
+    action: str = "Abrir o Incidente"
 
 
 def message_for_incident(incident: IncidentFacts, app_url: str, event: str) -> Message:

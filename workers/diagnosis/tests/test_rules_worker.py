@@ -94,9 +94,8 @@ async def test_37_execucoes_com_504_em_18_min_abrem_um_incidente_critico(
         " group by topic order by topic",
         t=tenant["tenant"],
     )
-    # Cada mensagem do Incidente pede a avaliação dos alertas (#41); o `notifier` deduplica.
+    # Sem Regra de alerta na Organização, nenhuma `alert.evaluate` a mais na outbox (#41).
     assert [(t["topic"], t["n"]) for t in topics] == [
-        ("alert.evaluate", 37),
         ("incident.opened", 1),
         ("incident.updated", 36),
     ]

@@ -1,7 +1,7 @@
 -- Ticket #41: Regras de alerta e notificações (push no PWA, e-mail, Slack e Microsoft Teams).
 -- O worker `notifier` (ADR-0017) consome `alert.evaluate`, que nasce aqui por trigger: na
--- outbox (Incidente aberto ou atualizado, Diagnóstico publicado) e na mudança de um Conector
--- para `failing`. Taxa de erro e Diagnóstico aguardando revisão saem da varredura agendada.
+-- outbox (Incidente aberto ou atualizado) e na mudança de um Conector para `failing`, só para
+-- Organização com Regra ligada. Taxa de erro e Diagnóstico aguardando revisão saem da varredura agendada.
 -- As mensagens levam só título, severidade, Integração e o link: nada de log ou de Evidência.
 
 -- Canais da Organização. O endereço do Slack e do Teams é um segredo (quem tem o webhook posta no
@@ -153,7 +153,8 @@ create table doctor.notification_deliveries (
   channel_id uuid,
   -- O que a notificação trata: `incident:<id>`, `connector:<id>`, `error_rate:<integração>` etc.
   subject text not null check (char_length(subject) between 1 and 200),
-  status text not null check (status in ('sent', 'failed', 'suppressed', 'quiet')),
+  -- `pending`: reservada antes do envio; se o worker cair no meio, a reserva vence em 2 min.
+  status text not null check (status in ('pending', 'sent', 'failed', 'suppressed', 'quiet')),
   error text check (char_length(error) <= 500),
   created_at timestamptz not null default now(),
   unique (tenant_id, id),
@@ -163,7 +164,9 @@ create table doctor.notification_deliveries (
 );
 comment on table doctor.notification_deliveries is 'Entrega de notificação por canal, com o motivo de não ter saído.';
 create index notification_deliveries_dedup_idx
-  on doctor.notification_deliveries (tenant_id, rule_id, subject, created_at desc);
+  on doctor.notification_deliveries (tenant_id, subject, channel_id, created_at desc);
+-- O histórico guarda 30 dias (a varredura do `notifier` apaga o resto).
+create index notification_deliveries_created_idx on doctor.notification_deliveries (created_at);
 
 alter table doctor.notification_deliveries enable row level security;
 revoke all on doctor.notification_deliveries from anon, authenticated;
@@ -248,7 +251,36 @@ grant execute on function doctor.create_notification_channel(text, text, jsonb, 
 grant execute on function doctor.delete_notification_channel(uuid) to authenticated;
 grant execute on function doctor.get_channel_secret(uuid) to service_role;
 
--- `alert.evaluate` nasce junto com o que pode notificar, na mesma transação.
+-- Um aparelho é de quem o assinou por último: a assinatura do mesmo endpoint de outro Usuário
+-- (navegador compartilhado, outra Organização) sai antes, e a tela de bloqueio não mostra os
+-- Incidentes de quem já saiu.
+create function doctor.claim_push_endpoint(endpoint text)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  delete from doctor.push_subscriptions s
+  where s.endpoint = claim_push_endpoint.endpoint
+    and not (s.user_id = (select auth.uid()) and s.tenant_id = (select doctor.current_tenant_id()))
+$$;
+revoke all on function doctor.claim_push_endpoint(text) from public, anon, service_role;
+grant execute on function doctor.claim_push_endpoint(text) to authenticated;
+
+-- `alert.evaluate` nasce junto com o que pode notificar, na mesma transação, e só para
+-- Organização com Regra ligada: sem Regra, nenhuma mensagem a mais na outbox.
+create function doctor.has_alert_rules(tenant uuid, kind text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (select 1 from doctor.alert_rules r
+    where r.tenant_id = has_alert_rules.tenant and r.enabled and r.conditions ->> 'type' = kind)
+$$;
+revoke all on function doctor.has_alert_rules(uuid, text) from public, anon, authenticated;
+
 create function doctor.queue_alert_from_outbox()
 returns trigger
 language plpgsql
@@ -256,15 +288,17 @@ security definer
 set search_path = ''
 as $$
 begin
-  insert into doctor.outbox_messages (tenant_id, topic, payload)
-  values (new.tenant_id, 'alert.evaluate', new.payload || jsonb_build_object('source', new.topic));
+  if doctor.has_alert_rules(new.tenant_id, 'incident') then
+    insert into doctor.outbox_messages (tenant_id, topic, payload)
+    values (new.tenant_id, 'alert.evaluate', new.payload || jsonb_build_object('source', new.topic));
+  end if;
   return new;
 end;
 $$;
 revoke all on function doctor.queue_alert_from_outbox() from public, anon, authenticated;
 create trigger outbox_queue_alert
 after insert on doctor.outbox_messages
-for each row when (new.topic in ('incident.opened', 'incident.updated', 'diagnosis.published'))
+for each row when (new.topic in ('incident.opened', 'incident.updated'))
 execute function doctor.queue_alert_from_outbox();
 
 create function doctor.queue_alert_from_connector()
@@ -274,9 +308,11 @@ security definer
 set search_path = ''
 as $$
 begin
-  insert into doctor.outbox_messages (tenant_id, topic, payload)
-  values (new.tenant_id, 'alert.evaluate',
-    jsonb_build_object('source', 'connector.failing', 'connector_id', new.id));
+  if doctor.has_alert_rules(new.tenant_id, 'connector_failing') then
+    insert into doctor.outbox_messages (tenant_id, topic, payload)
+    values (new.tenant_id, 'alert.evaluate',
+      jsonb_build_object('source', 'connector.failing', 'connector_id', new.id));
+  end if;
   return new;
 end;
 $$;
@@ -305,3 +341,52 @@ as $$
 $$;
 revoke all on function doctor.alert_audience(uuid, boolean) from public, anon, authenticated;
 grant execute on function doctor.alert_audience(uuid, boolean) to service_role;
+
+-- Exclusão total (LGPD, #29): os webhooks dos canais saem do Vault junto com as credenciais dos
+-- Conectores, e o comprovante lista os canais para a verificação conferir o Vault depois.
+create or replace function doctor.purge_tenant(tenant uuid, storage_objects integer)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  found_tenant doctor.tenants;
+  secrets integer;
+  receipt uuid;
+  counts jsonb;
+begin
+  select * into found_tenant from doctor.tenants t
+  where t.id = tenant and t.deletion_scheduled_for <= now() for update;
+  if found_tenant.id is null then
+    raise exception 'Organização sem exclusão vencida' using errcode = 'DR042';
+  end if;
+  delete from vault.secrets s
+  where s.id in (select c.secret_id from doctor.connectors c where c.tenant_id = tenant and c.secret_id is not null)
+    or s.id in (select n.secret_id from doctor.notification_channels n
+      where n.tenant_id = tenant and n.secret_id is not null);
+  get diagnostics secrets = row_count;
+  counts := jsonb_build_object(
+    'storage_objects', storage_objects,
+    'vault_secrets', secrets,
+    -- Para a verificação conferir o Vault depois (o nome do segredo leva o id do Conector).
+    'connectors', (select coalesce(jsonb_agg(c.id), '[]') from doctor.connectors c where c.tenant_id = tenant),
+    -- Webhooks de Slack e Teams (#41): o nome do segredo leva o id do canal.
+    'notification_channels', (select coalesce(jsonb_agg(n.id), '[]') from doctor.notification_channels n
+      where n.tenant_id = tenant),
+    'events', (select count(*) from doctor.events e where e.tenant_id = tenant),
+    'incidents', (select count(*) from doctor.incidents i where i.tenant_id = tenant),
+    'knowledge_documents', (select count(*) from doctor.knowledge_documents k where k.tenant_id = tenant),
+    'ingestion_tokens', (select count(*) from doctor.ingestion_tokens k where k.tenant_id = tenant),
+    'memberships', (select count(*) from doctor.memberships m where m.tenant_id = tenant)
+  );
+  delete from doctor.user_active_tenant u where u.tenant_id = tenant;
+  -- A fila do Dashboard (#21) não tem FK de propósito; sai à mão.
+  delete from doctor.execution_stats_dirty d where d.tenant_id = tenant;
+  delete from doctor.tenants t where t.id = tenant;
+  insert into doctor.deletion_receipts (tenant_id, requested_by, requested_at, removed)
+  values (tenant, found_tenant.deletion_requested_by, found_tenant.deletion_requested_at, counts)
+  returning id into receipt;
+  return receipt;
+end;
+$$;

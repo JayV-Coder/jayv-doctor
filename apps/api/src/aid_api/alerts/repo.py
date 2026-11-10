@@ -235,7 +235,11 @@ class AlertRepository:
         if not push_endpoint_allowed(new.endpoint):
             raise invalid("endpoint: serviço de push de um navegador")
         async with translated_tx(claims, ERRORS, self.engine) as connection:
-            # Mesmo aparelho de novo (chaves renovadas): troca a assinatura.
+            # O aparelho passa a ser de quem assina: a assinatura anterior do mesmo endpoint, deste
+            # ou de outro Usuário (navegador compartilhado), sai antes.
+            await connection.execute(
+                text("select doctor.claim_push_endpoint(:e)"), {"e": new.endpoint}
+            )
             await connection.execute(
                 text("delete from doctor.push_subscriptions where endpoint = :e"),
                 {"e": new.endpoint},

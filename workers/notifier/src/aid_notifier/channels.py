@@ -34,10 +34,19 @@ PushSender = Callable[[PushTarget, Message], Awaitable[bool]]
 WebhookSender = Callable[[str, str, Message], Awaitable[None]]
 
 
+def slack_escape(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 async def post_webhook(kind: str, url: str, message: Message) -> None:
     if not webhook_allowed(kind, url):
         raise DeliveryError(f"endereço do {kind} fora dos hosts permitidos")
-    text = f"*{message.title}*\n{message.body}\n<{message.url}|Abrir o Incidente>"
+    # O nome da Integração vem do cliente: sem o escape, `<!channel>` ou `<url|texto>` viraria
+    # menção ou link disfarçado no Slack.
+    text = (
+        f"*{slack_escape(message.title)}*\n{slack_escape(message.body)}\n"
+        f"<{message.url}|{slack_escape(message.action)}>"
+    )
     if kind == "slack":
         body: dict[str, Any] = {"text": text}
     else:
@@ -56,7 +65,7 @@ async def post_webhook(kind: str, url: str, message: Message) -> None:
                             {"type": "TextBlock", "text": message.body, "wrap": True},
                         ],
                         "actions": [
-                            {"type": "Action.OpenUrl", "title": "Abrir", "url": message.url}
+                            {"type": "Action.OpenUrl", "title": message.action, "url": message.url}
                         ],
                     },
                 }
@@ -100,6 +109,14 @@ async def send_push(target: PushTarget, message: Message) -> bool:
         "sub": os.environ.get("AID_VAPID_SUBJECT", "mailto:alertas@jayv.dev")
     }
 
+    raw_key = os.environ.get("AID_VAPID_PRIVATE_KEY")
+    if not raw_key:
+        raise DeliveryError("push sem a chave VAPID configurada")
+    try:
+        key = vapid_key(raw_key)
+    except Exception as exc:
+        raise DeliveryError("chave VAPID inválida") from exc
+
     def deliver() -> bool:
         try:
             webpush(
@@ -108,7 +125,7 @@ async def send_push(target: PushTarget, message: Message) -> bool:
                     "keys": {"p256dh": target.p256dh, "auth": target.auth},
                 },
                 data=payload,
-                vapid_private_key=vapid_key(os.environ["AID_VAPID_PRIVATE_KEY"]),
+                vapid_private_key=key,
                 vapid_claims=claims,
                 ttl=3600,
                 timeout=10,
@@ -118,6 +135,9 @@ async def send_push(target: PushTarget, message: Message) -> bool:
             if status in (404, 410):
                 return False
             raise DeliveryError(f"o serviço de push respondeu HTTP {status}") from exc
+        except Exception as exc:
+            # Rede (timeout, conexão) e o resto da biblioteca: falha classificada, sem detalhe.
+            raise DeliveryError("o serviço de push não respondeu") from exc
         return True
 
     return await asyncio.to_thread(deliver)
@@ -132,8 +152,14 @@ class Senders:
     mailer: Callable[[], Mailer] = mailer_from_env
 
     async def email(self, to: Sequence[str], message: Message) -> None:
-        body = f"{message.body}\n\nAbrir: {message.url}\n"
-        try:
-            await asyncio.to_thread(self.mailer().send, list(to), message.title, body)
-        except Exception as exc:
-            raise DeliveryError("o servidor de e-mail recusou o envio") from exc
+        """Um e-mail por destinatário: ninguém vê o endereço dos colegas."""
+        body = f"{message.body}\n\n{message.action}: {message.url}\n"
+        mailer = self.mailer()
+        failed = 0
+        for address in to:
+            try:
+                await asyncio.to_thread(mailer.send, [address], message.title, body)
+            except Exception:
+                failed += 1
+        if failed == len(to):
+            raise DeliveryError("o servidor de e-mail recusou o envio")

@@ -1,6 +1,6 @@
 begin;
 \ir ../helpers/tenancy.psql
-select plan(14);
+select plan(17);
 
 select tests.create_user('00000000-0000-4000-8000-0000000d0001', 'admin@acme.test');
 select tests.create_user('00000000-0000-4000-8000-0000000d0002', 'analyst@acme.test');
@@ -54,7 +54,16 @@ select is((select count(*)::int from doctor.alert_rules) + (select count(*)::int
   'outra Organização não vê Regras nem canais');
 select tests.clear_authentication();
 
--- `alert.evaluate` nasce com o que pode notificar.
+-- `alert.evaluate` nasce com o que pode notificar, só com Regra ligada do tipo.
+insert into doctor.outbox_messages (tenant_id, topic, payload)
+values ('00000000-0000-4000-8000-00000000be01', 'incident.opened', '{"incident_id": "00000000-0000-4000-8000-000000000998"}');
+select is(
+  (select count(*)::int from doctor.outbox_messages where topic = 'alert.evaluate'
+   and payload ->> 'incident_id' = '00000000-0000-4000-8000-000000000998'),
+  0, 'Organização sem Regra não gera avaliação'
+);
+insert into doctor.alert_rules (tenant_id, name, conditions)
+values ('00000000-0000-4000-8000-00000000ac01', 'Falhas', '{"type": "connector_failing"}');
 insert into doctor.outbox_messages (tenant_id, topic, payload)
 values ('00000000-0000-4000-8000-00000000ac01', 'incident.opened', '{"incident_id": "00000000-0000-4000-8000-000000000999"}');
 select is(
@@ -79,6 +88,13 @@ select is(
    and payload ->> 'source' = 'alert.evaluate'),
   0, 'a mensagem nova não dispara a si mesma'
 );
+
+-- O aparelho passa a ser de quem assinou por último.
+select tests.authenticate_as('00000000-0000-4000-8000-0000000d0002', '00000000-0000-4000-8000-00000000ac01', 'analyst', 'aal2');
+select lives_ok($$select doctor.claim_push_endpoint('https://fcm.googleapis.com/fcm/send/a')$$, 'quem assina toma o aparelho');
+select tests.clear_authentication();
+select is((select count(*)::int from doctor.push_subscriptions where endpoint = 'https://fcm.googleapis.com/fcm/send/a'), 0,
+  'a assinatura do Usuário anterior saiu');
 
 select * from finish();
 rollback;

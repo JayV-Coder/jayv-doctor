@@ -372,3 +372,88 @@ async def test_taxa_de_erro_acima_do_limite_na_varredura(
     mine = [m for kind, _, m in fake.webhooks if kind == "teams" and "Pedidos SF → SAP" in m.body]
     assert mine[0].title == "Taxa de erro acima de 5%"
     assert "15% em 10 min" in mine[0].body
+
+
+@pytest.mark.asyncio
+async def test_regras_sobrepostas_no_mesmo_canal_notificam_uma_vez(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    push = await channel(engine, org, "webpush", config={"audience": "managers"})
+    await rule(engine, org, {"type": "incident", "min_severity": "critical"}, [push])
+    await rule(engine, org, {"type": "incident", "min_severity": "high"}, [push])
+    await subscribe(engine, org, org["admin"], "https://fcm.googleapis.com/fcm/send/celular")
+    found = await incident(engine, org, "critical")
+    fake = Fake()
+    assert (
+        await evaluate(
+            engine, {"source": "incident.opened", "incident_id": found}, fake.senders(), NOON
+        )
+        == 1
+    )
+    assert len(fake.pushes) == 1
+
+
+@pytest.mark.asyncio
+async def test_incidente_que_vira_critico_notifica_de_novo(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    slack = await channel(engine, org, "slack", webhook="https://hooks.slack.com/services/T/B/x")
+    await rule(engine, org, {"type": "incident", "min_severity": "high"}, [slack])
+    found = await incident(engine, org, "high")
+    fake = Fake()
+    payload = {"source": "incident.updated", "incident_id": found}
+    assert await evaluate(engine, payload, fake.senders(), NOON) == 1
+    await run(engine, "update doctor.incidents set severity = 'critical' where id = :i", i=found)
+    assert await evaluate(engine, payload, fake.senders(), NOON) == 1
+    assert [m.title.split(" #")[0] for _, _, m in fake.webhooks] == [
+        "Incidente atualizado alta",
+        "Incidente atualizado crítico",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_canal_que_quebra_nao_impede_os_outros_e_espera_antes_de_tentar_de_novo(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    broken = await channel(engine, org, "slack", webhook="https://hooks.slack.com/services/falha")
+    email = await channel(engine, org, "email", config={"audience": "all"})
+    await rule(engine, org, {"type": "incident", "min_severity": "low"}, [broken, email])
+    found = await incident(engine, org, "medium")
+    fake = Fake()
+    payload = {"source": "incident.updated", "incident_id": found}
+    assert await evaluate(engine, payload, fake.senders(), NOON) == 1
+    # Um e-mail por pessoa: ninguém vê o endereço do colega.
+    assert sorted(len(to) for to, _, _ in fake.emails) == [1, 1]
+    # O Slack quebrado espera 5 min; o e-mail, os 15 min da deduplicação.
+    assert await evaluate(engine, payload, fake.senders(), NOON) == 0
+    statuses = await rows(
+        engine,
+        "select status, count(*) as n from doctor.notification_deliveries"
+        " where tenant_id = cast(:t as uuid) group by status order by status",
+        t=org["tenant"],
+    )
+    assert {r["status"]: r["n"] for r in statuses} == {"failed": 1, "sent": 1, "suppressed": 2}
+
+
+@pytest.mark.asyncio
+async def test_falha_inesperada_no_canal_vira_failed_e_nao_some(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    push = await channel(engine, org, "webpush", config={"audience": "managers"})
+    await rule(engine, org, {"type": "incident", "min_severity": "low"}, [push])
+    await subscribe(engine, org, org["admin"], "https://fcm.googleapis.com/fcm/send/x")
+    found = await incident(engine, org, "low")
+
+    async def explode(target: PushTarget, message: Message) -> bool:
+        raise TimeoutError("rede")
+
+    senders = Fake().senders()
+    senders.push = explode
+    payload = {"source": "incident.opened", "incident_id": found}
+    assert await evaluate(engine, payload, senders, NOON) == 0
+    [delivery] = await rows(
+        engine,
+        "select status from doctor.notification_deliveries where tenant_id = cast(:t as uuid)",
+        t=org["tenant"],
+    )
+    assert delivery["status"] == "failed"

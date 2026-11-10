@@ -36,6 +36,7 @@ from aid_notifier.channels import DeliveryError, PushTarget, Senders
 
 log = logging.getLogger(__name__)
 REPEAT = timedelta(minutes=15)
+HISTORY_DAYS = 30
 
 
 def app_url() -> str:
@@ -85,31 +86,37 @@ async def rules_of(connection: AsyncConnection, tenant: str, kind: str) -> list[
     return found
 
 
-async def reserve(connection: AsyncConnection, rule: Rule, notice: Notice) -> bool:
-    """Lock por (Regra, assunto) e a janela de 15 min: entregas concorrentes do mesmo Incidente
-    viram uma notificação; as outras ficam registradas como `suppressed`."""
+async def lock(connection: AsyncConnection, rule: Rule, notice: Notice) -> None:
+    """Lock por assunto na Organização: entregas concorrentes do mesmo Incidente (e Regras que
+    se sobrepõem) passam uma de cada vez pela reserva."""
     await connection.execute(
         text("select pg_advisory_xact_lock(hashtextextended(:k, 0))"),
-        {"k": f"doctor.alert:{rule.tenant_id}:{rule.id}:{notice.subject}"},
+        {"k": f"doctor.alert:{rule.tenant_id}:{notice.subject}"},
     )
-    recent = await connection.scalar(
+
+
+async def busy(connection: AsyncConnection, rule: Rule, notice: Notice, channel: str) -> bool:
+    """O canal já recebeu (ou está recebendo) este assunto: enviado há menos de 15 min,
+    reservado há menos de 2 min (o worker pode ter caído no meio) ou falhou há menos de 5 min
+    (espera antes de tentar de novo um canal quebrado). Por canal, não por Regra: duas Regras no
+    mesmo canal não duplicam."""
+    found = await connection.scalar(
         text(
             "select 1 from doctor.notification_deliveries where tenant_id = cast(:t as uuid)"
-            " and rule_id = cast(:r as uuid) and subject = :s and status = 'sent'"
-            " and (:once or created_at > now() - make_interval(secs => :w)) limit 1"
+            " and subject = :s and channel_id = cast(:c as uuid) and ("
+            " (status = 'sent' and (:once or created_at > now() - make_interval(secs => :w)))"
+            " or (status = 'pending' and created_at > now() - interval '2 minutes')"
+            " or (status = 'failed' and created_at > now() - interval '5 minutes')) limit 1"
         ),
         {
             "t": rule.tenant_id,
-            "r": rule.id,
             "s": notice.subject,
+            "c": channel,
             "once": notice.once,
             "w": REPEAT.total_seconds(),
         },
     )
-    if recent is not None:
-        await record(connection, rule, notice, None, "suppressed")
-        return False
-    return True
+    return found is not None
 
 
 async def record(
@@ -119,21 +126,23 @@ async def record(
     channel: str | None,
     status: str,
     error: str | None = None,
-) -> None:
-    await connection.execute(
-        text(
-            "insert into doctor.notification_deliveries (tenant_id, rule_id, channel_id, subject,"
-            " status, error) values (cast(:t as uuid), cast(:r as uuid), cast(:c as uuid), :s,"
-            " :st, :e)"
-        ),
-        {
-            "t": rule.tenant_id,
-            "r": rule.id,
-            "c": channel,
-            "s": notice.subject,
-            "st": status,
-            "e": error[:500] if error else None,
-        },
+) -> str:
+    return str(
+        await connection.scalar(
+            text(
+                "insert into doctor.notification_deliveries (tenant_id, rule_id, channel_id,"
+                " subject, status, error) values (cast(:t as uuid), cast(:r as uuid),"
+                " cast(:c as uuid), :s, :st, :e) returning id::text"
+            ),
+            {
+                "t": rule.tenant_id,
+                "r": rule.id,
+                "c": channel,
+                "s": notice.subject,
+                "st": status,
+                "e": error[:500] if error else None,
+            },
+        )
     )
 
 
@@ -182,12 +191,6 @@ async def deliver_channel(
         async with engine.begin() as connection:
             await platform_role(connection)
             people = await audience(connection, rule.tenant_id, scope, notice.critical, now)
-            if channel.type == "email":
-                emails = sorted({email for _, email in people if email})
-                if not emails:
-                    return "quiet", "ninguém fora do silêncio"
-                await senders.email(emails, notice.message)
-                return "sent", None
             targets = [
                 PushTarget(*row)
                 for row in await connection.execute(
@@ -199,6 +202,13 @@ async def deliver_channel(
                     {"t": rule.tenant_id, "u": [user for user, _ in people]},
                 )
             ]
+        # Os envios ficam fora da transação: um SMTP lento não segura conexão do Supavisor.
+        if channel.type == "email":
+            emails = sorted({email for _, email in people if email})
+            if not emails:
+                return "quiet", "ninguém fora do silêncio"
+            await senders.email(emails, notice.message)
+            return "sent", None
         if not targets:
             return "quiet", "nenhum aparelho com push fora do silêncio"
         delivered, gone = 0, []
@@ -222,16 +232,21 @@ async def deliver_channel(
         return ("sent", None) if delivered else ("failed", "nenhum aparelho aceitou o push")
     except DeliveryError as exc:
         return "failed", str(exc)
+    except Exception:
+        # Qualquer outra falha (segredo sumido, banco) vira `failed` deste canal; os outros
+        # canais seguem.
+        log.exception("entrega no canal %s falhou", channel.id)
+        return "failed", "falha interna na entrega"
 
 
 async def notify(
     engine: AsyncEngine, rule: Rule, notice: Notice, senders: Senders, now: datetime
 ) -> int:
     """Entrega uma notificação da Regra; devolve quantos canais a receberam."""
+    chosen: list[tuple[Any, str]] = []
     async with engine.begin() as connection:
         await platform_role(connection)
-        if not await reserve(connection, rule, notice):
-            return 0
+        await lock(connection, rule, notice)
         if not notice.critical and in_quiet_hours(rule.quiet, now):
             await record(connection, rule, notice, None, "quiet")
             return 0
@@ -244,34 +259,27 @@ async def notify(
                 {"t": rule.tenant_id, "c": list(rule.channels)},
             )
         )
-        # A entrega fica registrada como feita antes do envio: outra mensagem do mesmo assunto,
-        # que espera este lock, já a vê e não duplica. Falha muda o registro depois.
+        # A reserva (`pending`) sai antes do envio: outra mensagem do mesmo assunto, que espera
+        # este lock, já a vê e não duplica.
         for channel in channels:
-            await record(connection, rule, notice, channel.id, "sent")
+            if await busy(connection, rule, notice, channel.id):
+                await record(connection, rule, notice, channel.id, "suppressed")
+            else:
+                chosen.append(
+                    (channel, await record(connection, rule, notice, channel.id, "pending"))
+                )
     sent = 0
-    for channel in channels:
+    for channel, delivery in chosen:
         status, error = await deliver_channel(engine, rule, notice, channel, senders, now)
-        if status == "sent":
-            sent += 1
-            continue
+        sent += status == "sent"
         async with engine.begin() as connection:
             await platform_role(connection)
             await connection.execute(
                 text(
                     "update doctor.notification_deliveries set status = :s, error = :e"
-                    " where id = (select id from doctor.notification_deliveries"
-                    " where tenant_id = cast(:t as uuid) and rule_id = cast(:r as uuid)"
-                    " and channel_id = cast(:c as uuid) and subject = :subject"
-                    " order by created_at desc limit 1)"
+                    " where id = cast(:d as uuid)"
                 ),
-                {
-                    "s": status,
-                    "e": error,
-                    "t": rule.tenant_id,
-                    "r": rule.id,
-                    "c": channel.id,
-                    "subject": notice.subject,
-                },
+                {"s": status, "e": error[:500] if error else None, "d": delivery},
             )
     return sent
 
@@ -315,8 +323,9 @@ async def evaluate(
                     notices.append(
                         (
                             rule,
+                            # A severidade no assunto: escalar para crítico notifica de novo.
                             Notice(
-                                f"incident:{facts.id}",
+                                f"incident:{facts.id}:{facts.severity}",
                                 message_for_incident(facts, app_url(), event),
                                 critical=facts.severity == "critical",
                             ),
@@ -350,6 +359,7 @@ async def evaluate(
                                 "Conector com falhas",
                                 f"{row.name} · {row.integration}"[:300],
                                 f"{app_url()}/conectores",
+                                "Abrir os Conectores",
                             ),
                         ),
                     )
@@ -366,6 +376,15 @@ async def scan(engine: AsyncEngine, senders: Senders, now: datetime | None = Non
     notices: list[tuple[Rule, Notice]] = []
     async with engine.begin() as connection:
         await platform_role(connection)
+        # O histórico de entregas guarda 30 dias; cada varredura apaga um lote do que passou.
+        await connection.execute(
+            text(
+                "delete from doctor.notification_deliveries where id in ("
+                " select id from doctor.notification_deliveries"
+                " where created_at < now() - make_interval(days => :d) limit 1000)"
+            ),
+            {"d": HISTORY_DAYS},
+        )
         tenants = [
             row[0]
             for row in await connection.execute(
@@ -420,6 +439,7 @@ async def error_rate(connection: AsyncConnection, rule: Rule) -> list[tuple[Rule
                         f"Taxa de erro acima de {rule.conditions.threshold_pct:g}%",
                         f"{row.name} · {pct:.0f}% em {rule.conditions.minutes} min",
                         f"{app_url()}/execucoes",
+                        "Abrir as Execuções",
                     ),
                 ),
             )

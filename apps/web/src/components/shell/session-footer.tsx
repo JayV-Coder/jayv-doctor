@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { SignOut } from "./sign-out";
 
 // Quem ainda não tem Organização também precisa sair ou cuidar da conta.
 export async function SessionFooter() {
@@ -14,11 +15,7 @@ export async function SessionFooter() {
       <Link className="btn" href="/seguranca">
         Segurança da conta
       </Link>
-      <form action="/auth/sair" method="post">
-        <button className="btn" type="submit">
-          Sair
-        </button>
-      </form>
+      <SignOut />
     </section>
   );
 }

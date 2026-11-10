@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 import httpx
 
+from aid_diagnosis_engine.llm import egress
 from aid_diagnosis_engine.llm.base import InputType, LLMTransientError, LLMUnavailableError
 from aid_diagnosis_engine.llm.guards import token_batches
 
@@ -39,7 +40,9 @@ class VoyageEmbeddings:
             raise LLMUnavailableError("VOYAGE_API_KEY não configurada.")
         try:
             async with httpx.AsyncClient(
-                transport=self.transport, timeout=httpx.Timeout(30.0)
+                transport=self.transport,
+                timeout=httpx.Timeout(30.0),
+                event_hooks={"request": [egress.hook("voyage")]},
             ) as client:
                 response = await client.post(
                     URL,

@@ -31,6 +31,20 @@ isOneToOne: false
       referencedColumns: ["tenant_id","id"]
     }
                   ]
+                },"ai_profile_checks": {
+                  Row: {
+                    "checked_at": string,"detail": string | null,"hosts": (string)[],"id": number,"in_region": boolean,"ok": boolean,"profile": string,"region": string | null,"target": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "checked_at"?: string,"detail"?: string | null,"hosts"?: (string)[],"id"?: never,"in_region"?: boolean,"ok": boolean,"profile": string,"region"?: string | null,"target"?: string
+                  }
+                  Update: {
+                    "checked_at"?: string,"detail"?: string | null,"hosts"?: (string)[],"id"?: never,"in_region"?: boolean,"ok"?: boolean,"profile"?: string,"region"?: string | null,"target"?: string
+                  }
+                  Relationships: [
+
+                  ]
                 },"alert_preferences": {
                   Row: {
                     "created_at": string,"id": string,"quiet_hours": Json | null,"tenant_id": string,"updated_at": string,"user_id": string
@@ -1583,14 +1597,14 @@ isOneToOne: false
                   ]
                 },"tenants": {
                   Row: {
-                    "auto_diagnose_critical": boolean,"created_at": string,"deletion_requested_at": string | null,"deletion_requested_by": string | null,"deletion_scheduled_for": string | null,"dpa_accepted_at": string | null,"id": string,"llm_enabled": boolean,"llm_provider": string,"mttr_baseline_minutes": number | null,"plan": string,"quota_tolerance": number,"segment": string | null,"status": string,"updated_at": string
+                    "ai_profile": string,"ai_project": string | null,"auto_diagnose_critical": boolean,"created_at": string,"deletion_requested_at": string | null,"deletion_requested_by": string | null,"deletion_scheduled_for": string | null,"dpa_accepted_at": string | null,"id": string,"llm_enabled": boolean,"llm_provider": string,"mttr_baseline_minutes": number | null,"plan": string,"quota_tolerance": number,"segment": string | null,"status": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "auto_diagnose_critical"?: boolean,"created_at"?: string,"deletion_requested_at"?: string | null,"deletion_requested_by"?: string | null,"deletion_scheduled_for"?: string | null,"dpa_accepted_at"?: string | null,"id": string,"llm_enabled"?: boolean,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"quota_tolerance"?: number,"segment"?: string | null,"status"?: string,"updated_at"?: string
+                    "ai_profile"?: string,"ai_project"?: string | null,"auto_diagnose_critical"?: boolean,"created_at"?: string,"deletion_requested_at"?: string | null,"deletion_requested_by"?: string | null,"deletion_scheduled_for"?: string | null,"dpa_accepted_at"?: string | null,"id": string,"llm_enabled"?: boolean,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"quota_tolerance"?: number,"segment"?: string | null,"status"?: string,"updated_at"?: string
                   }
                   Update: {
-                    "auto_diagnose_critical"?: boolean,"created_at"?: string,"deletion_requested_at"?: string | null,"deletion_requested_by"?: string | null,"deletion_scheduled_for"?: string | null,"dpa_accepted_at"?: string | null,"id"?: string,"llm_enabled"?: boolean,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"quota_tolerance"?: number,"segment"?: string | null,"status"?: string,"updated_at"?: string
+                    "ai_profile"?: string,"ai_project"?: string | null,"auto_diagnose_critical"?: boolean,"created_at"?: string,"deletion_requested_at"?: string | null,"deletion_requested_by"?: string | null,"deletion_scheduled_for"?: string | null,"dpa_accepted_at"?: string | null,"id"?: string,"llm_enabled"?: boolean,"llm_provider"?: string,"mttr_baseline_minutes"?: number | null,"plan"?: string,"quota_tolerance"?: number,"segment"?: string | null,"status"?: string,"updated_at"?: string
                   }
                   Relationships: [
 
@@ -1795,6 +1809,11 @@ isOneToOne: false
                            },
 "agent_seen":
 { Args: { "secret_hash": string,"version": string }; Returns: undefined
+                           },
+"ai_profile_status":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "checked_at": string,"detail": string,"hosts": (string)[],"in_region": boolean,"ok": boolean,"profile": string,"region": string
+            }[]
                            },
 "alert_audience":
 { Args: { "everyone": boolean,"tenant": string }; Returns: {
@@ -2203,8 +2222,14 @@ isOneToOne: false
 "servicenow_hook":
 { Args: { "number": string,"token_hash": string }; Returns: boolean
                            },
+"set_ai_profile":
+{ Args: { "profile": string }; Returns: undefined
+                           },
 "set_auto_diagnosis":
 { Args: { "enabled": boolean }; Returns: undefined
+                           },
+"set_dedicated_ai":
+{ Args: { "project": string,"tenant": string }; Returns: undefined
                            },
 "set_llm_enabled":
 { Args: { "enabled": boolean }; Returns: undefined

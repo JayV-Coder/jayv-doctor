@@ -5,6 +5,9 @@ python -m aid_evaluation run --modes rules_only hybrid --provider anthropic --ju
 python -m aid_evaluation gate                gate de regressão (rules_only, 2 p.p.)
 python -m aid_evaluation label ARQUIVO       rotulagem por especialista, caso a caso
 python -m aid_evaluation sample RESULTADOS   amostra de 20% do juiz para conferência humana
+python -m aid_evaluation run --modes hybrid --profile br_region --json reports/br_region.json
+python -m aid_evaluation compare standard=reports/standard.json br_region=reports/br_region.json
+                                             diferença de qualidade e custo entre perfis (#45)
 """
 
 import argparse
@@ -48,14 +51,20 @@ def dataset(paths: list[str] | None) -> list[Case]:
 
 
 async def evaluate(
-    cases: list[Case], modes: list[str], provider: str | None, judge: bool
+    cases: list[Case],
+    modes: list[str],
+    provider: str | None,
+    judge: bool,
+    judge_provider: str | None = None,
 ) -> tuple[list[Metrics], list[CaseResult]]:
+    """`judge_provider`: o mesmo juiz em todos os perfis (#45), para a diferença de qualidade
+    ser do modelo avaliado e não do juiz; sem ele, o juiz é o próprio provedor."""
     llm = guarded(provider) if provider else None
     referee: Judge | None = None
     if judge and provider:
         from aid_evaluation.judge import LLMJudge
 
-        referee = LLMJudge(guarded(provider)())
+        referee = LLMJudge(guarded(judge_provider or provider)())
     prices = json.loads(PRICES.read_text(encoding="utf-8")) if PRICES.exists() else None
     metrics, everything = [], []
     for mode in modes:
@@ -73,10 +82,27 @@ async def evaluate(
     return metrics, everything
 
 
+def command_compare(args: argparse.Namespace) -> None:
+    from aid_evaluation.compare import load
+    from aid_evaluation.compare import render as render_profiles
+
+    out = Path(args.out or ROOT / "reports" / f"perfis-{date.today().isoformat()}.md")
+    out.write_text(render_profiles(load(args.reports)), encoding="utf-8")
+    print(f"comparação: {out}")
+
+
 def command_run(args: argparse.Namespace) -> None:
+    if args.profile:
+        from aid_diagnosis_engine.llm.registry import PROFILES
+
+        args.provider = PROFILES[args.profile]
+        if args.judge and not args.judge_provider:
+            raise SystemExit("com --profile e --judge, fixe o juiz: --judge-provider anthropic")
     cases = dataset(args.dataset)
     cases = cases[: args.limit] if args.limit else cases
-    metrics, results = asyncio.run(evaluate(cases, args.modes, args.provider, args.judge))
+    metrics, results = asyncio.run(
+        evaluate(cases, args.modes, args.provider, args.judge, args.judge_provider)
+    )
     notes = []
     if "hybrid" not in args.modes:
         notes.append(
@@ -220,7 +246,11 @@ def main() -> None:
     runner.add_argument(
         "--modes", nargs="+", default=["rules_only"], choices=["rules_only", "hybrid"]
     )
-    runner.add_argument("--provider", choices=["anthropic", "vertex"])
+    runner.add_argument("--provider", choices=["anthropic", "vertex", "vertex_dedicated"])
+    # Perfil de IA (ADR-0018): escolhe o provedor dele.
+    runner.add_argument("--profile", choices=["standard", "br_region", "dedicated"])
+    # Juiz fixo entre perfis: compare só faz sentido com o mesmo juiz.
+    runner.add_argument("--judge-provider", choices=["anthropic", "vertex"])
     runner.add_argument("--judge", action="store_true")
     runner.add_argument("--limit", type=int)
     runner.add_argument("--report-dir", default=str(ROOT / "reports"))
@@ -236,6 +266,11 @@ def main() -> None:
     sample = commands.add_parser("sample")
     sample.add_argument("results")
     sample.add_argument("--seed", type=int, default=30)
+    compare = commands.add_parser("compare")
+    compare.add_argument(
+        "reports", nargs="+", help="perfil=arquivo.json (o primeiro é a referência)"
+    )
+    compare.add_argument("--out", help="padrão: reports/perfis-<data>.md")
     args = parser.parse_args()
     {
         "generate": command_generate,
@@ -243,6 +278,7 @@ def main() -> None:
         "gate": command_gate,
         "label": command_label,
         "sample": command_sample,
+        "compare": command_compare,
     }[args.command](args)
 
 

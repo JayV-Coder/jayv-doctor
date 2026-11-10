@@ -159,7 +159,10 @@ async def test_pedido_ja_criado_no_sap_apesar_do_504_nao_reenviar(
     provider = FakeProvider()
     try:
         # 1ª passagem: pede a consulta e espera, sem gastar tentativa.
-        assert await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _: provider) == "waiting"
+        assert (
+            await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _, _project: provider)
+            == "waiting"
+        )
         [state] = await rows(
             engine,
             "select status, stage, attempts from doctor.diagnoses where id = cast(:d as uuid)",
@@ -180,7 +183,8 @@ async def test_pedido_ja_criado_no_sap_apesar_do_504_nao_reenviar(
         assert s4.filters == ["PurchaseOrderByCustomer eq '801XX0001'"]
 
         assert (
-            await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _: provider) == "published"
+            await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _, _project: provider)
+            == "published"
         )
         recommendations = await rows(
             engine,
@@ -218,10 +222,16 @@ async def test_consulta_sem_resposta_expira_e_o_diagnostico_segue_com_a_nota(
     diagnosis = found["diagnosis"]
     provider = FakeProvider()
     try:
-        assert await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _: provider) == "waiting"
+        assert (
+            await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _, _project: provider)
+            == "waiting"
+        )
         # Ainda dentro do prazo: nada expira, e outra entrega continua esperando.
         assert await expire_enrichment(engine) == 0
-        assert await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _: provider) == "waiting"
+        assert (
+            await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _, _project: provider)
+            == "waiting"
+        )
         await run(
             engine,
             "update doctor.enrichments set created_at = now() - interval '6 minutes'"
@@ -230,7 +240,8 @@ async def test_consulta_sem_resposta_expira_e_o_diagnostico_segue_com_a_nota(
         )
         assert await expire_enrichment(engine) >= 1
         assert (
-            await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _: provider) == "published"
+            await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _, _project: provider)
+            == "published"
         )
         [notes] = await rows(
             engine,
@@ -254,7 +265,10 @@ async def test_diagnostico_parado_na_fila_com_consultas_respondidas_e_retomado(
     diagnosis = found["diagnosis"]
     provider = FakeProvider()
     try:
-        assert await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _: provider) == "waiting"
+        assert (
+            await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _, _project: provider)
+            == "waiting"
+        )
         await run_enrichment(engine, {"diagnosis_id": diagnosis}, registry(FakeS4(set())))
         await run(
             engine,
@@ -271,12 +285,16 @@ async def test_diagnostico_parado_na_fila_com_consultas_respondidas_e_retomado(
         )
         assert len(requested) == 1
         assert (
-            await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _: provider) == "published"
+            await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _, _project: provider)
+            == "published"
         )
         # Entrega repetida da consulta, já sem pendentes: pede o Diagnóstico, que ignora.
         assert (
             await run_enrichment(engine, {"diagnosis_id": diagnosis}, registry(FakeS4(set()))) == 0
         )
-        assert await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _: provider) == "ignored"
+        assert (
+            await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _, _project: provider)
+            == "ignored"
+        )
     finally:
         await cleanup(engine, tenant)

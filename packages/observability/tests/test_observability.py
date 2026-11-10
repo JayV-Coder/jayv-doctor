@@ -107,3 +107,11 @@ async def test_metricas_vao_para_o_cloud_monitoring_com_o_token_da_conta() -> No
 
 def test_fora_de_um_trace_o_span_atual_e_invalido() -> None:
     assert not trace.get_current_span().get_span_context().is_valid
+
+
+def test_campos_estruturados_do_log_entram_no_json() -> None:
+    """O egress da IA (ADR-0018) vira campos que a métrica de log filtra."""
+    entry = record("ai.egress")
+    entry.fields = {"provider": "vertex", "host": "southamerica-east1-aiplatform.googleapis.com"}
+    found = json.loads(JsonFormatter(project="p").format(entry))
+    assert (found["message"], found["provider"]) == ("ai.egress", "vertex")

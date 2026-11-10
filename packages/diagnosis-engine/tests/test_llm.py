@@ -435,3 +435,101 @@ def test_lotes_de_embedding_respeitam_itens_e_tokens() -> None:
     # Um texto maior que o limite vai sozinho, sem lote vazio.
     assert [len(b) for b in token_batches(["x" * 100_000, "y"], 10, 1_000)] == [1, 1]
     assert token_batches([], 10, 10) == []
+
+
+# --- Perfis de IA (ADR-0018): onde as chamadas vão e o que fica registrado. ---
+
+
+def vertex_handler(sent: list[httpx.Request]) -> Any:
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        if request.url.host == "metadata.google.internal":
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
+        if request.url.path.endswith(":predict"):
+            return httpx.Response(200, json={"predictions": [{"embeddings": {"values": [0.1]}}]})
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [{"content": {"parts": [{"text": GOOD}]}, "finishReason": "STOP"}],
+                "usageMetadata": {"promptTokenCount": 50, "candidatesTokenCount": 10},
+            },
+        )
+
+    return handler
+
+
+def test_perfil_brasil_nao_chama_host_fora_do_brasil_e_registra_o_egress(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Critério do #45: tenant `br_region` → nenhuma chamada sai do Brasil (e o log comprova)."""
+    from aid_diagnosis_engine.llm import egress
+
+    sent: list[httpx.Request] = []
+    provider = VertexProvider(
+        project="acme-prd", transport=httpx.MockTransport(vertex_handler(sent))
+    )
+    caplog.set_level("INFO", logger="aid.ai.egress")
+    with egress.recording() as hosts:
+        complete(provider)
+        asyncio.run(provider.embed(["pedido 4500012345"], input_type="query"))
+    assert {request.url.host for request in sent} <= {
+        "metadata.google.internal",
+        "southamerica-east1-aiplatform.googleapis.com",
+    }
+    assert set(hosts) == {request.url.host for request in sent}
+    logged = [r for r in caplog.records if r.getMessage() == "ai.egress"]
+    assert {r.fields["region"] for r in logged} <= {"southamerica-east1", "local"}  # type: ignore[attr-defined]
+    # O log não leva conteúdo: só provedor, host e região.
+    assert all(set(r.fields) == {"provider", "host", "region"} for r in logged)  # type: ignore[attr-defined]
+
+
+def test_vertex_recusa_regiao_e_host_fora_do_brasil() -> None:
+    with pytest.raises(ValueError, match="southamerica-east1"):
+        VertexProvider(project="p", region="us-central1")
+    sent: list[httpx.Request] = []
+    provider = VertexProvider(project="p", transport=httpx.MockTransport(vertex_handler(sent)))
+    provider.base = lambda model: f"https://us-central1-aiplatform.googleapis.com/v1/{model}"  # type: ignore[method-assign]
+    with pytest.raises(LLMUnavailableError, match="não fala com"):
+        complete(provider)
+    # O pedido de fora nem chegou ao transporte (só o token do metadata).
+    assert [request.url.host for request in sent] == ["metadata.google.internal"]
+
+
+def test_dedicado_usa_so_a_capacidade_provisionada_no_projeto_do_cliente() -> None:
+    from aid_diagnosis_engine.llm.registry import INDEXES, provider_for
+
+    sent: list[httpx.Request] = []
+    provider = VertexProvider(
+        project="cliente-ia-123",
+        transport=httpx.MockTransport(vertex_handler(sent)),
+        dedicated=True,
+    )
+    complete(provider)
+    asyncio.run(provider.embed(["x"], input_type="query"))
+    generate, embed = sent[1], sent[2]
+    assert "/projects/cliente-ia-123/" in str(generate.url)
+    assert generate.headers["x-vertex-ai-llm-request-type"] == "dedicated"
+    # O embedding não tem capacidade provisionada: vai pelo compartilhado no Brasil.
+    assert "x-vertex-ai-llm-request-type" not in embed.headers
+    assert provider.name == "vertex_dedicated"
+    assert provider_for("vertex_dedicated", "cliente-ia-123").project == "cliente-ia-123"  # type: ignore[attr-defined]
+    assert "voyage-3" not in INDEXES["br_region"]
+    assert "voyage-3" in INDEXES["standard"]
+
+
+def test_anthropic_e_voyage_registram_o_egress(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-teste")
+    provider = AnthropicProvider(embeddings=VoyageEmbeddings(api_key="v"))
+    hooks = provider.client._client.event_hooks["request"]
+    assert hooks
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": [{"index": 0, "embedding": [0.1]}]})
+
+    caplog.set_level("INFO", logger="aid.ai.egress")
+    voyage = VoyageEmbeddings(api_key="v", transport=httpx.MockTransport(handler))
+    asyncio.run(voyage.embed(["x"], input_type="query"))
+    [logged] = [r for r in caplog.records if r.getMessage() == "ai.egress"]
+    assert logged.fields == {"provider": "voyage", "host": "api.voyageai.com", "region": "us"}  # type: ignore[attr-defined]

@@ -39,7 +39,7 @@ async def main(organization: str) -> None:
         ).scalars()
         targets = list(documents)
     for document in targets:
-        await index(engine, {"document_id": document}, store, lambda _: provider)
+        await index(engine, {"document_id": document}, store, lambda _, _project: provider)
     await engine.dispose()
 
 

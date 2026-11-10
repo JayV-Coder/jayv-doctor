@@ -1208,8 +1208,9 @@ export interface paths {
     /**
      * Search Knowledge
      * @description Híbrida (vetor + texto, RRF) com o embedding do provedor da Organização; com o provedor
-     *     fora, só o texto, em vez de falhar. O provedor sai numa transação curta e o embedding é
-     *     gerado fora dela: nenhuma conexão do banco fica presa esperando a API de IA.
+     *     fora, só o texto, em vez de falhar. Perfil de IA trocado: até o reindex terminar, os índices
+     *     antigos que o perfil permite também entram (ADR-0018). O provedor sai numa transação curta e
+     *     o embedding é gerado fora dela: nenhuma conexão do banco fica presa esperando a API de IA.
      */
     post: operations["search_knowledge_api_v1_knowledge_search_post"];
     delete?: never;
@@ -1372,6 +1373,26 @@ export interface paths {
     get?: never;
     /** Put Retention */
     put: operations["put_retention_api_v1_privacy_retention_put"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/privacy/ai-profile": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Put Ai Profile
+     * @description Perfil de IA (ADR-0018): Owner com MFA troca entre o padrão e o Brasil.
+     */
+    put: operations["put_ai_profile_api_v1_privacy_ai_profile_put"];
     post?: never;
     delete?: never;
     options?: never;
@@ -1659,6 +1680,35 @@ export interface components {
       sha256: string;
       /** Signature */
       signature: string;
+    };
+    /**
+     * AiCheck
+     * @description Última verificação diária do perfil (ADR-0018): os hosts e a região efetivos.
+     */
+    AiCheck: {
+      /**
+       * Checked At
+       * Format: date-time
+       */
+      checked_at: string;
+      /** Ok */
+      ok: boolean;
+      /** In Region */
+      in_region: boolean;
+      /** Hosts */
+      hosts: string[];
+      /** Region */
+      region: string | null;
+      /** Detail */
+      detail: string | null;
+    };
+    /** AiProfileChange */
+    AiProfileChange: {
+      /**
+       * Profile
+       * @enum {string}
+       */
+      profile: "standard" | "br_region" | "dedicated";
     };
     /** AlertRule */
     AlertRule: {
@@ -3373,7 +3423,16 @@ export interface components {
        * Llm Provider
        * @enum {string}
        */
-      llm_provider: "anthropic" | "vertex";
+      llm_provider: "anthropic" | "vertex" | "vertex_dedicated";
+      /**
+       * Ai Profile
+       * @enum {string}
+       */
+      ai_profile: "standard" | "br_region" | "dedicated";
+      /** Ai Project */
+      ai_project: string | null;
+      ai_check: components["schemas"]["AiCheck"] | null;
+      reindex: components["schemas"]["Reindex"];
       deletion: components["schemas"]["Deletion"] | null;
     };
     /** Profile */
@@ -3471,6 +3530,18 @@ export interface components {
       expires_in_hours: number;
       /** Install Command */
       install_command: string;
+    };
+    /**
+     * Reindex
+     * @description Documentos prontos da Base e quantos já estão no modelo de embedding do perfil.
+     */
+    Reindex: {
+      /** Model */
+      model: string;
+      /** Total */
+      total: number;
+      /** Current */
+      current: number;
     };
     /** RejectedEvent */
     RejectedEvent: {
@@ -7472,6 +7543,40 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": components["schemas"]["RetentionChange"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  put_ai_profile_api_v1_privacy_ai_profile_put: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AiProfileChange"];
       };
     };
     responses: {

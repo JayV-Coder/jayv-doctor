@@ -113,7 +113,10 @@ async def test_sem_cota_de_ia_o_diagnostico_roda_so_com_regras(
         k=f"cota:{diagnosis}",
     )
     provider = FakeProvider()
-    assert await diagnose(engine, {"diagnosis_id": diagnosis}, lambda n: provider) == "published"
+    assert (
+        await diagnose(engine, {"diagnosis_id": diagnosis}, lambda n, _project: provider)
+        == "published"
+    )
     async with engine.begin() as connection:
         row = (
             await connection.execute(
@@ -157,7 +160,7 @@ async def test_diagnostico_com_llm_registra_tokens_e_consome_a_cota(
         "requires_human_review": True,
     }
     provider = FakeProvider([json.dumps(answer)])
-    await diagnose(engine, {"diagnosis_id": diagnosis}, lambda n: provider)
+    await diagnose(engine, {"diagnosis_id": diagnosis}, lambda n, _project: provider)
     async with engine.begin() as connection:
         usage = (
             await connection.execute(

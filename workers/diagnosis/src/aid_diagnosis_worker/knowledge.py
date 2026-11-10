@@ -10,6 +10,7 @@ from typing import Any, Protocol
 
 from aid_db import platform_role
 from aid_diagnosis_engine.llm.base import LLMError, LLMProvider, LLMTransientError
+from aid_diagnosis_engine.llm.registry import EMBEDDING_MODELS
 from aid_knowledge.extract import ExtractionError
 from aid_knowledge.index import index_document
 from aid_knowledge.store import store_chunks
@@ -26,7 +27,7 @@ class Store(Protocol):
     async def read(self, path: str) -> bytes | None: ...
 
 
-ProviderFor = Callable[[str], LLMProvider]
+ProviderFor = Callable[[str, str | None], LLMProvider]
 
 
 async def fail(engine: AsyncEngine, document: Any, message: str) -> None:
@@ -51,7 +52,8 @@ async def index(
             await connection.execute(
                 text(
                     "select d.id::text, d.tenant_id::text, d.storage_path, d.content_type,"
-                    " d.body, t.llm_provider, t.llm_enabled from doctor.knowledge_documents d"
+                    " d.body, t.llm_provider, t.ai_project, t.llm_enabled"
+                    " from doctor.knowledge_documents d"
                     " join doctor.tenants t on t.id = d.tenant_id"
                     " where d.id = cast(:d as uuid) and d.status in ('indexing', 'ready')"
                 ),
@@ -70,7 +72,9 @@ async def index(
         await fail(engine, document, "Arquivo não encontrado no armazenamento.")
         return "failed"
     # Envio ao LLM desligado (#29): nada sai para o provedor; os Fragmentos ficam só com o texto.
-    provider = provider_for(document.llm_provider) if document.llm_enabled else None
+    provider = (
+        provider_for(document.llm_provider, document.ai_project) if document.llm_enabled else None
+    )
     model = provider.embedding_model if provider is not None else None
     try:
         # Sem Referências de negócio aqui: o documento é texto livre, não um Evento.
@@ -117,7 +121,8 @@ async def reindex_stale(engine: AsyncEngine, provider_for: ProviderFor) -> int:
     Organização e os que ficaram em `indexing` sem resposta. O pronto continua `ready`: a busca
     por texto segue achando os Fragmentos antigos até os novos chegarem. O Cloud Scheduler chama
     a cada hora."""
-    models = {name: provider_for(name).embedding_model for name in ("anthropic", "vertex")}
+    # O mapa provedor → modelo é o mesmo da tela de privacidade (registro dos provedores).
+    models = EMBEDDING_MODELS
     async with engine.begin() as connection:
         await platform_role(connection)
         result = await connection.execute(

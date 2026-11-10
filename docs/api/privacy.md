@@ -15,3 +15,11 @@
 - **Envio ao LLM desligado:** o Diagnóstico roda como rules_only, com a nota; a indexação da Base grava os Fragmentos sem embedding, e a busca vai só pelo texto. Nenhuma chamada ao provedor.
 - **Exclusão total:** depois da carência, o job congela a Organização (`status = 'deleted'`: token de ingestão e API param de aceitar escrita), apaga os arquivos das pastas da Organização nos dois buckets, os segredos dos Conectores no Vault e todo o schema `doctor` da Organização (cascade), e grava o comprovante em `deletion_receipts` (contagens e ids dos Conectores, para a verificação). `public.organizations` é do jayv-coder e não é tocada. Verificação: `SUPABASE_DB_URL=... uv run python scripts/verify_tenant_deleted.py <tenant_id>`.
 - **Titular:** a Referência vai no corpo e vira HMAC com a chave da Organização. Apagar tira os Eventos e a Referência das chaves de correlação das Execuções e das fusões; a Trilha de auditoria guarda só a quantidade apagada (`subject.erased`).
+
+## Perfil de IA (#45)
+
+| Rota | Quem | Efeito |
+|---|---|---|
+| `PUT /api/v1/privacy/ai-profile` | Owner `aal2` | `{ "profile": "standard" \| "br_region" }`. `dedicated` → `422 dedicated_by_contract` (é ligado pela operação da plataforma) |
+
+`GET /api/v1/privacy` traz também `ai_profile`, `ai_project` (projeto da capacidade dedicada, ou `null`), `ai_check` (última verificação diária: `checked_at`, `ok`, `in_region`, `hosts`, `region`, `detail`; `in_region = false` é divergência de região, `ok = false` com `in_region = true` é falha da chamada) e `reindex` (`model` do perfil, `total` de documentos prontos e `current` já nesse modelo; zerados com o envio ao LLM desligado, que não reindexa). Detalhes em [docs/operations/ia-perfis.md](../operations/ia-perfis.md).

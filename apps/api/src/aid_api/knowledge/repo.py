@@ -2,8 +2,9 @@
 que conferem Analyst ou acima na tabela. A busca usa o mesmo código do worker de diagnóstico."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
-from aid_knowledge.store import search
+from aid_knowledge.store import previous_models, search
 from sqlalchemy import text
 
 from aid_api.core.auth import Claims
@@ -28,6 +29,14 @@ ERRORS = {
     "42501": lambda: ApiError(403, "forbidden", "Seu Papel não permite esta ação."),
     "22023": lambda: ApiError(422, "invalid_filename", "Nome de arquivo inválido."),
 }
+
+
+@dataclass(frozen=True)
+class AiChoice:
+    provider: str | None
+    project: str | None
+    profile: str
+    models: list[str]
 
 
 class KnowledgeRepository:
@@ -93,20 +102,31 @@ class KnowledgeRepository:
                 text("select doctor.delete_knowledge_document(cast(:d as uuid))"), {"d": target}
             )
 
-    async def llm_provider(self, claims: Claims) -> str | None:
-        """Provedor da Organização, ou `None` se ela desligou o envio ao LLM (#29)."""
+    async def ai(self, claims: Claims) -> AiChoice:
+        """Provedor e perfil de IA da Organização (provedor `None` se ela desligou o envio ao
+        LLM, #29) e os modelos de embedding dos documentos prontos (ADR-0018)."""
         async with translated_tx(claims, ERRORS) as connection:
             found = (
                 await connection.execute(
                     text(
-                        "select llm_provider, llm_enabled from doctor.tenants"
-                        " where id = (select doctor.current_tenant_id())"
+                        "select llm_provider, llm_enabled, ai_profile, ai_project"
+                        " from doctor.tenants where id = (select doctor.current_tenant_id())"
                     )
                 )
             ).first()
-        if found is not None and not found.llm_enabled:
-            return None
-        return str(found.llm_provider) if found is not None else "anthropic"
+            models = (
+                await previous_models(connection, claims.tenant_id or "", None)
+                if found is not None and found.llm_enabled
+                else []
+            )
+        if found is None:
+            return AiChoice("anthropic", None, "standard", models)
+        return AiChoice(
+            str(found.llm_provider) if found.llm_enabled else None,
+            found.ai_project,
+            str(found.ai_profile),
+            models,
+        )
 
     async def search(
         self,
@@ -115,11 +135,20 @@ class KnowledgeRepository:
         k: int,
         embedding: Sequence[float] | None,
         model: str | None,
+        previous: Sequence[tuple[Sequence[float], str]] = (),
     ) -> list[KnowledgeHit]:
         # require_role já garante a Organização ativa; o RLS limita de novo.
         tenant = claims.tenant_id or ""
         async with translated_tx(claims, ERRORS) as connection:
-            hits = await search(connection, tenant, query, embedding=embedding, model=model, k=k)
+            hits = await search(
+                connection,
+                tenant,
+                query,
+                embedding=embedding,
+                model=model,
+                k=k,
+                previous=previous,
+            )
         return [
             KnowledgeHit(
                 origin=hit.origin,

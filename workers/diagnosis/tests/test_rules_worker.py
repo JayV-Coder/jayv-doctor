@@ -410,7 +410,10 @@ async def test_indexa_documento_e_reindexa_quando_o_modelo_muda(
             return b"# Runbook\n\nCliente CPF 529.982.247-25 com o job VL10 travado."
 
     provider = FakeProvider()
-    assert await index(engine, {"document_id": document}, Store(), lambda name: provider) == "ready"
+    assert (
+        await index(engine, {"document_id": document}, Store(), lambda name, project: provider)
+        == "ready"
+    )
     stored = await rows(
         engine,
         "select d.status, d.chunk_count, d.embedding_model, c.content from"
@@ -491,11 +494,11 @@ async def test_falha_definitiva_marca_o_documento_e_passageira_reentrega(
     provider = Provider() if failure else FakeProvider()
     if failure == "transient":
         with pytest.raises(LLMTransientError):
-            await index(engine, {"document_id": document}, Store(), lambda name: provider)
+            await index(engine, {"document_id": document}, Store(), lambda name, project: provider)
     else:
-        assert await index(engine, {"document_id": document}, Store(), lambda n: provider) == (
-            "failed"
-        )
+        assert await index(
+            engine, {"document_id": document}, Store(), lambda n, _project: provider
+        ) == ("failed")
     found = await rows(
         engine, "select status, error from doctor.knowledge_documents where id = :d", d=document
     )

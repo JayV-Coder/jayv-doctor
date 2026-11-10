@@ -136,3 +136,31 @@ async def test_classificacao_fora_das_categorias_conta_como_erro_no_hibrido() ->
     )
     result = await run_case(case, "hybrid", llm)
     assert result.predicted_category is None
+
+
+def test_compara_perfis_com_diferenca_de_qualidade_e_custo() -> None:
+    from aid_evaluation.compare import render as render_profiles
+
+    standard = {
+        "hybrid": {
+            "cases": 100,
+            "category_accuracy": 0.90,
+            "cause_accuracy": 0.80,
+            "inconclusive_rate": 0.95,
+            "hallucination_rate": 0.01,
+            "cost_usd": 2.0,
+            "latency_p95_ms": 9000.0,
+        }
+    }
+    brazil = {
+        "hybrid": {
+            **standard["hybrid"],
+            "category_accuracy": 0.87,
+            "cost_usd": 1.2,
+            "latency_p95_ms": 7200.0,
+        }
+    }
+    report = render_profiles({"standard": standard, "br_region": brazil})
+    assert "| Precisão de categoria | 90,0% | 87,0% (-3,0 p.p.) |" in report
+    assert "| Custo por Diagnóstico | US$ 0,0200 | US$ 0,0120 (-40%) |" in report
+    assert "7200 ms (-20%)" in report

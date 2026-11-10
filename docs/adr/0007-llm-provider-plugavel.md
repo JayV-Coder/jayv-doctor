@@ -1,3 +1,5 @@
 # LLMProvider plugável: Claude como padrão e Vertex Gemini como alternativa
 
 Todo acesso a modelos passa pela interface `LLMProvider` (`complete_structured`, `embed`) em `packages/diagnosis-engine`. A implementação padrão usa Anthropic Claude (`claude-sonnet-5-5` para diagnóstico e `claude-haiku-5-5` para classificação e resumo), com embeddings Voyage. A alternativa usa Vertex AI Gemini em `southamerica-east1`, para clientes que exigem processamento no Brasil ou no GCP. A escolha é feita por Organização. Cada Diagnóstico registra `model_version` e cada Fragmento registra `embedding_model`, porque trocar o modelo de embedding exige reindexar.
+
+Atualização (#45): a escolha passou a ser o perfil de IA da Organização, do qual o provedor é derivado. Ver [ADR-0018](0018-perfis-de-ia-por-organizacao.md).

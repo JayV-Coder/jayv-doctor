@@ -5,8 +5,16 @@ import { useState, useTransition } from "react";
 import { FormMessage } from "@/components/auth-shell";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import type { PrivacySettings } from "@/lib/privacy/api";
-import { classLabel, daysText, deletionText } from "@/lib/privacy/labels";
-import { cancelDeletion, requestDeletion, setLlm, setRetention } from "./actions";
+import {
+  AI_PROFILES,
+  checkText,
+  classLabel,
+  daysText,
+  deletionText,
+  profileChangeText,
+  reindexText,
+} from "@/lib/privacy/labels";
+import { cancelDeletion, requestDeletion, setAiProfile, setLlm, setRetention } from "./actions";
 
 type Props = {
   settings: PrivacySettings;
@@ -41,6 +49,7 @@ export function PrivacySection({ settings, manager, owner, slug }: Props) {
 
       <h2 className="label">LGPD e IA</h2>
       <LlmToggle enabled={settings.llm_enabled} manager={manager} />
+      <AiProfile settings={settings} owner={owner} />
       <ul className="list">
         <li>
           <Link className="li" href="/subprocessadores">
@@ -153,6 +162,90 @@ function LlmToggle({ enabled, manager }: { enabled: boolean; manager: boolean })
       </label>
       <FormMessage error={error} />
     </div>
+  );
+}
+
+// Perfil de IA (#45): o Owner com MFA escolhe e confirma (a troca muda onde os dados são
+// processados, e sair do dedicado só volta pela operação da plataforma).
+function AiProfile({ settings, owner }: { settings: PrivacySettings; owner: boolean }) {
+  const current = settings.ai_profile;
+  const [chosen, setChosen] = useState(current);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, startTransition] = useTransition();
+  const check = checkText(settings.ai_check);
+  const reindex = reindexText(settings.reindex);
+  const options =
+    current === "dedicated"
+      ? (["dedicated", "standard", "br_region"] as const)
+      : (["standard", "br_region"] as const);
+  const title = AI_PROFILES[chosen]?.title ?? chosen;
+  return (
+    <fieldset className="stack" aria-label="Perfil de IA">
+      <legend className="label">Perfil de IA</legend>
+      {options.map((profile) => (
+        <label key={profile} className="option">
+          <input
+            type="radio"
+            name="ai-profile"
+            value={profile}
+            checked={chosen === profile}
+            disabled={!owner || busy || profile === "dedicated"}
+            onChange={() => {
+              setChosen(profile);
+              setError(null);
+            }}
+          />
+          <span>
+            <strong>{AI_PROFILES[profile]?.title}</strong>
+            <span className="muted small">{AI_PROFILES[profile]?.detail}</span>
+          </span>
+        </label>
+      ))}
+      {owner && chosen !== current && (
+        <BottomSheet
+          title={`Trocar para o perfil ${title}`}
+          trigger={`Trocar para ${title}`}
+          triggerClassName="btn primary"
+          onClose={() => {
+            setError(null);
+          }}
+        >
+          <p className="small">{profileChangeText(current, chosen)}</p>
+          <FormMessage error={error} />
+          <button
+            type="button"
+            className="btn primary"
+            disabled={busy}
+            onClick={(event) => {
+              const dialog = event.currentTarget.closest("dialog");
+              startTransition(async () => {
+                const failure = await setAiProfile(chosen).catch(
+                  () => "Sem conexão. Tente de novo.",
+                );
+                setError(failure);
+                if (failure === null) dialog?.close();
+              });
+            }}
+          >
+            Confirmar a troca
+          </button>
+        </BottomSheet>
+      )}
+      {check && (
+        <p className={check.ok ? "muted small" : "alert"} role="status">
+          {check.text}
+        </p>
+      )}
+      {reindex && (
+        <p className="note" role="status">
+          {reindex}
+        </p>
+      )}
+      {!owner && <p className="muted small">Só o Owner com MFA troca o perfil de IA.</p>}
+      {current !== "dedicated" && (
+        <p className="muted small">Capacidade dedicada: fale com o suporte da plataforma.</p>
+      )}
+    </fieldset>
   );
 }
 

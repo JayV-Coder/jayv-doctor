@@ -98,7 +98,7 @@ async def diagnosed(engine: AsyncEngine, ids: dict[str, str], incident: str) -> 
         k=f"teste:{diagnosis}",
     )
     provider = FakeProvider()
-    assert await diagnose(engine, {"diagnosis_id": diagnosis}, lambda n: provider) in (
+    assert await diagnose(engine, {"diagnosis_id": diagnosis}, lambda n, _project: provider) in (
         "published",
         "inconclusive",
     )

@@ -21,10 +21,38 @@ class Deletion(BaseModel):
     scheduled_for: datetime
 
 
+AiProfile = Literal["standard", "br_region", "dedicated"]
+
+
+class AiCheck(BaseModel):
+    """Última verificação diária do perfil (ADR-0018): os hosts e a região efetivos."""
+
+    checked_at: datetime
+    ok: bool
+    # Falso só quando um host saiu do lugar do perfil (falha da chamada não conta).
+    in_region: bool
+    hosts: list[str]
+    region: str | None
+    detail: str | None
+
+
+class Reindex(BaseModel):
+    """Documentos prontos da Base e quantos já estão no modelo de embedding do perfil."""
+
+    model: str
+    total: int
+    current: int
+
+
 class PrivacySettings(BaseModel):
     retention: list[Retention]
     llm_enabled: bool
-    llm_provider: Literal["anthropic", "vertex"]
+    llm_provider: Literal["anthropic", "vertex", "vertex_dedicated"]
+    ai_profile: AiProfile
+    # Projeto do GCP com a capacidade dedicada (nulo: o da plataforma).
+    ai_project: str | None
+    ai_check: AiCheck | None
+    reindex: Reindex
     deletion: Deletion | None
 
 
@@ -33,6 +61,13 @@ class RetentionChange(BaseModel):
 
     data_class: DataClass
     days: int = Field(ge=1, le=3650)
+
+
+class AiProfileChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # O dedicado é contratado com a plataforma (a API recusa com 422).
+    profile: AiProfile
 
 
 class LlmChange(BaseModel):

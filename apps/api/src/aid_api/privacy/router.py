@@ -13,6 +13,7 @@ from aid_api.core.rate_limit import rate_limit
 from aid_api.core.references import reference_of
 from aid_api.privacy.repo import PrivacyRepository, get_privacy_repository
 from aid_api.privacy.schemas import (
+    AiProfileChange,
     DeletionRequest,
     LlmChange,
     PrivacySettings,
@@ -52,6 +53,15 @@ async def put_retention(
     change: RetentionChange, claims: Manager, repository: Repository, _: Idempotent
 ) -> Response:
     await repository.set_retention(claims, change)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/ai-profile", status_code=status.HTTP_204_NO_CONTENT)
+async def put_ai_profile(
+    change: AiProfileChange, claims: Manager, repository: Repository, _: Idempotent
+) -> Response:
+    """Perfil de IA (ADR-0018): Owner com MFA troca entre o padrão e o Brasil."""
+    await repository.set_ai_profile(claims, change.profile)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

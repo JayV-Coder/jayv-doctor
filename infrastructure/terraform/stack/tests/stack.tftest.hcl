@@ -250,6 +250,7 @@ run "cada_alerta_tem_runbook_e_vai_para_o_plantao" {
     condition = toset(keys(module.observability.alerts)) == toset([
       "dlq", "workers_stopped", "api_errors", "metrics_absent", "outbox_lag_seconds", "outbox_stuck",
       "ingestion_lag_seconds", "diagnosis_queue_seconds", "llm_error_rate_1h", "supabase_cpu_utilization",
+      "ai_region",
     ])
     error_message = "Os alertas do ticket (DLQ, outbox, workers, CPU, LLM, 5xx) mais outbox travada, filas e medidas ausentes."
   }

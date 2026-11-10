@@ -54,6 +54,9 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "time": datetime.fromtimestamp(record.created, UTC).isoformat(),
             **(_fields.get() or {}),
+            # Campos estruturados de um log específico (`extra={"fields": {...}}`), sem dado do
+            # cliente: ex. o host e a região de uma chamada de IA (ADR-0018).
+            **(getattr(record, "fields", None) or {}),
         }
         span = trace.get_current_span().get_span_context()
         if span.is_valid and self.project:

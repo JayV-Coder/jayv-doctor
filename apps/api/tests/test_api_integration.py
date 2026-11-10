@@ -792,9 +792,9 @@ async def test_diagnostico_pedido_pela_api_publicado_pelo_worker_e_lido_isolado(
         "requires_human_review": False,
     }
     provider = FakeProvider([json.dumps(answer)])
-    assert await diagnose(engine, {"diagnosis_id": queued.diagnosis_id}, lambda n: provider) == (
-        "published"
-    )
+    assert await diagnose(
+        engine, {"diagnosis_id": queued.diagnosis_id}, lambda n, _project: provider
+    ) == ("published")
 
     detail = await repository.detail(analyst, queued.diagnosis_id)
     assert (detail.status, detail.stage, detail.confidence, detail.responsible_system) == (

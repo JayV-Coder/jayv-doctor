@@ -10,7 +10,7 @@ import os
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from datetime import timedelta
-from typing import Any, cast
+from typing import Any, cast, get_args
 
 from aid_db import platform_role, tenant_role
 from aid_diagnosis_engine.diagnosis import (
@@ -25,6 +25,7 @@ from aid_diagnosis_engine.diagnosis import (
     RuleItem,
     Stage,
 )
+from aid_diagnosis_engine.diagnosis.engine import Routing
 from aid_diagnosis_engine.diagnosis.model import Mode
 from aid_diagnosis_engine.llm.base import LLMProvider, LLMUnavailableError
 from aid_diagnosis_engine.llm.client import GuardedLLM
@@ -118,6 +119,26 @@ def estimate_cost(model: str | None, input_tokens: int, output_tokens: int) -> f
     if price is None:
         return None
     return round(input_tokens / 1e6 * price[0] + output_tokens / 1e6 * price[1], 6)
+
+
+def routing(profile: str) -> Routing:
+    """`AID_LLM_ROUTING` (#47, ADR-0020): JSON por perfil de IA, ex. `{"standard":
+    "by_complexity"}`; perfil fora do mapa fica em `fixed`. O dedicado também: a capacidade
+    contratada é por modelo, e o menor sem capacidade daria 429. Valor inválido fica em `fixed`,
+    com aviso no log."""
+    raw = os.environ.get("AID_LLM_ROUTING", "") or "{}"
+    try:
+        found = json.loads(raw)
+    except ValueError:
+        found = None
+    if not isinstance(found, dict):
+        log.warning("AID_LLM_ROUTING inválido (esperado JSON por perfil); usando fixed")
+        return "fixed"
+    chosen = found.get(profile, "fixed")
+    if chosen not in get_args(Routing):
+        log.warning("AID_LLM_ROUTING[%s] desconhecido: %s; usando fixed", profile, chosen)
+        return "fixed"
+    return cast("Routing", chosen)
 
 
 def guarded(provider: LLMProvider, tenant: str) -> GuardedLLM:
@@ -684,6 +705,7 @@ async def diagnose(
         motor = DiagnosisEngine(
             guarded(provider, diagnosis.tenant_id) if allowed and provider is not None else None,
             scope=diagnosis.tenant_id,
+            routing=routing(diagnosis.ai_profile),
             without_ai=LLM_DISABLED
             if not enabled
             else LOCAL_MISSING

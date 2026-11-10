@@ -46,3 +46,22 @@ A Confiança do Diagnóstico é **heurística** e continua rotulada assim na tel
 2. comparar, em cada faixa, a Confiança média com a taxa real de Causa provável correta (diagrama de confiabilidade) e medir o erro de calibração esperado (ECE);
 3. ajustar o mapeamento (regressão isotônica sobre a Confiança do modelo e os ajustes da verificação) num conjunto separado e validar no restante;
 4. só com o ECE abaixo de 5 pontos o rótulo muda, numa PR própria, com o relatório da calibração e uma ADR.
+
+## Modelos menores e roteamento (#47)
+
+Decisão em [ADR-0020](../adr/0020-roteamento-de-modelo-e-sem-fine-tuning.md). Cada variante roda com o mesmo dataset e o mesmo juiz, e o `compare` diz se pode ser adotada (custo médio ≥ 30% menor, perda ≤ 2 p.p.):
+
+```bash
+J="--modes hybrid --judge --judge-provider anthropic"
+uv run python -m aid_evaluation run $J --provider anthropic --json tests/evaluation/reports/sonnet.json
+uv run python -m aid_evaluation run $J --provider anthropic --routing by_complexity --json tests/evaluation/reports/roteado.json
+uv run python -m aid_evaluation run $J --provider anthropic --routing classify_first --json tests/evaluation/reports/classifica.json
+uv run python -m aid_evaluation run $J --provider anthropic --routing fast --json tests/evaluation/reports/haiku.json
+uv run python -m aid_evaluation run $J --provider vertex --routing fast --json tests/evaluation/reports/flash.json
+uv run python -m aid_evaluation run $J --provider local --local-url http://vllm.interno:8000/v1 --local-model llama-3.1-70b-instruct --json tests/evaluation/reports/llama70b.json
+uv run python -m aid_evaluation compare sonnet=tests/evaluation/reports/sonnet.json roteado=tests/evaluation/reports/roteado.json classifica=tests/evaluation/reports/classifica.json haiku=tests/evaluation/reports/haiku.json flash=tests/evaluation/reports/flash.json llama70b=tests/evaluation/reports/llama70b.json
+```
+
+Para o open-weights, ponha em `tests/evaluation/prices.json` o custo do servidor por milhão de tokens (GPU por hora ÷ tokens por hora medidos), senão o `compare` não recomenda. Publique a tabela e a recomendação aqui. Se uma variante passar, mude `llm_routing` no tfvars **para aquele perfil** (ex. `{ standard = "by_complexity" }`) e registre a data. Se nenhuma passar, registre por quê.
+
+**Relatório:** pendente da primeira rodada com chaves reais (ver [pendencias.md](pendencias.md)). Até lá, o roteamento fica em `fixed`.

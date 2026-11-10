@@ -621,3 +621,20 @@ def test_local_tem_disjuntor_por_organizacao_e_uma_tentativa_com_o_prazo_dele() 
     # Os provedores em nuvem seguem com o disjuntor e as tentativas de sempre.
     cloud = guarded(FakeProvider(), "tenant-a")
     assert cloud.policy.attempts == 3
+
+
+def test_roteamento_e_por_perfil_e_valor_invalido_fica_no_maior(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aid_diagnosis_worker.diagnose import routing
+
+    monkeypatch.setenv("AID_LLM_ROUTING", '{"standard": "by_complexity"}')
+    assert (routing("standard"), routing("br_region"), routing("dedicated")) == (
+        "by_complexity",
+        "fixed",
+        "fixed",
+    )
+    monkeypatch.setenv("AID_LLM_ROUTING", '{"standard": "by-complexity"}')
+    assert routing("standard") == "fixed"
+    monkeypatch.setenv("AID_LLM_ROUTING", "by_complexity")
+    assert routing("standard") == "fixed"

@@ -127,3 +127,17 @@ variable "atlassian_client_id" {
   type        = string
   default     = ""
 }
+
+variable "llm_routing" {
+  description = "Roteamento do modelo do Diagnóstico por perfil de IA (#47, ADR-0020): { standard = \"by_complexity\" }. Perfil fora do mapa fica em fixed (sempre o maior). Mude só com a recomendação de aid_evaluation compare; o dedicado só com capacidade contratada para o modelo menor."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for profile, routing in var.llm_routing :
+      contains(["standard", "br_region", "dedicated"], profile) && contains(["fixed", "fast", "by_complexity", "classify_first"], routing)
+    ])
+    error_message = "llm_routing: perfis standard, br_region ou dedicated; roteamentos fixed, fast, by_complexity ou classify_first."
+  }
+}

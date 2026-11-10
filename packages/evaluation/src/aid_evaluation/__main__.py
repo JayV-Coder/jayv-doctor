@@ -18,7 +18,9 @@ import sys
 from dataclasses import asdict
 from datetime import date
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, cast, get_args
+
+from aid_diagnosis_engine.diagnosis.engine import Routing
 
 from aid_evaluation.dataset import Case, Label, dump, load
 from aid_evaluation.harness import CATEGORIES, CaseResult, Judge, run
@@ -37,12 +39,28 @@ PRICES = ROOT / "prices.json"
 TOLERANCE = 0.02
 
 
-def guarded(provider: str) -> Any:
+def guarded(provider: str, local: tuple[str, str] | None = None) -> Any:
+    """`local`: (URL, modelo) do servidor open-weights, quando `provider` é `local`."""
     from aid_diagnosis_engine.llm.client import GuardedLLM
     from aid_diagnosis_engine.llm.registry import provider_for
+    from aid_diagnosis_engine.llm.resilience import RetryPolicy
 
+    if provider == "local":
+        # Modelos open-weights (8 a 70B, #47) num servidor compatível com a API da OpenAI, com
+        # uma tentativa e o prazo longo (como o worker): repetir manda o prompt de novo a um
+        # servidor que atende um por vez.
+        from aid_diagnosis_engine.llm.local import LocalProvider, PrivateEndpoint
+
+        if not local or not all(local):
+            raise SystemExit("o provedor local precisa de --local-url e --local-model")
+        model = LocalProvider(PrivateEndpoint(local[0], LOCAL_TIMEOUT), local[1], LOCAL_TIMEOUT)
+        policy = RetryPolicy(attempts=1, timeout_seconds=LOCAL_TIMEOUT + 15)
+        return lambda: GuardedLLM(model, policy=policy)
     chosen = provider_for(provider)
     return lambda: GuardedLLM(chosen)
+
+
+LOCAL_TIMEOUT = 300.0
 
 
 def dataset(paths: list[str] | None) -> list[Case]:
@@ -56,15 +74,17 @@ async def evaluate(
     provider: str | None,
     judge: bool,
     judge_provider: str | None = None,
+    routing: str = "fixed",
+    local: tuple[str, str] | None = None,
 ) -> tuple[list[Metrics], list[CaseResult]]:
     """`judge_provider`: o mesmo juiz em todos os perfis (#45), para a diferença de qualidade
     ser do modelo avaliado e não do juiz; sem ele, o juiz é o próprio provedor."""
-    llm = guarded(provider) if provider else None
+    llm = guarded(provider, local) if provider else None
     referee: Judge | None = None
     if judge and provider:
         from aid_evaluation.judge import LLMJudge
 
-        referee = LLMJudge(guarded(judge_provider or provider)())
+        referee = LLMJudge(guarded(judge_provider or provider, local)())
     prices = json.loads(PRICES.read_text(encoding="utf-8")) if PRICES.exists() else None
     metrics, everything = [], []
     for mode in modes:
@@ -76,6 +96,7 @@ async def evaluate(
             cast("Any", mode),
             llm if mode == "hybrid" else None,
             referee if mode == "hybrid" else None,
+            cast("Any", routing),
         )
         metrics.append(summarize(mode, results, prices))
         everything += results
@@ -101,7 +122,7 @@ def command_run(args: argparse.Namespace) -> None:
     cases = dataset(args.dataset)
     cases = cases[: args.limit] if args.limit else cases
     metrics, results = asyncio.run(
-        evaluate(cases, args.modes, args.provider, args.judge, args.judge_provider)
+        evaluate(cases, args.modes, args.provider, args.judge, args.judge_provider, args.routing)
     )
     notes = []
     if "hybrid" not in args.modes:
@@ -117,6 +138,13 @@ def command_run(args: argparse.Namespace) -> None:
     names = ", ".join(args.dataset) if args.dataset else "datasets/*.jsonl"
     report.write_text(render(cases, metrics, names, notes), encoding="utf-8")
     write_json(metrics, Path(args.json))
+    # O juiz vai junto: o `compare` só recomenda entre variantes com o mesmo juiz.
+    written = json.loads(Path(args.json).read_text(encoding="utf-8"))
+    for found in written.values():
+        found["judge"] = (args.judge_provider or args.provider) if args.judge else None
+    Path(args.json).write_text(
+        json.dumps(written, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     Path(args.results).write_text(
         "\n".join(json.dumps(asdict(r), ensure_ascii=False) for r in results) + "\n",
         encoding="utf-8",
@@ -246,7 +274,11 @@ def main() -> None:
     runner.add_argument(
         "--modes", nargs="+", default=["rules_only"], choices=["rules_only", "hybrid"]
     )
-    runner.add_argument("--provider", choices=["anthropic", "vertex", "vertex_dedicated"])
+    runner.add_argument("--provider", choices=["anthropic", "vertex", "vertex_dedicated", "local"])
+    # #47: modelo menor em todas as etapas (`fast`) ou só nos casos simples (`by_complexity`).
+    runner.add_argument("--routing", choices=list(get_args(Routing)), default="fixed")
+    runner.add_argument("--local-url", help="servidor compatível com a API da OpenAI (/v1)")
+    runner.add_argument("--local-model", help="modelo servido (ex.: llama-3.1-70b-instruct)")
     # Perfil de IA (ADR-0018): escolhe o provedor dele.
     runner.add_argument("--profile", choices=["standard", "br_region", "dedicated"])
     # Juiz fixo entre perfis: compare só faz sentido com o mesmo juiz.

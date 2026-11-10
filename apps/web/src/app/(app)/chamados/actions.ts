@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, type ServiceNowSaved } from "@/lib/api";
 import { send as post, type Outcome } from "@/lib/forms/send";
 import { parseFields } from "@/lib/itsm/labels";
 
@@ -10,10 +10,11 @@ export type { Outcome };
 const OPTIONS = {
   page: "/chamados",
   messages: {
-    jira_not_configured: "Conecte e configure o Jira antes.",
+    itsm_not_configured: "Conecte e configure o ITSM em Chamados (ITSM) antes.",
     invalid_site: "O site escolhido não está na autorização.",
     jira_unavailable: "O app do Jira não está configurado na plataforma.",
-    not_found: "Jira não conectado.",
+    not_found: "Conexão não encontrada.",
+    secret_required: "Informe o client secret (primeira vez ou instância nova).",
   },
 };
 
@@ -61,12 +62,50 @@ export async function configureJira(form: FormData, key: string): Promise<Outcom
   );
 }
 
+const SYSTEMS = ["sap", "salesforce", "gcp", "other"] as const;
+
+export async function configureServiceNow(
+  form: FormData,
+  key: string,
+): Promise<Outcome<ServiceNowSaved>> {
+  const groups = Object.fromEntries(
+    SYSTEMS.map((system) => [system, text(form, `group-${system}`)]).filter(([, group]) => group),
+  ) as Record<string, string>;
+  return post<ServiceNowSaved>(
+    "/itsm/servicenow",
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        instance_url: text(form, "instance").toLowerCase().replace(/\/+$/, ""),
+        client_id: text(form, "client-id"),
+        // Em branco mantém o secret que já está no Vault.
+        client_secret: text(form, "client-secret") || null,
+        assignment_groups: groups,
+        default_group: text(form, "default-group") || null,
+        sync_status: form.get("sync") === "on",
+        rotate_hook: form.get("rotate") === "on",
+      }),
+    },
+    key,
+    OPTIONS,
+  );
+}
+
+export async function disconnectServiceNow(key: string): Promise<Outcome> {
+  return post("/itsm/servicenow", { method: "DELETE" }, key, OPTIONS);
+}
+
 export async function disconnectJira(key: string): Promise<Outcome> {
   return post("/itsm/jira", { method: "DELETE" }, key, OPTIONS);
 }
 
-export async function openTicket(incident: string, key: string): Promise<Outcome> {
-  return post(`/incidents/${encodeURIComponent(incident)}/tickets`, { method: "POST" }, key, {
+export async function openTicket(
+  incident: string,
+  provider: "jira" | "servicenow",
+  key: string,
+): Promise<Outcome> {
+  const path = `/incidents/${encodeURIComponent(incident)}/tickets?provider=${provider}`;
+  return post(path, { method: "POST" }, key, {
     ...OPTIONS,
     page: `/incidentes/${incident}`,
   });

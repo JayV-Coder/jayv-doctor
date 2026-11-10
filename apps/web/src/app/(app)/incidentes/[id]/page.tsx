@@ -12,7 +12,7 @@ import { Chip } from "@/components/ui/chip";
 import { ErrorState } from "@/components/ui/error-state";
 import { ListItem } from "@/components/ui/list-item";
 import { ReloadButton } from "@/components/ui/reload-button";
-import { getJira, getMe, listTickets } from "@/lib/api";
+import { getJira, getMe, getServiceNow, listTickets } from "@/lib/api";
 import {
   durationText,
   executionTitle,
@@ -64,13 +64,14 @@ export default async function IncidentPage({
   searchParams: Promise<{ versao?: string | string[] }>;
 }) {
   const [{ id }, { versao }] = await Promise.all([params, searchParams]);
-  const [incident, comments, me, versions, tickets, jira] = await Promise.all([
+  const [incident, comments, me, versions, tickets, jira, servicenow] = await Promise.all([
     getIncident(id),
     listComments(id),
     getMe(),
     listDiagnoses(id),
     listTickets(id),
     getJira(),
+    getServiceNow(),
   ]);
   if (incident === "not_found") notFound();
   if (incident === null) {
@@ -81,6 +82,13 @@ export default async function IncidentPage({
     );
   }
   const operator = OPERATORS.includes(me?.active_role ?? "");
+  // ITSM com conexão ativa: Jira com projeto e ServiceNow com instância (#43, #44).
+  const providers = [
+    ...(jira?.status === "active" && jira.project_key ? (["jira"] as const) : []),
+    ...(servicenow?.status === "active" && servicenow.instance_url
+      ? (["servicenow"] as const)
+      : []),
+  ];
   const chosen = versions?.find((item) => String(item.version) === versao) ?? versions?.[0] ?? null;
   // A anterior só serve para as diferenças, que não aparecem enquanto a escolhida roda.
   const previous =
@@ -153,11 +161,12 @@ export default async function IncidentPage({
           Relatório
         </Link>
       </div>
-      {(tickets?.length || (jira?.status === "active" && jira.project_key)) && (
+      {(Boolean(tickets?.length) || providers.length > 0) && (
         <TicketCard
           incidentId={incident.id}
           tickets={tickets ?? []}
-          canOpen={operator && jira?.status === "active"}
+          providers={providers}
+          canOpen={operator}
           resolved={incident.status === "resolved"}
         />
       )}

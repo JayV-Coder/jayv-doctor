@@ -16,7 +16,15 @@ from aid_api.core.auth import Claims
 from aid_api.core.db import anonymous_tx, translated_tx
 from aid_api.core.errors import ApiError
 from aid_api.core.tokens import token_hash
-from aid_api.itsm.schemas import Authorization, JiraConfig, JiraConnection, Ticket
+from aid_api.itsm.schemas import (
+    Authorization,
+    JiraConfig,
+    JiraConnection,
+    ServiceNowConfig,
+    ServiceNowConnection,
+    ServiceNowSaved,
+    Ticket,
+)
 
 AUTHORIZE_URL = "https://auth.atlassian.com/authorize"
 TOKEN_URL = "https://auth.atlassian.com/oauth/token"  # noqa: S105 - endereço, não segredo
@@ -28,20 +36,39 @@ CONNECTION_COLUMNS = (
     " sync_status, jira_webhook_expires_at, last_error"
 )
 TICKET_COLUMNS = (
-    "id::text, provider, status, external_key, url, external_status, error, created_at,"
-    " last_synced_at"
+    "id::text, provider, status, external_key, url, external_status, error, assignment_group,"
+    " created_at, last_synced_at"
+)
+SERVICENOW_COLUMNS = (
+    "status, instance_url, client_id, impact_map, assignment_groups, default_group, sync_status,"
+    " last_error"
 )
 
 
 ERRORS = {
     "42501": lambda: ApiError(403, "forbidden", "Seu Papel não permite esta ação."),
     "P0002": lambda: ApiError(404, "not_found", "Incidente ou conexão do Jira não encontrada."),
-    "DR080": lambda: ApiError(409, "jira_not_configured", "Conecte e configure o Jira antes."),
+    "DR080": lambda: ApiError(
+        409, "itsm_not_configured", "Conecte e configure o ITSM em Chamados (ITSM) antes."
+    ),
     "DR081": lambda: ApiError(
         400, "invalid_state", "A autorização do Jira venceu ou não é desta sessão: tente de novo."
     ),
     "DR082": lambda: ApiError(422, "invalid_site", "O site escolhido não está na autorização."),
+    "DR083": lambda: ApiError(
+        422, "validation_error", "Grupos: um por Sistema (SAP, Salesforce, GCP ou Outro)."
+    ),
+    "DR084": lambda: ApiError(
+        422, "secret_required", "Informe o client secret (primeira vez ou instância nova)."
+    ),
+    "DR085": lambda: ApiError(
+        409, "conflict", "A configuração mudou ao mesmo tempo em outra sessão: tente de novo."
+    ),
 }
+
+
+def public_api_url() -> str:
+    return os.environ.get("AID_PUBLIC_API_URL", "http://127.0.0.1:8000").rstrip("/")
 
 
 def client_credentials() -> tuple[str, str, str]:
@@ -184,12 +211,80 @@ class ItsmRepository:
             )
             return [Ticket.model_validate(dict(row)) for row in result.mappings()]
 
-    async def request(self, claims: Claims, incident: str) -> list[Ticket]:
+    async def request(self, claims: Claims, incident: str, provider: str) -> list[Ticket]:
         async with translated_tx(claims, ERRORS, self.engine) as db:
             await db.execute(
-                text("select doctor.request_ticket(cast(:i as uuid))"), {"i": incident}
+                text("select doctor.request_ticket(cast(:i as uuid), :p)"),
+                {"i": incident, "p": provider},
             )
         return await self.tickets(claims, incident)
+
+    async def servicenow(self, claims: Claims) -> ServiceNowConnection | None:
+        async with translated_tx(claims, ERRORS, self.engine) as db:
+            row = (
+                (
+                    await db.execute(
+                        text(
+                            f"select {SERVICENOW_COLUMNS} from doctor.itsm_connections"  # noqa: S608
+                            " where provider = 'servicenow'"
+                        )
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            return ServiceNowConnection.model_validate(dict(row)) if row else None
+
+    async def configure_servicenow(
+        self, claims: Claims, config: ServiceNowConfig
+    ) -> ServiceNowSaved:
+        current = await self.servicenow(claims)
+        # Endereço novo só na primeira vez, a pedido ou com instância nova (a Business Rule da
+        # instância antiga para de valer); fora isso, a Business Rule guarda o atual.
+        fresh = current is None or config.rotate_hook or current.instance_url != config.instance_url
+        token = secrets.token_urlsafe(32) if fresh else None
+        async with translated_tx(claims, ERRORS, self.engine) as db:
+            await db.execute(
+                text(
+                    "select doctor.configure_servicenow(:u, :c, :s, cast(:m as jsonb),"
+                    " cast(:g as jsonb), :d, :y, :h)"
+                ),
+                {
+                    "u": config.instance_url,
+                    "c": config.client_id.strip(),
+                    "s": config.client_secret,
+                    # Nulo mantém o mapa atual (a tela não o edita).
+                    "m": None
+                    if config.impact_map is None
+                    else json.dumps(
+                        {key: value.model_dump() for key, value in config.impact_map.items()}
+                    ),
+                    "g": json.dumps(
+                        {key: value.strip() for key, value in config.assignment_groups.items()}
+                    ),
+                    "d": config.default_group,
+                    "y": config.sync_status,
+                    "h": token,
+                },
+            )
+        saved = await self.servicenow(claims)
+        if saved is None:
+            raise ApiError(404, "not_found", "ServiceNow não conectado.")
+        return ServiceNowSaved(
+            connection=saved,
+            hook_url=f"{public_api_url()}/api/v1/itsm/servicenow/hooks/{token}" if token else None,
+        )
+
+    async def disconnect_servicenow(self, claims: Claims) -> None:
+        async with translated_tx(claims, ERRORS, self.engine) as db:
+            await db.execute(text("select doctor.disconnect_servicenow()"))
+
+    async def servicenow_hook(self, token: str, number: str | None) -> None:
+        async with anonymous_tx({}) as db:
+            await db.execute(
+                text("select doctor.servicenow_hook(:h, :n)"),
+                {"h": token_hash(token), "n": number},
+            )
 
     async def hook(self, token: str, issue_key: str | None) -> None:
         async with anonymous_tx({}) as db:

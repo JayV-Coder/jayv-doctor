@@ -13,6 +13,7 @@ import pytest
 import pytest_asyncio
 from aid_alerts import Message
 from aid_alerts.signing import verify
+from aid_notifier import servicenow
 from aid_notifier.channels import DeliveryError, PushTarget, Senders
 from aid_notifier.jira import create_ticket, maintain, post_comment, sync
 from aid_notifier.notify import evaluate, scan
@@ -1126,3 +1127,273 @@ async def test_evento_do_jira_rele_so_a_issue_dele(
     jira = FakeJira()
     await sync(engine, {"connection_id": connection, "issue_key": "SUST-882"}, jira.transport())
     assert jira.reads == ["SUST-882"]
+
+
+class FakeServiceNow:
+    """Instância falsa: token por client credentials, Table API de incident."""
+
+    def __init__(self) -> None:
+        self.created: list[dict[str, Any]] = []
+        self.existing: list[dict[str, Any]] = []
+        self.state = {"value": "2", "display_value": "In Progress"}
+        self.token_status = 200
+        self.reads: list[str] = []
+        self.groups = {"SAP Basis": "1" * 32, "Service Desk": "2" * 32, "CRM": "3" * 32}
+        self.read_status = 200
+
+    def transport(self) -> httpx.MockTransport:
+        def handle(request: httpx.Request) -> httpx.Response:
+            assert request.url.host == "acme.service-now.com"
+            path = request.url.path
+            if path == "/oauth_token.do":
+                if self.token_status != 200:
+                    return httpx.Response(self.token_status, json={"error": "invalid_client"})
+                return httpx.Response(200, json={"access_token": "sn", "expires_in": 1800})
+            assert request.headers["authorization"] == "Bearer sn"
+            if path == "/api/now/table/sys_user_group":
+                name = request.url.params["sysparm_query"].removeprefix("name=")
+                found = [{"sys_id": self.groups[name]}] if name in self.groups else []
+                return httpx.Response(200, json={"result": found})
+            if path == "/api/now/table/incident" and request.method == "GET":
+                return httpx.Response(200, json={"result": self.existing})
+            if path == "/api/now/table/incident" and request.method == "POST":
+                assert "sysparm_input_display_value" not in request.url.params
+                self.created.append(json.loads(request.content))
+                return httpx.Response(
+                    201, json={"result": {"sys_id": "a" * 32, "number": "INC0010001"}}
+                )
+            if path.startswith("/api/now/table/incident/"):
+                self.reads.append(path.rsplit("/", 1)[-1])
+                if self.read_status != 200:
+                    return httpx.Response(
+                        self.read_status, json={"error": {"message": "No Record"}}
+                    )
+                return httpx.Response(200, json={"result": {"state": self.state}})
+            return httpx.Response(404)
+
+        return httpx.MockTransport(handle)
+
+
+async def servicenow_connection(engine: AsyncEngine, org: dict[str, str]) -> str:
+    connection = str(uuid4())
+    await run(
+        engine,
+        "insert into doctor.itsm_connections (id, tenant_id, provider, status, instance_url,"
+        " client_id, assignment_groups, default_group, secret_id) values (cast(:c as uuid), :t,"
+        " 'servicenow', 'active', 'https://acme.service-now.com', 'app',"
+        ' \'{"sap": "SAP Basis", "salesforce": "CRM"}\', \'Service Desk\','
+        " vault.create_secret('{\"client_secret\": \"s3\"}', 'doctor/sn/' || cast(:c as text)))",
+        c=connection,
+        t=org["tenant"],
+    )
+    return connection
+
+
+async def servicenow_ticket(engine: AsyncEngine, org: dict[str, str], system: str | None) -> str:
+    found = await incident(engine, org, "critical")
+    if system is not None:
+        diagnosis = str(uuid4())
+        await run(
+            engine,
+            "insert into doctor.diagnoses (id, tenant_id, incident_id, version, requested_mode,"
+            " mode, processing_key, status, stage, classification, probable_cause, confidence,"
+            " responsible_system) values (cast(:d as uuid), :t, :i, 1, 'rules_only',"
+            " 'rules_only', :k, 'running', 'verification', 'UPSTREAM_TIMEOUT',"
+            " 'O SAP não respondeu a tempo.', 0.68, :s)",
+            d=diagnosis,
+            t=org["tenant"],
+            i=found,
+            k=f"k-{diagnosis}",
+            s=system,
+        )
+        await run(
+            engine,
+            "update doctor.diagnoses set status = 'published', stage = 'done',"
+            " published_at = now() where id = cast(:d as uuid)",
+            d=diagnosis,
+        )
+    await run(
+        engine,
+        "select doctor.queue_ticket(cast(:t as uuid), cast(:i as uuid), null, null, 'servicenow')",
+        t=org["tenant"],
+        i=found,
+    )
+    [ticket] = await rows(
+        engine,
+        "select id::text from doctor.incident_tickets where incident_id = cast(:i as uuid)",
+        i=found,
+    )
+    return str(ticket["id"])
+
+
+@pytest.mark.asyncio
+async def test_sistema_responsavel_sap_vai_para_o_grupo_mapeado_para_sap(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    """Critério do #44."""
+    await servicenow_connection(engine, org)
+    ticket = await servicenow_ticket(engine, org, "sap")
+    instance = FakeServiceNow()
+    assert await create_ticket_any(engine, ticket, instance) == "open"
+    [created] = instance.created
+    # O grupo vai pelo sys_id; impact e urgency pelos valores crus.
+    assert (created["assignment_group"], created["impact"], created["urgency"]) == (
+        "1" * 32,
+        "1",
+        "1",
+    )
+    assert created["correlation_id"] == ticket
+    assert "Confiança heurística: 0,68" in created["work_notes"]
+    assert "Sistema responsável: SAP" in created["work_notes"]
+    assert "/incidentes/" in created["work_notes"]
+    [row] = await rows(
+        engine,
+        "select status, external_key, assignment_group, url from doctor.incident_tickets"
+        " where id = cast(:t as uuid)",
+        t=ticket,
+    )
+    assert (row["status"], row["external_key"], row["assignment_group"]) == (
+        "open",
+        "INC0010001",
+        "SAP Basis",
+    )
+    assert row["url"].startswith("https://acme.service-now.com/nav_to.do?uri=incident.do")
+
+
+async def create_ticket_any(engine: AsyncEngine, ticket: str, instance: FakeServiceNow) -> str:
+    from aid_notifier.itsm import create_ticket as dispatch
+
+    return await dispatch(engine, ticket, instance.transport())
+
+
+@pytest.mark.asyncio
+async def test_indeterminado_vai_para_o_grupo_padrao(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    await servicenow_connection(engine, org)
+    instance = FakeServiceNow()
+    for system in (None, "gcp"):
+        ticket = await servicenow_ticket(engine, org, system)
+        await create_ticket_any(engine, ticket, instance)
+    assert [c["assignment_group"] for c in instance.created] == ["2" * 32, "2" * 32]
+    assert "Diagnóstico ainda não publicado." in instance.created[0]["work_notes"]
+
+
+@pytest.mark.asyncio
+async def test_incident_ja_criado_e_adotado_pelo_correlation_id(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    await servicenow_connection(engine, org)
+    ticket = await servicenow_ticket(engine, org, "sap")
+    instance = FakeServiceNow()
+    instance.existing = [{"sys_id": "b" * 32, "number": "INC0010009"}]
+    assert await create_ticket_any(engine, ticket, instance) == "open"
+    assert instance.created == []
+    [row] = await rows(
+        engine,
+        "select external_key from doctor.incident_tickets where id = cast(:t as uuid)",
+        t=ticket,
+    )
+    assert row["external_key"] == "INC0010009"
+
+
+@pytest.mark.asyncio
+async def test_resolvido_no_servicenow_volta_como_done(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    connection = await servicenow_connection(engine, org)
+    ticket = await servicenow_ticket(engine, org, "sap")
+    instance = FakeServiceNow()
+    await create_ticket_any(engine, ticket, instance)
+    instance.state = {"value": "6", "display_value": "Resolved"}
+    from aid_notifier.itsm import sync as dispatch
+
+    await dispatch(
+        engine, {"connection_id": connection, "issue_key": "INC0010001"}, instance.transport()
+    )
+    [row] = await rows(
+        engine,
+        "select status, external_status from doctor.incident_tickets where id = cast(:t as uuid)",
+        t=ticket,
+    )
+    assert (row["status"], row["external_status"]) == ("done", "Resolved")
+    assert instance.reads == ["a" * 32]
+
+
+@pytest.mark.asyncio
+async def test_credenciais_recusadas_pedem_nova_configuracao(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    connection = await servicenow_connection(engine, org)
+    instance = FakeServiceNow()
+    instance.token_status = 401
+    await servicenow.sync(
+        engine, {"connection_id": connection, "check": True}, instance.transport()
+    )
+    [state] = await rows(
+        engine,
+        "select status, last_error from doctor.itsm_connections where id = cast(:c as uuid)",
+        c=connection,
+    )
+    assert state["status"] == "needs_reauth"
+    assert "client id" in state["last_error"]
+
+
+@pytest.mark.asyncio
+async def test_regra_com_canal_servicenow_abre_o_incident(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    await servicenow_connection(engine, org)
+    sn_channel = await channel(engine, org, "servicenow")
+    await rule(engine, org, {"type": "incident", "min_severity": "critical"}, [sn_channel])
+    found = await incident(engine, org, "critical")
+    await evaluate(
+        engine, {"source": "incident.opened", "incident_id": found}, Fake().senders(), NOON
+    )
+    [ticket] = await rows(
+        engine,
+        "select provider, status from doctor.incident_tickets where incident_id = cast(:i as uuid)",
+        i=found,
+    )
+    assert (ticket["provider"], ticket["status"]) == ("servicenow", "creating")
+
+
+@pytest.mark.asyncio
+async def test_grupo_que_nao_existe_falha_o_chamado_com_o_motivo(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    await servicenow_connection(engine, org)
+    ticket = await servicenow_ticket(engine, org, "sap")
+    instance = FakeServiceNow()
+    del instance.groups["SAP Basis"]
+    assert await create_ticket_any(engine, ticket, instance) == "failed"
+    [row] = await rows(
+        engine, "select error from doctor.incident_tickets where id = cast(:t as uuid)", t=ticket
+    )
+    assert "SAP Basis" in row["error"]
+    assert instance.created == []
+
+
+@pytest.mark.asyncio
+async def test_leitura_que_falha_vai_para_o_fim_da_fila(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    connection = await servicenow_connection(engine, org)
+    ticket = await servicenow_ticket(engine, org, "sap")
+    instance = FakeServiceNow()
+    await create_ticket_any(engine, ticket, instance)
+    await run(
+        engine,
+        "update doctor.incident_tickets set last_synced_at = now() - interval '1 day'"
+        " where id = cast(:t as uuid)",
+        t=ticket,
+    )
+    instance.read_status = 404
+    await servicenow.sync(engine, {"connection_id": connection}, instance.transport())
+    [row] = await rows(
+        engine,
+        "select status, last_synced_at > now() - interval '1 minute' as touched"
+        " from doctor.incident_tickets where id = cast(:t as uuid)",
+        t=ticket,
+    )
+    assert (row["status"], row["touched"]) == ("open", True)

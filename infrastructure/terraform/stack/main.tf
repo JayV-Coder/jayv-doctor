@@ -171,6 +171,8 @@ module "api" {
     # Jira (#43): o consentimento volta para o app, que repassa o código à API.
     AID_ATLASSIAN_CLIENT_ID    = var.atlassian_client_id
     AID_ATLASSIAN_REDIRECT_URI = "${trimsuffix(var.app_url, "/")}/chamados/jira"
+    # Endereço do webhook que a Business Rule do ServiceNow chama (#44).
+    AID_PUBLIC_API_URL = "https://${var.api_domain}"
     # Liga os logs JSON ao trace (`logging.googleapis.com/trace`, #34).
     GCP_PROJECT_ID = var.project_id
     OTEL_ENABLED   = "true"

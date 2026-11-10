@@ -815,10 +815,34 @@ export interface paths {
     put?: never;
     /**
      * Request Ticket
-     * @description Abre o chamado no Jira (uma vez por Incidente); a chave aparece quando o Jira responde.
+     * @description Abre o chamado no ITSM (uma vez por Incidente e provedor); a chave aparece quando o ITSM
+     *     responde.
      */
     post: operations["request_ticket_api_v1_incidents__target__tickets_post"];
     delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/itsm/servicenow": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Servicenow */
+    get: operations["servicenow_api_v1_itsm_servicenow_get"];
+    /**
+     * Configure Servicenow
+     * @description Instância, app OAuth (client credentials) e a regra de grupos. O endereço do webhook
+     *     para a Business Rule volta só na primeira vez ou com `rotate_hook`.
+     */
+    put: operations["configure_servicenow_api_v1_itsm_servicenow_put"];
+    post?: never;
+    /** Disconnect Servicenow */
+    delete: operations["disconnect_servicenow_api_v1_itsm_servicenow_delete"];
     options?: never;
     head?: never;
     patch?: never;
@@ -1811,7 +1835,7 @@ export interface components {
        * Type
        * @enum {string}
        */
-      type: "email" | "slack" | "teams" | "webpush" | "jira";
+      type: "email" | "slack" | "teams" | "webpush" | "jira" | "servicenow";
       /** Name */
       name: string;
       /** Config */
@@ -1830,7 +1854,7 @@ export interface components {
        * Type
        * @enum {string}
        */
-      type: "email" | "slack" | "teams" | "webpush" | "jira";
+      type: "email" | "slack" | "teams" | "webpush" | "jira" | "servicenow";
       /** Name */
       name: string;
       /**
@@ -3686,6 +3710,67 @@ export interface components {
       /** Matched Event Ids */
       matched_event_ids: string[];
     };
+    /** ServiceNowConfig */
+    ServiceNowConfig: {
+      /** Instance Url */
+      instance_url: string;
+      /** Client Id */
+      client_id: string;
+      /** Client Secret */
+      client_secret?: string | null;
+      /** Impact Map */
+      impact_map?: {
+        [key: string]: components["schemas"]["Weights"];
+      } | null;
+      /** Assignment Groups */
+      assignment_groups?: {
+        [key: string]: string;
+      };
+      /** Default Group */
+      default_group?: string | null;
+      /**
+       * Sync Status
+       * @default true
+       */
+      sync_status: boolean;
+      /**
+       * Rotate Hook
+       * @default false
+       */
+      rotate_hook: boolean;
+    };
+    /** ServiceNowConnection */
+    ServiceNowConnection: {
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "pending" | "active" | "needs_reauth";
+      /** Instance Url */
+      instance_url: string | null;
+      /** Client Id */
+      client_id: string | null;
+      /** Impact Map */
+      impact_map: {
+        [key: string]: components["schemas"]["Weights"];
+      };
+      /** Assignment Groups */
+      assignment_groups: {
+        [key: string]: string;
+      };
+      /** Default Group */
+      default_group: string | null;
+      /** Sync Status */
+      sync_status: boolean;
+      /** Last Error */
+      last_error: string | null;
+    };
+    /** ServiceNowSaved */
+    ServiceNowSaved: {
+      connection: components["schemas"]["ServiceNowConnection"];
+      /** Hook Url */
+      hook_url: string | null;
+    };
     /** SharedReportRequest */
     SharedReportRequest: {
       /** Token */
@@ -3729,8 +3814,11 @@ export interface components {
     Ticket: {
       /** Id */
       id: string;
-      /** Provider */
-      provider: string;
+      /**
+       * Provider
+       * @enum {string}
+       */
+      provider: "jira" | "servicenow";
       /**
        * Status
        * @enum {string}
@@ -3744,6 +3832,8 @@ export interface components {
       external_status: string | null;
       /** Error */
       error: string | null;
+      /** Assignment Group */
+      assignment_group: string | null;
       /**
        * Created At
        * Format: date-time
@@ -3879,6 +3969,13 @@ export interface components {
       id: string;
       /** Secret */
       secret: string;
+    };
+    /** Weights */
+    Weights: {
+      /** Impact */
+      impact: number;
+      /** Urgency */
+      urgency: number;
     };
   };
   responses: never;
@@ -6003,7 +6100,9 @@ export interface operations {
   };
   request_ticket_api_v1_incidents__target__tickets_post: {
     parameters: {
-      query?: never;
+      query?: {
+        provider?: "jira" | "servicenow";
+      };
       header?: {
         authorization?: string | null;
         "idempotency-key"?: string | null;
@@ -6023,6 +6122,103 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["Ticket"][];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  servicenow_api_v1_itsm_servicenow_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ServiceNowConnection"] | null;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  configure_servicenow_api_v1_itsm_servicenow_put: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ServiceNowConfig"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ServiceNowSaved"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  disconnect_servicenow_api_v1_itsm_servicenow_delete: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Validation Error */
       422: {

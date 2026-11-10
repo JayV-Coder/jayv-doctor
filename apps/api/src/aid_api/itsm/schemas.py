@@ -49,13 +49,60 @@ class JiraConfig(BaseModel):
     sync_status: bool = True
 
 
+System = Literal["sap", "salesforce", "gcp", "other"]
+
+
+class Weights(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    impact: int = Field(ge=1, le=3)
+    urgency: int = Field(ge=1, le=3)
+
+
+class ServiceNowConnection(BaseModel):
+    status: Literal["pending", "active", "needs_reauth"]
+    instance_url: str | None
+    client_id: str | None
+    impact_map: dict[str, Weights]
+    assignment_groups: dict[str, str]
+    default_group: str | None
+    sync_status: bool
+    last_error: str | None
+
+
+class ServiceNowConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Só instâncias da ServiceNow (o banco confere de novo).
+    instance_url: str = Field(pattern=r"^https://[a-z0-9][a-z0-9-]{0,62}\.service-now\.com$")
+    client_id: str = Field(min_length=1, max_length=200)
+    # Obrigatório na primeira vez e quando a instância ou o client id mudam; vai para o Vault.
+    client_secret: str | None = Field(default=None, min_length=1, max_length=500)
+    # Nulo mantém o atual (na primeira vez, o padrão do banco: crítica 1/1 … baixa 3/3).
+    impact_map: dict[Severity, Weights] | None = None
+    # Sistema responsável → grupo de atendimento (nome ou sys_id).
+    assignment_groups: dict[System, str] = Field(default_factory=dict)
+    # Para "Indeterminado" e Sistemas sem grupo.
+    default_group: str | None = Field(default=None, max_length=100)
+    sync_status: bool = True
+    # Gera outro endereço para a Business Rule (o anterior para de valer).
+    rotate_hook: bool = False
+
+
+class ServiceNowSaved(BaseModel):
+    connection: ServiceNowConnection
+    # Endereço do webhook para a Business Rule: só na primeira vez ou ao gerar outro.
+    hook_url: str | None
+
+
 class Ticket(BaseModel):
     id: str
-    provider: str
+    provider: Literal["jira", "servicenow"]
     status: Literal["creating", "open", "done", "failed"]
     external_key: str | None
     url: str | None
     external_status: str | None
     error: str | None
+    assignment_group: str | None
     created_at: datetime
     last_synced_at: datetime | None

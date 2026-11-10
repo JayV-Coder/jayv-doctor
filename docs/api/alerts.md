@@ -35,4 +35,4 @@ Ticket #41, [ADR-0017](../adr/0017-alertas-por-worker-proprio.md). Exigem `Autho
 
 - `endpoint` só dos serviços de push dos navegadores (`fcm.googleapis.com`, `updates.push.services.mozilla.com`, `*.push.apple.com`, `*.notify.windows.com`): `422 invalid_alert` para outro.
 - No iPhone (iOS 16.4+), o push só funciona com o PWA instalado na tela de início.
-- Canal `jira` (#43): sem configuração nem segredo; numa Regra de Incidente, abre o chamado do Incidente no Jira configurado em [itsm.md](itsm.md), uma vez só.
+- Canais `jira` (#43) e `servicenow` (#44): sem configuração nem segredo; numa Regra de Incidente, abrem o chamado do Incidente no ITSM configurado em [itsm.md](itsm.md), uma vez só.

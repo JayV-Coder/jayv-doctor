@@ -1,4 +1,4 @@
-# Jira Service Management (worker `notifier`)
+# Chamados de ITSM (worker `notifier`)
 
 Rotas em [docs/api/itsm.md](../api/itsm.md); a tela é **Mais → Chamados (ITSM)** (Tela 21) e o card **Chamado** no Incidente.
 
@@ -17,3 +17,35 @@ O refresh token do Atlassian gira a cada renovação; o `notifier` renova sob um
 - **Conteúdo:** título `[Doctor] <título do Incidente>`, rótulo `integration-ai-doctor`, prioridade pela severidade, campos fixos e, em ADF: Integração, Ambiente, severidade, a Classificação e a Causa provável do último Diagnóstico com **Confiança heurística**, as Recomendações e o link para o Incidente. Nunca Eventos brutos.
 - **Status de volta:** o webhook do Jira chega num endereço com token (o hash fica na tabela para conferir; o token, no Vault com os tokens do Atlassian, nunca na outbox) e só pede a sincronização, com limite de taxa por endereço. Eventos repetidos da mesma issue viram uma leitura só enquanto a anterior não saiu, e o evento com a chave da issue relê só aquele chamado; o `notifier` lê o status pela API do Jira com os tokens da Organização. O conteúdo do webhook não é confiado. A varredura sincroniza também os chamados sem leitura há 15 min. Status na categoria `done` vira `done`: a tela sugere resolver o Incidente, e uma pessoa confirma com a nota de resolução.
 - **Comentários:** comentário no Jira que começa com `#doctor` vira comentário no Incidente (uma vez, com o nome de quem escreveu); comentário no Doctor que começa com `#jira` vai para o chamado.
+
+## ServiceNow (#44)
+
+### Conexão
+
+1. Na instância do cliente, um administrador cria em **System OAuth → Application Registry** um *OAuth API endpoint for external clients* com o grant **Client Credentials** (Washington DC ou mais nova; propriedade `glide.oauth.inbound.client.credential.grant_type.enabled = true`) e um usuário de integração com o papel `itil` (criar e ler `incident`, ler `sys_user_group`).
+2. Owner ou Admin com MFA informa em **Mais → Chamados (ITSM)** a instância (`https://<instância>.service-now.com`; outro domínio é recusado), o client id e o client secret, a regra de grupos por Sistema responsável e o grupo padrão. O secret vai para o Vault (`doctor/itsm-servicenow/<tenant>`) e não volta em nenhuma resposta; trocar a instância ou o client id exige o secret de novo. Instância nova gera outro endereço para a Business Rule e marca os chamados abertos da antiga como `failed` ("A instância do ServiceNow mudou"), para serem abertos de novo na nova.
+3. O `notifier` confere as credenciais pedindo um token (`oauth_token.do`). Recusou: a conexão fica `needs_reauth` com o motivo, e a tela pede para conferir. O token de acesso fica só na memória da rodada.
+
+### Incident
+
+- **Abrir:** à mão no Incidente ("Abrir chamado no ServiceNow") ou por Regra de alerta com canal `servicenow`, pela mesma reserva única de `incident_tickets` do Jira (um por Incidente e provedor).
+- **Grupo:** o Sistema responsável do último Diagnóstico (SAP, Salesforce, GCP, Outro) escolhe o grupo pela regra da Organização; sem Sistema ("Indeterminado") ou sem grupo para ele, vai o grupo padrão. A regra guarda o nome (ou o sys_id); o `notifier` busca o sys_id em `sys_user_group` (o usuário de integração precisa ler os grupos) e cria o incident com valores crus, sem o modo display value. Grupo que não existe faz o chamado falhar com o nome no motivo.
+- **Conteúdo:** `short_description` `[Doctor] <título>`, `impact` e `urgency` pela severidade, `correlation_id` com o id do chamado e, nas `work_notes`, a Classificação, a Causa provável com **Confiança heurística**, o Sistema responsável, as Recomendações e o link. Nunca Eventos brutos.
+- **Sem duplicar:** a tentativa reserva o chamado por 5 min e, antes do POST, procura o incident pelo `correlation_id`; achou, adota.
+
+### Status de volta (Business Rule)
+
+A configuração mostra uma vez o endereço do webhook (`/api/v1/itsm/servicenow/hooks/<token>`; o banco guarda só o hash). No ServiceNow, crie uma Business Rule **after update** na tabela `incident`, com a condição `State changes` e `Correlation display is Integration AI Doctor`:
+
+```javascript
+(function executeRule(current, previous) {
+  var request = new sn_ws.RESTMessageV2();
+  request.setEndpoint(gs.getProperty('x_aid.doctor_hook_url')); // o endereço mostrado na configuração
+  request.setHttpMethod('POST');
+  request.setRequestHeader('Content-Type', 'application/json');
+  request.setRequestBody(JSON.stringify({ number: current.getValue('number') }));
+  request.executeAsync();
+})(current, previous);
+```
+
+O corpo só diz qual incident reler: o `notifier` lê o `state` pela Table API com as credenciais da Organização. Resolvido (6), Fechado (7) ou Cancelado (8) viram `done` e a tela sugere resolver o Incidente; uma pessoa confirma com a nota. Sem a Business Rule, a varredura lê os chamados abertos a cada 15 min. "Gerar outro endereço" invalida o anterior.

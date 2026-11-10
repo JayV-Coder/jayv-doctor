@@ -21,6 +21,7 @@ const CHANNEL: Record<string, string> = {
   slack: "Slack",
   teams: "Microsoft Teams",
   jira: "Jira",
+  servicenow: "ServiceNow",
 };
 
 function list(value: unknown): string[] {

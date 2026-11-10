@@ -2,22 +2,28 @@ import Link from "next/link";
 import { Chip } from "@/components/ui/chip";
 import { ErrorState } from "@/components/ui/error-state";
 import { ReloadButton } from "@/components/ui/reload-button";
-import { getJira, getMe, listWebhooks } from "@/lib/api";
-import { jiraState } from "@/lib/itsm/labels";
+import { getJira, getMe, getServiceNow, listWebhooks } from "@/lib/api";
+import { jiraState, serviceNowState } from "@/lib/itsm/labels";
 import { canManage } from "@/lib/orgs/labels";
 import { ConnectJira } from "./connect-button";
 import { JiraConfig } from "./jira-config";
+import { ServiceNowConfig } from "./servicenow-config";
 
 export const metadata = { title: "Chamados (ITSM) · Integration AI Doctor" };
 
-// Tela 21 (#43): Jira Service Management, o webhook genérico e o que ainda não existe.
+// Tela 21 (#43, #44): Jira Service Management, ServiceNow e o webhook genérico.
 export default async function TicketsPage({
   searchParams,
 }: {
   searchParams: Promise<{ jira?: string }>;
 }) {
-  const [{ jira: result }, me, connection] = await Promise.all([searchParams, getMe(), getJira()]);
-  if (connection === undefined) {
+  const [{ jira: result }, me, connection, servicenow] = await Promise.all([
+    searchParams,
+    getMe(),
+    getJira(),
+    getServiceNow(),
+  ]);
+  if (connection === undefined || servicenow === undefined) {
     return (
       <ErrorState title="Não foi possível carregar os chamados" action={<ReloadButton />}>
         O serviço não respondeu. Tente de novo em instantes.
@@ -27,6 +33,7 @@ export default async function TicketsPage({
   const manager = canManage(me);
   const hooks = manager ? await listWebhooks() : null;
   const state = jiraState(connection);
+  const serviceNow = serviceNowState(servicenow);
 
   return (
     <>
@@ -71,10 +78,25 @@ export default async function TicketsPage({
       <section className="win" aria-label="ServiceNow">
         <div className="win-h">
           <span>servicenow</span>
-          <Chip tone="neutral">Em breve</Chip>
+          <Chip tone={serviceNow.tone}>{serviceNow.label}</Chip>
         </div>
-        <div className="win-b">
-          <p className="small">Cria Incident com assignment group por Sistema responsável.</p>
+        <div className="win-b stack">
+          {servicenow?.instance_url && (
+            <dl className="kv">
+              <dt>instância</dt>
+              <dd>{servicenow.instance_url.replace("https://", "")}</dd>
+              <dt>grupo</dt>
+              <dd>por Sistema responsável</dd>
+            </dl>
+          )}
+          {servicenow?.last_error && <p className="alert">{servicenow.last_error}</p>}
+          {manager ? (
+            <ServiceNowConfig connection={servicenow ?? null} />
+          ) : (
+            !servicenow && (
+              <p className="muted small">Peça a um Owner ou Admin para conectar o ServiceNow.</p>
+            )
+          )}
         </div>
       </section>
       <section className="win" aria-label="Webhook genérico">

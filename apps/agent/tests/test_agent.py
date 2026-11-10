@@ -428,3 +428,38 @@ def test_rfc_pagina_e_continua_do_cursor_sem_perder_linhas(
     assert buffer.size() == 3000
     cursor = json.loads(buffer.checkpoint("rfc_table:EDIDS") or "{}")
     assert cursor == {"since": "20261101104959", "skip": 0}
+
+
+def test_modelo_local_leva_so_o_chat_e_devolve_resposta_ou_erro() -> None:
+    """#46: o agente chama o servidor da rede do cliente e devolve só a resposta."""
+    import httpx
+    from aid_agent.local_llm import handle
+
+    class Local:
+        def __init__(self) -> None:
+            self.answers: list[tuple[str, dict[str, object]]] = []
+
+        def answer(self, request: str, result: dict[str, object]) -> None:
+            self.answers.append((request, result))
+
+    sent: list[tuple[str, dict[str, object]]] = []
+
+    def post(url: str, json: dict[str, object], timeout: float) -> httpx.Response:
+        sent.append((url, json))
+        return httpx.Response(200, json={"choices": []}, request=httpx.Request("POST", url))
+
+    local = Local()
+    llm = {"base_url": "http://vllm.interno:8000/v1", "timeout_seconds": 60}
+    found = {"id": "r1", "request": {"model": "m", "messages": [], "tools": ["x"], "url": "y"}}
+    assert handle(local, found, llm, post)  # type: ignore[arg-type]
+    [(url, body)] = sent
+    assert url == "http://vllm.interno:8000/v1/chat/completions"
+    # Só os campos de chat: nada de ferramentas nem de endereço vindo da plataforma.
+    assert set(body) == {"model", "messages"}
+    assert local.answers == [("r1", {"response": {"choices": []}})]
+
+    def down(url: str, json: dict[str, object], timeout: float) -> httpx.Response:
+        raise httpx.ConnectError("recusado")
+
+    assert not handle(local, found, llm, down)  # type: ignore[arg-type]
+    assert local.answers[-1] == ("r1", {"error": "o servidor local não respondeu (ConnectError)"})

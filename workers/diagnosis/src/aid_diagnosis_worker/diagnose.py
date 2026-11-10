@@ -33,6 +33,8 @@ from aid_knowledge.vectors import query_vectors
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from aid_diagnosis_worker.local_ai import local_provider
+
 # Posse de um Diagnóstico em andamento: passado isso sem publicar, outra entrega pode retomá-lo.
 LEASE = timedelta(minutes=5)
 # Na terceira falha que não seja do LLM (banco, dado, código), o Diagnóstico vira `failed` em vez
@@ -57,6 +59,7 @@ LLM_DISABLED = (
     "Envio de evidências ao LLM desligado pela Organização: Diagnóstico só com as Regras."
 )
 QUOTA_EXHAUSTED = "Cota de IA do mês esgotada: Diagnóstico só com as Regras."
+LOCAL_MISSING = "Modelo local não configurado: Diagnóstico só com as Regras."
 
 
 async def llm_enabled(engine: AsyncEngine, tenant: str) -> bool:
@@ -618,14 +621,30 @@ async def diagnose(
 
     # Tudo depois da posse fica aqui dentro: nenhuma falha deixa o Diagnóstico `running`.
     try:
-        provider = provider_for(diagnosis.llm_provider, diagnosis.ai_project)
+        # Perfil local (#46): o modelo na rede do cliente, montado com a configuração dele; sem
+        # ela, só as Regras. Nunca o registro dos provedores em nuvem.
+        local = diagnosis.llm_provider == "local"
+        provider: LLMProvider | None = (
+            await local_provider(engine, diagnosis.tenant_id)
+            if local
+            else provider_for(diagnosis.llm_provider, diagnosis.ai_project)
+        )
         hybrid = diagnosis.requested_mode == "hybrid"
         enabled = await llm_enabled(engine, diagnosis.tenant_id)
-        allowed = hybrid and enabled and await reserve_llm(engine, diagnosis, provider.name)
+        allowed = (
+            hybrid
+            and enabled
+            and provider is not None
+            and await reserve_llm(engine, diagnosis, provider.name)
+        )
         motor = DiagnosisEngine(
-            GuardedLLM(provider) if allowed else None,
+            GuardedLLM(provider) if allowed and provider is not None else None,
             scope=diagnosis.tenant_id,
-            without_ai=LLM_DISABLED if not enabled else QUOTA_EXHAUSTED,
+            without_ai=LLM_DISABLED
+            if not enabled
+            else LOCAL_MISSING
+            if provider is None
+            else QUOTA_EXHAUSTED,
         )
         # Envio ao LLM desligado: a Base também não gera o embedding da pergunta (só o texto). No
         # rules_only com o envio ligado, o embedding da Base continua.
@@ -633,7 +652,8 @@ async def diagnose(
             engine,
             diagnosis.tenant_id,
             diagnosis.incident_id,
-            provider if enabled else None,
+            # O local não gera embeddings: a Base vai só pelo texto.
+            provider if enabled and not local else None,
             diagnosis.id,
             profile=diagnosis.ai_profile,
             others=lambda name: provider_for(name, None),

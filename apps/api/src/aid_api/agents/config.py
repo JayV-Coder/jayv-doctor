@@ -4,6 +4,7 @@
   pasta da máquina do agente; caminho absoluto, sem `..`, e um padrão simples de nome.
 - `rfc_table`: leitura de tabela via RFC_READ_TABLE, só das tabelas e campos daqui.
 - `rfc_function`: função customizada de leitura (ex.: SLG1, SM58), só com o prefixo `Z_AID_`.
+- `llm` (opcional, #46): o servidor do modelo local para onde o agente leva os pedidos.
 """
 
 import re
@@ -106,4 +107,25 @@ def validate(config: Mapping[str, Any]) -> dict[str, Any]:
             clean.append({"type": "rfc_function", "name": name})
         else:
             raise invalid(f"collections[{index}].type: directory, rfc_table ou rfc_function")
-    return {"collections": clean, "interval_seconds": interval}
+    result: dict[str, Any] = {"collections": clean, "interval_seconds": interval}
+    llm = config.get("llm")
+    if llm is not None:
+        result["llm"] = validate_llm(llm)
+    return result
+
+
+# Modelo local (#46): o servidor compatível com a API da OpenAI na rede do cliente. HTTP vale
+# (é a rede interna do cliente); sem usuário e senha na URL, só a base `/v1`.
+LLM_URL = re.compile(r"^https?://[A-Za-z0-9.-]{1,253}(:[0-9]{1,5})?(/[A-Za-z0-9._~-]+)*/v1$")
+
+
+def validate_llm(llm: Any) -> dict[str, Any]:
+    if not isinstance(llm, Mapping):
+        raise invalid("llm: objeto")
+    base_url = str(llm.get("base_url", ""))
+    if not LLM_URL.match(base_url):
+        raise invalid("llm.base_url: http(s)://servidor[:porta]/v1, sem usuário na URL")
+    timeout = llm.get("timeout_seconds", 120)
+    if not isinstance(timeout, int) or not 10 <= timeout <= 600:
+        raise invalid("llm.timeout_seconds: de 10 a 600")
+    return {"base_url": base_url, "timeout_seconds": timeout}

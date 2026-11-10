@@ -78,6 +78,27 @@ class Platform:
         return dict(response.json())
 
 
+class LocalModel:
+    """As rotas do modelo local (#46) num cliente à parte: a thread do modelo não divide a
+    conexão com a coleta."""
+
+    def __init__(self, platform: Platform) -> None:
+        self.platform = platform
+
+    def next(self) -> dict[str, Any] | None:
+        """Long-poll (até 25 s) do próximo pedido da plataforma."""
+        response = self.platform.request("GET", "/api/v1/agent/llm")
+        if response.status_code == 204:
+            return None
+        response.raise_for_status()
+        return dict(response.json())
+
+    def answer(self, request: str, result: dict[str, Any]) -> None:
+        response = self.platform.request("POST", f"/api/v1/agent/llm/{request}", result)
+        if response.status_code != 404:
+            response.raise_for_status()
+
+
 def register(
     api_url: str,
     token: str,

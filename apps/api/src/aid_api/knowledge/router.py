@@ -104,7 +104,12 @@ async def search_knowledge(
     o embedding é gerado fora dela: nenhuma conexão do banco fica presa esperando a API de IA."""
     choice = await repository.ai(claims)
     # Envio ao LLM desligado: nem o embedding da pergunta sai; a busca vai só pelo texto.
-    provider = providers(choice.provider, choice.project) if choice.provider else None
+    # Perfil local (#46): sem embeddings, a pergunta não sai da plataforma; busca só no texto.
+    provider = (
+        providers(choice.provider, choice.project)
+        if choice.provider and choice.provider != "local"
+        else None
+    )
     vectors = await query_vectors(
         query.q, provider, choice.profile, choice.models, lambda name: providers(name, None)
     )

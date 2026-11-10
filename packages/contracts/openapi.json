@@ -2099,6 +2099,89 @@
         }
       }
     },
+    "/api/v1/agent/llm": {
+      "get": {
+        "tags": ["agent"],
+        "summary": "Llm Next",
+        "description": "Long-poll do próximo pedido ao modelo local (#46, ADR-0019): o agente leva o prompt ao\nservidor da rede do cliente e devolve a resposta em `POST /llm/{id}`.",
+        "operationId": "llm_next_api_v1_agent_llm_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "x-aid-timestamp",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Aid-Timestamp"
+            }
+          },
+          {
+            "name": "x-aid-signature",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Aid-Signature"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentLlmRequest"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "sem pedido"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/agents": {
       "get": {
         "tags": ["agents"],
@@ -7784,6 +7867,23 @@
         "required": ["config"],
         "title": "AgentConfigChange"
       },
+      "AgentLlmRequest": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "request": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Request"
+          }
+        },
+        "type": "object",
+        "required": ["id", "request"],
+        "title": "AgentLlmRequest",
+        "description": "Pedido ao modelo local (#46): o corpo de `POST /v1/chat/completions`, já sanitizado."
+      },
       "AgentRegistered": {
         "properties": {
           "agent_id": {
@@ -7914,7 +8014,7 @@
         "properties": {
           "profile": {
             "type": "string",
-            "enum": ["standard", "br_region", "dedicated"],
+            "enum": ["standard", "br_region", "dedicated", "local"],
             "title": "Profile"
           }
         },
@@ -12516,12 +12616,12 @@
           },
           "llm_provider": {
             "type": "string",
-            "enum": ["anthropic", "vertex", "vertex_dedicated"],
+            "enum": ["anthropic", "vertex", "vertex_dedicated", "local"],
             "title": "Llm Provider"
           },
           "ai_profile": {
             "type": "string",
-            "enum": ["standard", "br_region", "dedicated"],
+            "enum": ["standard", "br_region", "dedicated", "local"],
             "title": "Ai Profile"
           },
           "ai_project": {

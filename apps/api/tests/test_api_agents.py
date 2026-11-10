@@ -96,6 +96,9 @@ def test_config_so_da_allowlist() -> None:
         }
     )
     assert ok["collections"][1]["fields"][0] == "DOCNUM"
+    # Modelo local (#46): o servidor da rede do cliente, HTTP vale.
+    local = validate({"collections": [], "llm": {"base_url": "http://vllm.interno:8000/v1"}})
+    assert local["llm"] == {"base_url": "http://vllm.interno:8000/v1", "timeout_seconds": 120}
     for bad in (
         {"collections": [{"type": "rfc_table", "table": "USR02"}]},
         {
@@ -110,6 +113,12 @@ def test_config_so_da_allowlist() -> None:
         {"collections": [{"type": "rfc_table", "table": "EDIDS", "fields": ["DOCNUM", "STATUS"]}]},
         {"collections": [{"type": "rfc_table", "table": "EDIDS", "fields": [{}]}]},
         {"collections": [{"type": "rfc_table", "table": "EDIDS", "fields": "DOCNUM"}]},
+        {"collections": [], "llm": {"base_url": "http://user:senha@vllm.interno:8000/v1"}},
+        {"collections": [], "llm": {"base_url": "file:///etc/passwd"}},
+        {
+            "collections": [],
+            "llm": {"base_url": "http://vllm.interno:8000/v1", "timeout_seconds": 1},
+        },
     ):
         with pytest.raises(ApiError):
             validate(bad)
@@ -201,6 +210,58 @@ async def test_registro_lote_assinado_e_revogacao_na_proxima_chamada(
                 json={"token": token, "public_key": raw_public(key), "version": "0.1.0"},
             )
             assert again.status_code == 401
+
+            # Modelo local (#46): o agente busca o pedido e devolve a resposta; só o dele.
+            from aid_api.ingestion import agent_router
+
+            monkeypatch.setattr(agent_router, "LONG_POLL_SECONDS", 1.5)
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "select doctor.set_local_ai(cast(:t as uuid), 'agent', cast(:a as uuid),"
+                        " null, 'llama', 60)"
+                    ),
+                    {"t": tenant, "a": registered.json()["agent_id"]},
+                )
+                request_id = await connection.scalar(
+                    text(
+                        "insert into doctor.local_llm_requests (tenant_id, agent_id, request)"
+                        ' values (cast(:t as uuid), cast(:a as uuid), \'{"model": "llama"}\')'
+                        " returning id::text"
+                    ),
+                    {"t": tenant, "a": registered.json()["agent_id"]},
+                )
+            pulled = await agent.get(
+                "/api/v1/agent/llm", headers=signed(key, secret, "GET", "/api/v1/agent/llm", b"")
+            )
+            assert (pulled.status_code, pulled.json()["id"]) == (200, request_id)
+            assert pulled.json()["request"] == {"model": "llama"}
+            result = json.dumps({"response": {"choices": []}}).encode()
+            path = f"/api/v1/agent/llm/{request_id}"
+            answered = await agent.post(
+                path, content=result, headers=signed(key, secret, "POST", path, result)
+            )
+            assert answered.status_code == 204, answered.text
+            twice = await agent.post(
+                path, content=result, headers=signed(key, secret, "POST", path, result)
+            )
+            assert twice.status_code == 404
+            idle = await agent.get(
+                "/api/v1/agent/llm", headers=signed(key, secret, "GET", "/api/v1/agent/llm", b"")
+            )
+            assert idle.status_code == 204
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "delete from doctor.local_llm_requests where tenant_id = cast(:t as uuid)"
+                    ),
+                    {"t": tenant},
+                )
+                await connection.execute(
+                    text("delete from doctor.local_ai_settings where tenant_id = cast(:t as uuid)"),
+                    {"t": tenant},
+                )
+
             event = {
                 "schema_version": "1.0",
                 "event_id": "0192e1c4-7b2c-7d4e-8f00-123456789abc",

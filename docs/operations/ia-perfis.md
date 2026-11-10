@@ -7,6 +7,7 @@ Decisão em [ADR-0018](../adr/0018-perfis-de-ia-por-organizacao.md). Rotas em [d
 | `standard` | Owner com MFA | Claude (Anthropic) | Voyage | EUA |
 | `br_region` | Owner com MFA | Gemini (Vertex AI) | `text-embedding-005` | `southamerica-east1` |
 | `dedicated` | Operação da plataforma | Gemini (Vertex AI) com Provisioned Throughput | `text-embedding-005` | `southamerica-east1` |
+| `local` | Operação da plataforma | Modelo open-weights na rede do cliente ([ia-local.md](ia-local.md)) | nenhum (Base só pelo texto) | rede do cliente |
 
 ## Ligar o dedicado
 

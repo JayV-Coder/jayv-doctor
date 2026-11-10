@@ -96,10 +96,11 @@ class PrivacyRepository:
             ai_profile=tenant.ai_profile,
             ai_project=tenant.ai_project,
             ai_check=AiCheck.model_validate(dict(check)) if check else None,
-            # Envio ao LLM desligado: nada é reindexado (os documentos ficam só com o texto).
+            # Envio ao LLM desligado ou perfil local (sem índice vetorial): nada é reindexado; os
+            # documentos ficam só com o texto.
             reindex=Reindex(model=model, total=counts.total, current=counts.current)
-            if tenant.llm_enabled
-            else Reindex(model=model, total=0, current=0),
+            if tenant.llm_enabled and model is not None
+            else Reindex(model=model or "texto", total=0, current=0),
             deletion=deletion,
         )
 

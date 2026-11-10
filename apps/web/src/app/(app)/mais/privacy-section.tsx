@@ -7,6 +7,7 @@ import { BottomSheet } from "@/components/ui/bottom-sheet";
 import type { PrivacySettings } from "@/lib/privacy/api";
 import {
   AI_PROFILES,
+  CONTRACTED,
   checkText,
   classLabel,
   daysText,
@@ -174,10 +175,10 @@ function AiProfile({ settings, owner }: { settings: PrivacySettings; owner: bool
   const [busy, startTransition] = useTransition();
   const check = checkText(settings.ai_check);
   const reindex = reindexText(settings.reindex);
-  const options =
-    current === "dedicated"
-      ? (["dedicated", "standard", "br_region"] as const)
-      : (["standard", "br_region"] as const);
+  // O dedicado e o local aparecem só quando ligados (pela operação), sem poder ser escolhidos.
+  const options: PrivacySettings["ai_profile"][] = CONTRACTED.includes(current)
+    ? [current, "standard", "br_region"]
+    : ["standard", "br_region"];
   const title = AI_PROFILES[chosen]?.title ?? chosen;
   return (
     <fieldset className="stack" aria-label="Perfil de IA">
@@ -189,7 +190,7 @@ function AiProfile({ settings, owner }: { settings: PrivacySettings; owner: bool
             name="ai-profile"
             value={profile}
             checked={chosen === profile}
-            disabled={!owner || busy || profile === "dedicated"}
+            disabled={!owner || busy || CONTRACTED.includes(profile)}
             onChange={() => {
               setChosen(profile);
               setError(null);
@@ -242,8 +243,10 @@ function AiProfile({ settings, owner }: { settings: PrivacySettings; owner: bool
         </p>
       )}
       {!owner && <p className="muted small">Só o Owner com MFA troca o perfil de IA.</p>}
-      {current !== "dedicated" && (
-        <p className="muted small">Capacidade dedicada: fale com o suporte da plataforma.</p>
+      {!CONTRACTED.includes(current) && (
+        <p className="muted small">
+          Capacidade dedicada ou modelo na sua rede: fale com o suporte da plataforma.
+        </p>
       )}
     </fieldset>
   );

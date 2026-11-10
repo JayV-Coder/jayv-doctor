@@ -32,6 +32,9 @@ describe("Retenção e LGPD", () => {
     expect(subprocessors("br_region").map((item) => item.name)).not.toContain("Voyage AI");
     expect(subprocessors("dedicated")[2]?.purpose).toContain("capacidade dedicada");
     expect(dpaText("standard")).toContain("Transferência internacional");
+    expect(dpaText("local")).toContain("nenhum subprocessador de IA");
+    expect(subprocessors("local").map((item) => item.name)).toEqual(["Supabase", "Google Cloud"]);
+    expect(profileChangeText("local", "br_region")).toContain("fora da sua rede");
     expect(dpaText("br_region")).toContain("sem transferência internacional");
     expect(profileChangeText("dedicated", "standard")).toContain("só a operação da plataforma");
     expect(profileChangeText("standard", "br_region")).toContain("southamerica-east1");

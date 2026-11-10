@@ -83,8 +83,10 @@ async def verify_profiles(engine: AsyncEngine, provider_for: ProviderFor) -> lis
         targets = (
             await connection.execute(
                 text(
+                    # O local é do cliente: a saúde dele é do agente, não desta verificação.
                     "select distinct ai_profile, ai_project from doctor.tenants"
                     " where llm_enabled and deletion_requested_at is null"
+                    " and ai_profile <> 'local'"
                     " order by ai_profile, ai_project nulls first"
                 )
             )

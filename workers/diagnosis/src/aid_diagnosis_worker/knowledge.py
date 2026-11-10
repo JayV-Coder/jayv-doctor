@@ -72,8 +72,12 @@ async def index(
         await fail(engine, document, "Arquivo não encontrado no armazenamento.")
         return "failed"
     # Envio ao LLM desligado (#29): nada sai para o provedor; os Fragmentos ficam só com o texto.
+    # Perfil local (#46): sem embeddings; os Fragmentos ficam só com o texto, como com o envio
+    # ao LLM desligado.
     provider = (
-        provider_for(document.llm_provider, document.ai_project) if document.llm_enabled else None
+        provider_for(document.llm_provider, document.ai_project)
+        if document.llm_enabled and document.llm_provider != "local"
+        else None
     )
     model = provider.embedding_model if provider is not None else None
     try:

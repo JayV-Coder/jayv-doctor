@@ -29,6 +29,7 @@ Um pedido criado no Salesforce, processado no Cloud Run e com timeout no SAP tem
 - A estratégia `cross_system` fica entre `trace_id` e a Referência de negócio. Ela junta grupos com ids fortes diferentes, porque o Mapa é a Organização dizendo que são o mesmo fluxo. Evento com id forte continua marcado pelo id forte; só o que entrou pela chave fica `cross_system`.
 - Mudar um Mapa vale para os Eventos que chegarem depois: os já correlacionados guardam as chaves calculadas na hora.
 - A Timeline mostra uma raia por sistema quando a Execução passa por mais de um.
+- **Tela:** Integrações → **Mapa entre sistemas**. Todo Papel vê; Owner e Admin com MFA cadastram (até três chaves, com prefixo, zeros à esquerda e maiúsculas, janela, divergência e a consulta no destino) e removem.
 
 ## Fechamento
 

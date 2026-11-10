@@ -65,6 +65,7 @@ async def tenant(engine: AsyncEngine) -> AsyncIterator[dict[str, str]]:
         "execution_merges",
         "executions",
         "outbox_messages",
+        "correlation_mappings",
         "integrations",
     ):
         await run(engine, f"delete from doctor.{table} where tenant_id = :t", t=ids["tenant"])  # noqa: S608

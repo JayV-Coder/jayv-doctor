@@ -76,6 +76,39 @@ async def load(connection: AsyncConnection, execution_id: str) -> tuple[Any, lis
     return execution, events
 
 
+async def unreconciled(connection: AsyncConnection, execution: Any) -> tuple[str, ...]:
+    """Eventos da origem da Integração cuja chave de um Mapa com `reconcile` não aparece em
+    nenhum Evento do destino nesta Execução (INT-008, #40). A Execução fechou depois de 5 min sem
+    novidade; o que chegar depois a reabre e a avaliação refaz o match."""
+    rows = await connection.execute(
+        text(
+            "with maps as (select m.id::text as id from doctor.correlation_mappings m"
+            "  where m.tenant_id = cast(:t as uuid) and m.integration_id = cast(:i as uuid)"
+            "  and m.reconcile),"
+            " seen as (select e.id::text as event, e.source ->> 'provider' as system, k.key"
+            "  from doctor.events e cross join lateral unnest(e.cross_keys) as k(key)"
+            "  where e.tenant_id = cast(:t as uuid) and e.execution_ref = cast(:x as uuid)"
+            "  and e.timestamp between :first and :last and e.cross_keys is not null"
+            "  and exists (select 1 from maps where k.key like maps.id || ':%'))"
+            " select distinct s.event from seen s"
+            " join doctor.integrations g on g.tenant_id = cast(:t as uuid)"
+            " and g.id = cast(:i as uuid)"
+            " where s.system = g.source_system and g.target_system <> g.source_system"
+            " and not exists (select 1 from seen d where d.key = s.key"
+            "  and d.system = g.target_system)"
+            " order by 1"
+        ),
+        {
+            "t": execution.tenant_id,
+            "i": execution.integration_id,
+            "x": execution.id,
+            "first": execution.first_event_at,
+            "last": execution.last_event_at,
+        },
+    )
+    return tuple(row[0] for row in rows)
+
+
 async def save_matches(
     connection: AsyncConnection, tenant: str, execution_id: str, matches: list[RuleMatch]
 ) -> None:
@@ -304,6 +337,7 @@ async def evaluate_execution(engine: AsyncEngine, payload: Mapping[str, Any]) ->
             first_event_at=execution.first_event_at,
             last_event_at=execution.last_event_at,
             evaluated_at=execution.closed_at or datetime.now(UTC),
+            unreconciled=await unreconciled(connection, execution),
         )
         matches = evaluate(view, events)
         await save_matches(connection, execution.tenant_id, execution.id, matches)

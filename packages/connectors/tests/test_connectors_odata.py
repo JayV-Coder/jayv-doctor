@@ -9,13 +9,13 @@ from urllib.parse import parse_qs, unquote, urlparse
 import httpx
 import pytest
 from aid_connectors.base import ConnectorError, LookupQuery, Secret
-from aid_connectors.odata.connector import ODataConnector, shape_ok
+from aid_connectors.odata.connector import ODataConnector, PublicOnlyBackend, shape_ok
 
 URL = "https://s4.acme.com.br/sap/opu/odata/sap/API_SALES_ORDER_SRV"
 CONFIG: dict[str, Any] = {"service_url": URL, "version": "v2", "auth": "basic"}
 SECRET = Secret(json.dumps({"username": "AID_READER", "password": "segredo-de-teste"}))
 QUERY = LookupQuery(
-    "A_SalesOrder", "PurchaseOrderByCustomer", "801XX0001", "OverallSDProcessStatus"
+    "A_SalesOrder", "PurchaseOrderByCustomer", "801XX0001", "OverallSDProcessStatus", "SalesOrder"
 )
 
 
@@ -56,7 +56,7 @@ def test_consulta_acha_o_pedido_e_traz_o_status() -> None:
     fake = FakeOData()
     connector = ODataConnector(httpx.MockTransport(fake.handler), public("200.160.2.3"))
     found = run(connector, QUERY)
-    assert (found.found, found.record_id, found.status) == (True, "801XX0001", "C")
+    assert (found.found, found.record_id, found.status) == (True, "12345", "C")
     request = fake.requests[-1]
     assert request.headers["authorization"].startswith("Basic ")
     assert request.url.path.endswith("/A_SalesOrder")
@@ -127,3 +127,13 @@ def test_nao_coleta_eventos() -> None:
         return [b async for b in ODataConnector().collect(SECRET, CONFIG, None)]
 
     assert asyncio.run(gather()) == []
+
+
+@pytest.mark.parametrize("address", ["10.0.0.5", "127.0.0.1", "169.254.169.254"])
+def test_a_conexao_so_vai_para_o_endereco_conferido(address: str) -> None:
+    """DNS rebinding: a rede do transporte resolve e confere na hora de conectar."""
+    import httpcore
+
+    backend = PublicOnlyBackend(public(address))
+    with pytest.raises(httpcore.ConnectError):
+        asyncio.run(backend.connect_tcp("s4.acme.com.br", 443))

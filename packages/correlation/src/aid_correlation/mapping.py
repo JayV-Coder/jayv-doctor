@@ -12,7 +12,9 @@ from datetime import timedelta
 from typing import Any
 
 SYSTEMS = ("gcp", "salesforce", "sap", "aws", "azure", "mulesoft", "manual", "custom")
-FIXED_FIELDS = ("execution_id", "trace_id", "operation", "source.resource", "error.code")
+# Só campos que identificam um registro: operação, recurso e código de erro se repetem entre
+# pedidos diferentes e juntariam Execuções que não têm relação.
+FIXED_FIELDS = ("execution_id", "trace_id")
 OPERATIONS = ("trim", "upper", "lower", "strip_leading_zeros", "strip_prefix", "strip_suffix")
 WITH_VALUE = ("strip_prefix", "strip_suffix")
 MAX_VALUE = 256

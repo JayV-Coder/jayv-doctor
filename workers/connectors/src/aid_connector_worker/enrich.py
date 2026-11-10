@@ -22,7 +22,8 @@ TIMEOUT_SECONDS = 30
 
 PENDING = text(
     "select en.id::text, en.tenant_id::text, en.reference, en.entity, en.field,"
-    " m.lookup ->> 'status_field' as status_field, c.id::text as connector_id, c.provider,"
+    " m.lookup ->> 'status_field' as status_field, m.lookup ->> 'id_field' as id_field,"
+    " c.id::text as connector_id, c.provider,"
     " c.config, c.status as connector_status"
     " from doctor.enrichments en"
     " left join doctor.correlation_mappings m"
@@ -68,7 +69,7 @@ async def consult(
     if instance is None or not hasattr(instance, "lookup"):
         return None, "Este Conector não faz consultas."
     secret = Secret(await secret_of(engine, row.connector_id))
-    query = LookupQuery(row.entity, row.field, row.reference, row.status_field)
+    query = LookupQuery(row.entity, row.field, row.reference, row.status_field, row.id_field)
     try:
         result: LookupResult = await asyncio.wait_for(
             instance.lookup(secret, row.config or {}, query), TIMEOUT_SECONDS
@@ -96,14 +97,23 @@ async def run_enrichment(
             log.exception("consulta de enriquecimento %s falhou", row.id)
             result, error = None, "Falha interna na consulta."
         await finish(engine, row, result, error)
-    if rows:
-        async with engine.begin() as connection:
-            await platform_role(connection)
+    # Pede o Diagnóstico de novo mesmo sem pendentes (entrega repetida depois de uma queda entre
+    # as respostas e este pedido): a posse do Diagnóstico ignora o pedido que sobrar.
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        tenant = await connection.scalar(
+            text(
+                "select tenant_id::text from doctor.enrichments"
+                " where diagnosis_id = cast(:d as uuid) limit 1"
+            ),
+            {"d": diagnosis},
+        )
+        if tenant is not None:
             await connection.execute(
                 text(
                     "insert into doctor.outbox_messages (tenant_id, topic, payload)"
                     " values (cast(:t as uuid), 'diagnosis.requested', cast(:p as jsonb))"
                 ),
-                {"t": rows[0].tenant_id, "p": json.dumps({"diagnosis_id": diagnosis})},
+                {"t": tenant, "p": json.dumps({"diagnosis_id": diagnosis})},
             )
     return len(rows)

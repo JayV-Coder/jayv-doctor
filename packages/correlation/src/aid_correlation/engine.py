@@ -49,7 +49,7 @@ class EventRef:
 
     @property
     def strong(self) -> bool:
-        return self.execution_id is not None or self.trace_id is not None or bool(self.cross_keys)
+        return self.execution_id is not None or self.trace_id is not None
 
     @property
     def anchored(self) -> bool:
@@ -162,14 +162,17 @@ class Correlator:
                 how[event.id] = "execution_id"
             elif event.trace_id is not None:
                 how[event.id] = "trace_id"
-            elif event.cross_keys:
-                how[event.id] = "cross_system"
-        self._by_cross_keys(events, sets)
+        # Chave do Mapa só ancora quando achou par: um Evento com a chave e sem par continua
+        # solto, e a Referência ou a proximidade ainda podem prendê-lo (como antes do Mapa).
+        crossed = self._by_cross_keys(events, sets)
+        for event_id in crossed:
+            how.setdefault(event_id, "cross_system")
 
-        # Ancorado: tem id forte ou já pertence a uma Execução gravada. As estratégias fracas só
-        # prendem Eventos soltos a um grupo, um de cada vez: nunca ligam dois grupos ancorados.
-        loose = [event for event in events if not event.anchored]
-        self._by_reference(events, loose, sets, how)
+        # Ancorado: tem id forte, achou par pelo Mapa ou já pertence a uma Execução gravada. As
+        # estratégias fracas só prendem Eventos soltos a um grupo, um de cada vez: nunca ligam
+        # dois grupos ancorados.
+        loose = [event for event in events if not event.anchored and event.id not in crossed]
+        self._by_reference(events, loose, sets, how, crossed)
         self._by_proximity(events, [e for e in loose if e.id not in how], sets, how, weak)
 
         members: dict[str, list[EventRef]] = defaultdict(list)
@@ -177,15 +180,25 @@ class Correlator:
             members[sets.find(event.id)].append(event)
         return [self._group(group, how, weak) for group in members.values()]
 
-    def _by_cross_keys(self, events: list[EventRef], sets: _Sets) -> None:
-        """Mesma chave do Mapa, dentro da janela dele: o mesmo fluxo em sistemas diferentes."""
+    def _by_cross_keys(self, events: list[EventRef], sets: _Sets) -> set[str]:
+        """Mesma chave do Mapa, dentro da janela dele: o mesmo fluxo em sistemas diferentes. As
+        janelas são fixas a partir do primeiro Evento de cada uma, como na Referência: uma chave
+        que se repete a cada 50 min não encadeia Execuções de um dia. Devolve quem achou par."""
         buckets: dict[str, list[EventRef]] = defaultdict(list)
         for event in events:
             for key in event.cross_keys:
                 buckets[key].append(event)
+        crossed: set[str] = set()
         for key in sorted(buckets):
-            for event, other in _pairs(buckets[key], self.settings.window_of(key)):
-                sets.union(event.id, other.id)
+            window = self.settings.window_of(key)
+            head: EventRef | None = None
+            for event in buckets[key]:
+                if head is None or event.timestamp - head.timestamp > window:
+                    head = event
+                    continue
+                sets.union(event.id, head.id)
+                crossed.update((event.id, head.id))
+        return crossed
 
     def _by_reference(
         self,
@@ -193,19 +206,20 @@ class Correlator:
         loose: list[EventRef],
         sets: _Sets,
         how: dict[str, Strategy | None],
+        crossed: set[str],
     ) -> None:
         window = self.settings.reference_window
         anchored: dict[str, list[EventRef]] = defaultdict(list)
         spans: dict[str, tuple[datetime, datetime, bool]] = {}
         for event in events:
-            if not event.anchored:
+            if not event.anchored and event.id not in crossed:
                 continue
             root = sets.find(event.id)
             first, last, strong = spans.get(root, (event.timestamp, event.timestamp, False))
             spans[root] = (
                 min(first, event.timestamp),
                 max(last, event.timestamp),
-                strong or event.strong,
+                strong or event.strong or event.id in crossed,
             )
             if event.business_reference is not None:
                 anchored[event.business_reference].append(event)

@@ -77,7 +77,7 @@ class DiagnosisEngine:
             await on_stage("verification")
             draft = rules_draft(incident, events, rules, mode="rules_only")
             draft.verification_notes[:0] = notes
-            return apply_enrichment(draft, enrichment)
+            return apply_enrichment(draft, enrichment, incident)
 
         knowledge = []
         if include_knowledge_base:
@@ -106,12 +106,12 @@ class DiagnosisEngine:
                 *notes,
                 "O modelo de IA falhou: Diagnóstico só com as Regras.",
             ]
-            return self._with_usage(apply_enrichment(draft, enrichment))
+            return self._with_usage(apply_enrichment(draft, enrichment, incident))
 
         await on_stage("verification")
         draft = verify(result.output, incident, events, rules, knowledge, enrichment)
         draft.verification_notes[:0] = notes
-        return self._with_usage(apply_enrichment(draft, enrichment))
+        return self._with_usage(apply_enrichment(draft, enrichment, incident))
 
     def _with_usage(self, draft: DiagnosisDraft) -> DiagnosisDraft:
         billed = [usage for usage in self.usage if not usage.cached]

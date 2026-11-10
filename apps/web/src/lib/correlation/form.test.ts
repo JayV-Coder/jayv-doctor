@@ -57,6 +57,7 @@ describe("Mapa de identificadores na tela", () => {
       entity: "A_SalesOrder",
       field: "PurchaseOrderByCustomer",
       status_field: null,
+      id_field: null,
       pad_left: 10,
     });
   });

@@ -74,6 +74,8 @@ class LookupQuery:
     field: str
     value: str
     status_field: str | None = None
+    # Campo com a chave do registro no destino (OData; o Salesforce usa sempre o `Id`).
+    id_field: str | None = None
 
 
 @dataclass(frozen=True)

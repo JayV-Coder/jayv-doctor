@@ -46,7 +46,13 @@ class FakeS4:
         self.filters.append(wanted)
         value = wanted.split("'")[1]
         found = (
-            [{"PurchaseOrderByCustomer": value, "OverallSDProcessStatus": "C"}]
+            [
+                {
+                    "PurchaseOrderByCustomer": value,
+                    "SalesOrder": "12345",
+                    "OverallSDProcessStatus": "C",
+                }
+            ]
             if value in self.existing
             else []
         )
@@ -93,6 +99,7 @@ async def scenario(engine: AsyncEngine, ids: dict[str, str]) -> dict[str, str]:
                 "entity": "A_SalesOrder",
                 "field": "PurchaseOrderByCustomer",
                 "status_field": "OverallSDProcessStatus",
+                "id_field": "SalesOrder",
                 "pad_left": 0,
             }
         ),
@@ -231,5 +238,45 @@ async def test_consulta_sem_resposta_expira_e_o_diagnostico_segue_com_a_nota(
             d=diagnosis,
         )
         assert any("Consulta ao SAP indisponível" in n for n in notes["verification_notes"])
+    finally:
+        await cleanup(engine, tenant)
+
+
+@pytest.mark.asyncio
+async def test_diagnostico_parado_na_fila_com_consultas_respondidas_e_retomado(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    """O pedido de retomada se perdeu (queda do worker de Conectores, ou a resposta chegou
+    antes de o Diagnóstico voltar à fila): a rota agendada o pede de novo."""
+    from datetime import timedelta
+
+    found = await scenario(engine, tenant)
+    diagnosis = found["diagnosis"]
+    provider = FakeProvider()
+    try:
+        assert await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _: provider) == "waiting"
+        await run_enrichment(engine, {"diagnosis_id": diagnosis}, registry(FakeS4(set())))
+        await run(
+            engine,
+            "delete from doctor.outbox_messages where topic = 'diagnosis.requested'"
+            " and payload ->> 'diagnosis_id' = :d",
+            d=diagnosis,
+        )
+        assert await expire_enrichment(engine, idle=timedelta(0)) == 1
+        requested = await rows(
+            engine,
+            "select 1 from doctor.outbox_messages where topic = 'diagnosis.requested'"
+            " and payload ->> 'diagnosis_id' = :d",
+            d=diagnosis,
+        )
+        assert len(requested) == 1
+        assert (
+            await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _: provider) == "published"
+        )
+        # Entrega repetida da consulta, já sem pendentes: pede o Diagnóstico, que ignora.
+        assert (
+            await run_enrichment(engine, {"diagnosis_id": diagnosis}, registry(FakeS4(set()))) == 0
+        )
+        assert await diagnose(engine, {"diagnosis_id": diagnosis}, lambda _: provider) == "ignored"
     finally:
         await cleanup(engine, tenant)

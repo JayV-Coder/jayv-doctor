@@ -78,22 +78,27 @@ async def load(connection: AsyncConnection, execution_id: str) -> tuple[Any, lis
 
 async def unreconciled(connection: AsyncConnection, execution: Any) -> tuple[str, ...]:
     """Eventos da origem da Integração cuja chave de um Mapa com `reconcile` não aparece em
-    nenhum Evento do destino nesta Execução (INT-008, #40). A Execução fechou depois de 5 min sem
-    novidade; o que chegar depois a reabre e a avaliação refaz o match."""
+    nenhum Evento do destino nesta Execução (INT-008, #40). Só conta o Evento da origem mais
+    antigo que a janela do Mapa: antes disso o destino pode estar a caminho. A varredura
+    `reconcile_due` (worker de correlação) pede a avaliação de novo quando a janela passa, e o
+    destino que chegar depois reabre a Execução e refaz o match."""
     rows = await connection.execute(
         text(
-            "with maps as (select m.id::text as id from doctor.correlation_mappings m"
+            "with maps as (select m.id::text as id, m.window_minutes"
+            "  from doctor.correlation_mappings m"
             "  where m.tenant_id = cast(:t as uuid) and m.integration_id = cast(:i as uuid)"
             "  and m.reconcile),"
-            " seen as (select e.id::text as event, e.source ->> 'provider' as system, k.key"
+            " seen as (select e.id::text as event, e.timestamp as at,"
+            "  e.source ->> 'provider' as system, k.key, maps.window_minutes"
             "  from doctor.events e cross join lateral unnest(e.cross_keys) as k(key)"
+            "  join maps on k.key like maps.id || ':%'"
             "  where e.tenant_id = cast(:t as uuid) and e.execution_ref = cast(:x as uuid)"
-            "  and e.timestamp between :first and :last and e.cross_keys is not null"
-            "  and exists (select 1 from maps where k.key like maps.id || ':%'))"
+            "  and e.timestamp between :first and :last and e.cross_keys is not null)"
             " select distinct s.event from seen s"
             " join doctor.integrations g on g.tenant_id = cast(:t as uuid)"
             " and g.id = cast(:i as uuid)"
             " where s.system = g.source_system and g.target_system <> g.source_system"
+            " and s.at < now() - make_interval(mins => s.window_minutes)"
             " and not exists (select 1 from seen d where d.key = s.key"
             "  and d.system = g.target_system)"
             " order by 1"

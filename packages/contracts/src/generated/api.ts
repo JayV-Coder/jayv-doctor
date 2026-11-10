@@ -2556,6 +2556,8 @@ export interface components {
       field: string;
       /** Status Field */
       status_field?: string | null;
+      /** Id Field */
+      id_field?: string | null;
       /**
        * Pad Left
        * @default 0

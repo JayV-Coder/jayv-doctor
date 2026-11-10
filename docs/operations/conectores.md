@@ -134,7 +134,7 @@ Não coleta Eventos: responde às consultas do enriquecimento (o pedido existe n
 }
 ```
 
-- **Endereço:** só HTTPS na porta 443, com nome de host, sem usuário, query ou fragmento. A cada consulta, o host precisa resolver só para endereços públicos (SSRF; o risco de DNS rebinding está na ADR-0016). Loopback só com `AID_ODATA_ALLOW_LOOPBACK=1`, que existe só no E2E.
+- **Endereço:** só HTTPS na porta 443, com nome de host, sem usuário, query ou fragmento. O host precisa resolver só para endereços públicos, conferido na própria conexão (SSRF e DNS rebinding, ADR-0016). Loopback só com `AID_ODATA_ALLOW_LOOPBACK=1`, que existe só no E2E.
 - **Credencial:** `{"username", "password"}` (Basic, usuário técnico só de leitura) ou `{"client_id", "client_secret"}` com `auth: "oauth_client_credentials"` e `token_url`.
 - **Consulta:** `GET <service_url>/<entity>?$filter=<field> eq '<valor>'&$top=1&$select=…`, com os nomes no padrão de identificador e o valor com as aspas dobradas. O teste de conexão lê o `$metadata`.
 - **Salesforce** também consulta, com as credenciais da Sincronização: `SELECT Id[, status] FROM <objeto> WHERE <campo> = '<valor>' LIMIT 1`.

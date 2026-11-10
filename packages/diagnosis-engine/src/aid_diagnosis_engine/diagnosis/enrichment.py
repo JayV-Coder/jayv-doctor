@@ -1,6 +1,9 @@
 """O que a consulta de leitura no destino (etapa 2, ticket #40) muda no Diagnóstico.
 
-Depois de um timeout, o risco é reenviar o que o destino já processou. A consulta responde:
+Depois de um timeout (ou de uma falha sem resposta clara), o risco é reenviar o que o destino já
+processou. A Recomendação só muda quando a consulta foi no **destino** da Integração e o
+Incidente é de uma dessas categorias; nos outros casos a consulta entra só como Evidência. A
+consulta responde:
 - encontrado: a primeira Recomendação passa a ser "não reenviar", e nenhuma outra sugere
   reprocessar;
 - não encontrado: o reenvio não duplica, depois de corrigir a causa;
@@ -18,12 +21,15 @@ from aid_diagnosis_engine.diagnosis.model import (
     EnrichmentItem,
     EvidenceDraft,
     HypothesisDraft,
+    IncidentInfo,
     RecommendationDraft,
 )
 
 SYSTEMS = {"sap": "SAP", "salesforce": "Salesforce", "gcp": "Google Cloud"}
 RESEND = re.compile(r"reenvi|reprocess|reexecut|repet[ie]r? o envio", re.IGNORECASE)
 MAX_RECOMMENDATIONS = 6
+# Categorias em que o resultado no destino é incerto e o reenvio pode duplicar.
+RESEND_RISK = {"TIMEOUT", "CONNECTIVITY", "PENDING_CONFIRMATION", "UNKNOWN"}
 
 
 def system_name(item: EnrichmentItem) -> str:
@@ -50,15 +56,18 @@ def enrichment_evidence(item: EnrichmentItem, finding: str | None = None) -> Evi
     )
 
 
-def apply_enrichment(draft: DiagnosisDraft, items: Sequence[EnrichmentItem]) -> DiagnosisDraft:
-    found = [item for item in items if item.outcome == "found"]
-    missing = [item for item in items if item.outcome == "not_found"]
+def apply_enrichment(
+    draft: DiagnosisDraft, items: Sequence[EnrichmentItem], incident: IncidentInfo
+) -> DiagnosisDraft:
+    decides = incident.category in RESEND_RISK
+    at_target = [item for item in items if item.system == incident.target_system]
+    found = [item for item in at_target if item.outcome == "found"] if decides else []
+    missing = [item for item in at_target if item.outcome == "not_found"] if decides else []
     failed = [item for item in items if item.outcome == "failed"]
     cited = {e.ref_id for e in draft.evidence if e.kind == "enrichment"}
     # A consulta é o fato mais forte sobre o destino: vem antes das outras Evidências.
-    draft.evidence[:0] = [
-        enrichment_evidence(item) for item in [*found, *missing] if item.id not in cited
-    ]
+    answered = [item for item in items if item.outcome != "failed"]
+    draft.evidence[:0] = [enrichment_evidence(item) for item in answered if item.id not in cited]
     first: list[RecommendationDraft] = []
     if found:
         item = found[0]

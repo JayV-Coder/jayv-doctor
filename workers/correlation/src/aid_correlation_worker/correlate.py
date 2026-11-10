@@ -97,7 +97,13 @@ def to_ref(row: Row[Any], maps: Sequence[IdentifierMap] = ()) -> EventRef:
     fields = row._asdict()
     contract = {name: fields.pop(name) for name in EXTRA if name in fields}
     stored = tuple(fields.pop("cross_keys") or ())
-    keys = cross_keys({**fields, **contract}, maps) if contract else stored
+    if contract:
+        keys = cross_keys({**fields, **contract}, maps)
+    else:
+        # Chave gravada de um Mapa que já foi removido não une mais nada: mudar ou remover um
+        # Mapa vale para o que vem depois, como a tela promete.
+        current = {item.id for item in maps}
+        keys = tuple(key for key in stored if key.split(":", 1)[0] in current)
     return EventRef(**fields, cross_keys=keys)
 
 
@@ -138,6 +144,7 @@ async def neighborhood(
     integration: str,
     pending: Sequence[EventRef],
     correlator: Correlator,
+    maps: Sequence[IdentifierMap] = (),
 ) -> list[EventRef]:
     def values(name: str) -> list[str]:
         return sorted({str(getattr(e, name)) for e in pending if getattr(e, name) is not None})
@@ -149,6 +156,7 @@ async def neighborhood(
     neighbors = await load(
         connection,
         NEIGHBORS,
+        maps,
         t=tenant,
         i=integration,
         execs=values("execution_id"),
@@ -164,7 +172,7 @@ async def neighborhood(
         hi=max(e.timestamp for e in pending) + widest,
     )
     refs = sorted({e.execution_ref for e in neighbors if e.execution_ref})
-    members = await load(connection, MEMBERS, t=tenant, refs=refs) if refs else []
+    members = await load(connection, MEMBERS, maps, t=tenant, refs=refs) if refs else []
     return [*neighbors, *members]
 
 
@@ -237,7 +245,7 @@ async def correlate_integration(
         pending = await load(connection, PENDING, maps, t=tenant, i=integration, page=PAGE)
         if not pending:
             return 0
-        known = await neighborhood(connection, tenant, integration, pending, correlator)
+        known = await neighborhood(connection, tenant, integration, pending, correlator, maps)
         events = {event.id: event for event in [*known, *pending]}
         waiting = {event.id: event for event in pending}
         groups = [
@@ -310,7 +318,8 @@ async def correlate_integration(
             text(
                 "update doctor.executions set first_event_at = :f, last_event_at = :l,"
                 " duration_ms = :d, event_count = :n, correlation_keys = cast(:k as jsonb),"
-                " low_confidence = :w, status = :s, last_activity_at = now(), closed_at = null"
+                " low_confidence = :w, status = :s, last_activity_at = now(), closed_at = null,"
+                " reconciled_at = null"
                 " where tenant_id = cast(:t as uuid) and id = cast(:x as uuid)"
             ),
             [

@@ -23,9 +23,9 @@ Um pedido criado no Salesforce, processado no Cloud Run e com timeout no SAP tem
 ]
 ```
 
-- `system` é o `source.provider` do Evento; `field` é `execution_id`, `trace_id`, `operation`, `source.resource`, `error.code` ou `attributes.<nome>` (até dois níveis).
+- `system` é o `source.provider` do Evento; `field` é `execution_id`, `trace_id` ou `attributes.<nome>` (até dois níveis): só campos que identificam um registro. Operação, recurso e código de erro se repetem entre pedidos e juntariam Execuções sem relação.
 - Transformações, em ordem: `trim`, `upper`, `lower`, `strip_leading_zeros`, `strip_prefix` e `strip_suffix` (com `value`).
-- O worker calcula as chaves dos pendentes (`<id do Mapa>:<valor>`), grava em `events.cross_keys` (índice GIN) e busca os vizinhos já correlacionados com a mesma chave na janela do Mapa (`window_minutes`, padrão 60).
+- O worker calcula as chaves dos pendentes (`<id do Mapa>:<valor>`), grava em `events.cross_keys` (índice GIN) e busca os vizinhos já correlacionados com a mesma chave na janela do Mapa (`window_minutes`, padrão 60). A janela é fixa a partir do primeiro Evento com a chave: uma chave que se repete a cada 50 min não encadeia Execuções de um dia. Evento com a chave e sem par continua solto, e a Referência ou a proximidade ainda podem prendê-lo.
 - A estratégia `cross_system` fica entre `trace_id` e a Referência de negócio. Ela junta grupos com ids fortes diferentes, porque o Mapa é a Organização dizendo que são o mesmo fluxo. Evento com id forte continua marcado pelo id forte; só o que entrou pela chave fica `cross_system`.
 - Mudar um Mapa vale para os Eventos que chegarem depois: os já correlacionados guardam as chaves calculadas na hora.
 - A Timeline mostra uma raia por sistema quando a Execução passa por mais de um.

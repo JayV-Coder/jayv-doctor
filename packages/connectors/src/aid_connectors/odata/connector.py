@@ -3,8 +3,10 @@ OData (S/4HANA `API_SALES_ORDER_SRV`, um ECC exposto pelo gateway ou pela BTP) s
 existe. Não coleta Eventos: a Sincronização não roda para ele.
 
 - **Endereço:** `service_url` só HTTPS, sem usuário na URL, e o host precisa resolver só para
-  endereços públicos, conferido a cada consulta (SSRF). Loopback só com
-  `AID_ODATA_ALLOW_LOOPBACK=1`, que existe só no E2E.
+  endereços públicos (SSRF). A conferência acontece na própria conexão: o transporte resolve o
+  nome, confere e conecta no endereço conferido (o TLS continua validando o nome), então um DNS
+  que muda de resposta entre a conferência e a conexão (rebinding) não leva a rede interna.
+  Loopback só com `AID_ODATA_ALLOW_LOOPBACK=1`, que existe só no E2E.
 - **Credencial:** `{"username", "password"}` (Basic) ou `{"client_id", "client_secret"}` com
   `token_url` (OAuth client credentials), no Vault como as outras.
 - **Consulta:** `GET <service_url>/<entity>?$filter=<field> eq '<valor>'&$top=1`, com os nomes
@@ -22,6 +24,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequenc
 from typing import Any, ClassVar
 from urllib.parse import quote, urlparse
 
+import httpcore
 import httpx
 
 from aid_connectors.base import (
@@ -47,6 +50,56 @@ Resolver = Callable[[str], Awaitable[Sequence[str]]]
 async def resolve(host: str) -> list[str]:
     infos = await asyncio.get_running_loop().getaddrinfo(host, 443, type=socket.SOCK_STREAM)
     return sorted({str(info[4][0]) for info in infos})
+
+
+def all_public(addresses: Sequence[str]) -> bool:
+    return bool(addresses) and all(ipaddress.ip_address(a).is_global for a in addresses)
+
+
+class PublicOnlyBackend(httpcore.AsyncNetworkBackend):
+    """Rede do transporte: resolve o host, recusa se algum endereço não for público e conecta no
+    endereço conferido. O TLS recebe o nome original (SNI e verificação do certificado)."""
+
+    def __init__(self, resolver: Resolver) -> None:
+        self.resolver = resolver
+        self.inner = httpcore.AnyIOBackend()
+
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options: Any = None,
+    ) -> httpcore.AsyncNetworkStream:
+        try:
+            addresses = list(await self.resolver(host))
+        except OSError as exc:
+            raise httpcore.ConnectError(f"nome não resolveu: {host}") from exc
+        if not all_public(addresses):
+            raise httpcore.ConnectError("endereço não público")
+        return await self.inner.connect_tcp(
+            addresses[0], port, timeout, local_address, socket_options
+        )
+
+    async def connect_unix_socket(
+        self, path: str, timeout: float | None = None, socket_options: Any = None
+    ) -> httpcore.AsyncNetworkStream:
+        raise httpcore.ConnectError("socket local não é permitido")
+
+    async def sleep(self, seconds: float) -> None:
+        await self.inner.sleep(seconds)
+
+
+def public_transport(resolver: Resolver = resolve) -> httpx.AsyncHTTPTransport:
+    """O transporte padrão do httpx com a rede trocada pela que só conecta em endereço público.
+    O pool é recriado com a mesma configuração de TLS do httpx (verificação ligada)."""
+    transport = httpx.AsyncHTTPTransport()
+    transport._pool = httpcore.AsyncConnectionPool(
+        ssl_context=httpx.create_ssl_context(),
+        network_backend=PublicOnlyBackend(resolver),
+    )
+    return transport
 
 
 def loopback_allowed(environ: Mapping[str, str] = os.environ) -> bool:
@@ -139,7 +192,7 @@ class ODataConnector:
             addresses = await self.resolver(urlparse(url).hostname or "")
         except OSError as exc:
             raise ConnectorError("transient", "O nome do serviço OData não resolveu.") from exc
-        if not addresses or not all(ipaddress.ip_address(a).is_global for a in addresses):
+        if not all_public(addresses):
             raise ConnectorError("invalid", "O serviço OData resolve para endereço não público.")
 
     def credential(self, secret: Secret, auth: str) -> Mapping[str, str]:
@@ -183,16 +236,26 @@ class ODataConnector:
             )
         return {"authorization": f"Bearer {self.token[0]}"}
 
+    def network(self, url: str) -> httpx.AsyncBaseTransport | None:
+        if self.transport is not None:
+            return self.transport
+        if is_loopback(url) and loopback_allowed():
+            return None
+        return public_transport(self.resolver)
+
     async def get(self, secret: Secret, config: Mapping[str, Any], url: str) -> httpx.Response:
         await self.public(str(config["service_url"]))
         async with httpx.AsyncClient(
-            transport=self.transport, timeout=httpx.Timeout(20.0), follow_redirects=False
+            transport=self.network(url), timeout=httpx.Timeout(20.0), follow_redirects=False
         ) as client:
             headers = await self.headers(client, secret, config)
             try:
                 response = await client.get(url, headers={**headers, "accept": "application/json"})
             except httpx.HTTPError as exc:
-                raise ConnectorError("transient", "O serviço OData não respondeu.") from exc
+                raise ConnectorError(
+                    "transient",
+                    "O serviço OData não respondeu (ou resolveu para endereço não público).",
+                ) from exc
         if response.status_code in (401, 403):
             raise ConnectorError("auth", "O serviço OData recusou a credencial.")
         if response.status_code == 404:
@@ -217,10 +280,11 @@ class ODataConnector:
     async def lookup(
         self, secret: Secret, config: Mapping[str, Any], query: LookupQuery
     ) -> LookupResult:
-        names = [query.entity, query.field, *([query.status_field] if query.status_field else [])]
+        extra = [name for name in (query.status_field, query.id_field) if name]
+        names = [query.entity, query.field, *extra]
         if not all(IDENTIFIER.match(name) for name in names):
             raise ConnectorError("invalid", "Consulta recusada: entidade ou campo fora do padrão.")
-        selected = ",".join(dict.fromkeys([query.field, *names[2:]]))
+        selected = ",".join(dict.fromkeys([query.field, *extra]))
         params = [
             f"$filter={quote(f'{query.field} eq {literal(query.value)}', safe='')}",
             "$top=1",
@@ -238,7 +302,8 @@ class ODataConnector:
             return LookupResult(False)
         record = found[0]
         status = record.get(query.status_field) if query.status_field else None
-        key = record.get(query.field)
+        # A chave do registro no destino (ex.: SalesOrder), não o valor consultado.
+        key = record.get(query.id_field) if query.id_field else None
         return LookupResult(True, str(key) if key else None, str(status) if status else None)
 
     async def collect(

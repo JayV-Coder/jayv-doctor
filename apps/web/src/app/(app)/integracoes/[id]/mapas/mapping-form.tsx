@@ -137,6 +137,15 @@ export function MappingForm({
             <input name="status-field" autoCapitalize="none" spellCheck={false} />
           </label>
           <label className="field">
+            Campo com o nº do registro (opcional)
+            <input
+              name="id-field"
+              placeholder="SalesOrder"
+              autoCapitalize="none"
+              spellCheck={false}
+            />
+          </label>
+          <label className="field">
             Completar com zeros até
             <input name="pad" type="number" min={0} max={35} defaultValue={0} />
           </label>

@@ -380,24 +380,42 @@ async def wait_enrichment(engine: AsyncEngine, diagnosis: Any) -> None:
         )
 
 
-async def expire_enrichment(engine: AsyncEngine, wait: timedelta = LOOKUP_WAIT) -> int:
-    """Consulta sem resposta em 5 min vira `failed` e o Diagnóstico segue sem ela (rota
-    agendada `/enrichment/expire`). Devolve quantos Diagnósticos foram retomados."""
+async def expire_enrichment(
+    engine: AsyncEngine, wait: timedelta = LOOKUP_WAIT, idle: timedelta = timedelta(minutes=1)
+) -> int:
+    """Rota agendada `/enrichment/expire`, a cada 5 min. Consulta sem resposta em 5 min vira
+    `failed` e o Diagnóstico segue sem ela. E o Diagnóstico que ficou na fila com todas as
+    consultas respondidas (a resposta chegou antes de ele voltar à fila, ou o pedido de retomada
+    se perdeu) é pedido de novo. Devolve quantos Diagnósticos foram retomados."""
     async with engine.begin() as connection:
         await platform_role(connection)
-        resumed = list(
+        expired = list(
             await connection.execute(
                 text(
-                    "with expired as ("
-                    " update doctor.enrichments set outcome = 'failed', checked_at = now(),"
+                    "update doctor.enrichments set outcome = 'failed', checked_at = now(),"
                     " error = 'O Conector não respondeu à consulta a tempo.'"
                     " where outcome = 'pending' and created_at < now() - make_interval(secs => :w)"
-                    " returning tenant_id, diagnosis_id)"
-                    " select distinct tenant_id::text, diagnosis_id::text from expired"
+                    " returning tenant_id::text, diagnosis_id::text"
                 ),
                 {"w": wait.total_seconds()},
             )
         )
+        stranded = list(
+            await connection.execute(
+                text(
+                    "select d.tenant_id::text, d.id::text as diagnosis_id from doctor.diagnoses d"
+                    " where d.status = 'queued' and d.stage = 'correlation'"
+                    " and d.updated_at <= now() - make_interval(secs => :idle)"
+                    " and exists (select 1 from doctor.enrichments n"
+                    "  where n.tenant_id = d.tenant_id and n.diagnosis_id = d.id)"
+                    " and not exists (select 1 from doctor.enrichments n"
+                    "  where n.tenant_id = d.tenant_id and n.diagnosis_id = d.id"
+                    "  and n.outcome = 'pending')"
+                ),
+                {"idle": idle.total_seconds()},
+            )
+        )
+        resumed = sorted({(row[0], row[1]) for row in [*expired, *stranded]})
         if resumed:
             await connection.execute(
                 text(
@@ -405,8 +423,8 @@ async def expire_enrichment(engine: AsyncEngine, wait: timedelta = LOOKUP_WAIT) 
                     " values (cast(:t as uuid), 'diagnosis.requested', cast(:p as jsonb))"
                 ),
                 [
-                    {"t": row.tenant_id, "p": json.dumps({"diagnosis_id": row.diagnosis_id})}
-                    for row in resumed
+                    {"t": tenant, "p": json.dumps({"diagnosis_id": diagnosis})}
+                    for tenant, diagnosis in resumed
                 ],
             )
         return len(resumed)

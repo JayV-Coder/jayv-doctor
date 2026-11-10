@@ -7,6 +7,7 @@ export type Lookup = {
   entity: string;
   field: string;
   status_field: string | null;
+  id_field: string | null;
   pad_left: number;
 };
 
@@ -49,6 +50,7 @@ export function lookupFromForm(form: FormData): Lookup | null {
     entity: text(form, "entity"),
     field: text(form, "lookup-field"),
     status_field: text(form, "status-field") || null,
+    id_field: text(form, "id-field") || null,
     pad_left: Number(text(form, "pad") || "0"),
   };
 }

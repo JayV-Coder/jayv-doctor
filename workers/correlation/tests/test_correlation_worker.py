@@ -513,3 +513,31 @@ async def test_mapa_une_salesforce_gcp_e_sap_chegando_em_lotes_separados(
     )
     assert [row["correlated_by"] for row in stored] == ["execution_id", "trace_id", "execution_id"]
     assert all(row["cross_keys"] == [f"{mapping}:801XX0001"] for row in stored)
+
+
+@pytest.mark.asyncio
+async def test_mapa_removido_nao_une_mais_pelas_chaves_gravadas(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    mapping = str(uuid4())
+    await run(
+        engine,
+        "insert into doctor.correlation_mappings (id, tenant_id, integration_id, name, keys,"
+        " window_minutes) values (:m, :t, :i, 'Pedido', cast(:k as jsonb), 10)",
+        m=mapping,
+        t=tenant["tenant"],
+        i=tenant["integration"],
+        k=json.dumps([{"system": "sap", "field": "attributes.bstkd"}]),
+    )
+    # Duas Execuções com a mesma chave a 30 min: fora da janela de 10, ficam separadas.
+    await insert(engine, tenant, 0, provider="sap", execution_id="A", attributes={"bstkd": "801"})
+    await insert(
+        engine, tenant, 30 * 60_000, provider="sap", execution_id="B", attributes={"bstkd": "801"}
+    )
+    assert await correlate(engine, tenant) == 2
+    await run(engine, "delete from doctor.correlation_mappings where id = :m", m=mapping)
+    # Um Evento novo puxa A e B como vizinhos (ids fortes); sem o Mapa, a chave antiga não une.
+    await insert(engine, tenant, 31 * 60_000, provider="sap", execution_id="A")
+    await insert(engine, tenant, 31 * 60_000 + 1, provider="sap", execution_id="B")
+    assert await correlate(engine, tenant) == 2
+    assert [row["event_count"] for row in await executions(engine, tenant)] == [2, 2]

@@ -299,3 +299,23 @@ def test_referencia_de_negocio_prende_evento_solto_ao_grupo_do_mapa() -> None:
     ]
     (group,) = Correlator().correlate(TENANT, events).groups
     assert group.correlated_by[events[1].id] == "business_reference"
+
+
+def test_chave_que_se_repete_nao_encadeia_execucoes() -> None:
+    """Janelas fixas: a mesma chave a cada 50 min, com janela de 60, não vira um dia inteiro."""
+    events = [
+        event(n, n * 50 * 60_000, execution_id=f"exec-{n}", cross_keys=(PEDIDO,))
+        for n in range(1, 6)
+    ]
+    groups = Correlator().correlate(TENANT, events).groups
+    assert [len(group.event_ids) for group in groups] == [2, 2, 1]
+
+
+def test_chave_sem_par_continua_solta_e_a_referencia_ainda_prende() -> None:
+    """Configurar um Mapa não tira o que a Referência já juntava."""
+    events = [
+        event(1, 0, execution_id="exec-mw", business_reference="hmac:801"),
+        event(2, 500, business_reference="hmac:801", cross_keys=(PEDIDO,)),
+    ]
+    (group,) = Correlator().correlate(TENANT, events).groups
+    assert group.correlated_by[events[1].id] == "business_reference"

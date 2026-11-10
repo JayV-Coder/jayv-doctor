@@ -408,3 +408,18 @@ async def test_llm_recebe_a_consulta_como_dado_e_pode_cita_la() -> None:
     draft = await diagnosis.run(Loader(enrichment=[FOUND]), mode="hybrid")
     assert "enr-1" in json.dumps(provider.requests[0], default=str)
     assert [e.ref_id for e in draft.evidence].count("enr-1") == 1
+
+
+@pytest.mark.asyncio
+async def test_consulta_na_origem_ou_fora_do_risco_de_reenvio_so_vira_evidencia() -> None:
+    at_source = EnrichmentItem(**{**FOUND.__dict__, "system": "salesforce", "entity": "Order"})
+    diagnosis, _ = engine()
+    draft = await diagnosis.run(Loader(enrichment=[at_source]), mode="rules_only")
+    assert not draft.recommendations[0].text.startswith("Não reenvie")
+    assert draft.evidence[0].kind == "enrichment"
+
+    divergence = IncidentInfo(**{**INCIDENT.__dict__, "category": "DIVERGENCE"})
+    diagnosis, _ = engine()
+    draft = await diagnosis.run(Loader(incident=divergence, enrichment=[FOUND]), mode="rules_only")
+    assert not any(r.text.startswith("Não reenvie") for r in draft.recommendations)
+    assert not any("depois do timeout" in h.statement for h in draft.hypotheses)

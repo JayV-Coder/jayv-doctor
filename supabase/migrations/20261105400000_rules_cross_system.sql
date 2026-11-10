@@ -14,3 +14,9 @@ insert into doctor.rule_definitions (code, version, category, severity_hint, des
   ('INT-010', '2026.11.2', 'IDOC_ERROR', 'high', 'IDoc com status 51: o documento de aplicação não foi lançado no SAP.'),
   ('INT-011', '2026.11.2', 'SAP_AUTHORIZATION', 'high', 'O usuário técnico não tem autorização no SAP para a operação.'),
   ('INT-012', '2026.11.2', 'MASTER_DATA', 'medium', 'Cadastro mestre faltante ou incompleto no SAP (ex.: material não mantido no centro, M3 305).');
+
+-- Divergência pelo Mapa (INT-008): avaliada de novo quando a janela do Mapa já passou desde o
+-- último Evento, para o destino ter tido tempo de chegar. A Execução reaberta zera a marca.
+alter table doctor.executions add column reconciled_at timestamptz;
+create index executions_reconcile_due_idx on doctor.executions (tenant_id, last_event_at)
+  where reconciled_at is null and closed_at is not null and merged_into is null;

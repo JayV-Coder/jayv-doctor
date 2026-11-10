@@ -9198,6 +9198,18 @@
             ],
             "title": "Status Field"
           },
+          "id_field": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_]{0,79}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Field"
+          },
           "pad_left": {
             "type": "integer",
             "maximum": 35.0,

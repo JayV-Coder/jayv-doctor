@@ -16,6 +16,7 @@ from aid_diagnosis_engine.diagnosis import (
     KnowledgeItem,
     RuleItem,
 )
+from aid_diagnosis_engine.diagnosis.engine import Routing
 from aid_diagnosis_engine.diagnosis.model import Mode
 from aid_diagnosis_engine.incidents import LABELS, incident_title, primary
 from aid_diagnosis_engine.llm.base import LLMError
@@ -140,12 +141,13 @@ async def run_case(
     mode: Mode,
     llm: GuardedLLM | None = None,
     judge: Judge | None = None,
+    routing: Routing = "fixed",
 ) -> CaseResult:
     label = case.label
     if label is None:
         raise ValueError(f"caso {case.id} sem gabarito")
     incident, events, rules = context(case)
-    engine = DiagnosisEngine(llm if mode == "hybrid" else None, scope="avaliacao")
+    engine = DiagnosisEngine(llm if mode == "hybrid" else None, scope="avaliacao", routing=routing)
     started = time.perf_counter()
     draft = await engine.run(CaseLoader(incident, events, rules), mode=mode)
     latency = (time.perf_counter() - started) * 1000
@@ -204,12 +206,13 @@ async def run(
     mode: Mode,
     llm: Callable[[], GuardedLLM] | None = None,
     judge: Judge | None = None,
+    routing: Routing = "fixed",
 ) -> list[CaseResult]:
     """Casos rotulados, com até CONCURRENCY ao mesmo tempo; o resultado sai na ordem do dataset."""
     gate = asyncio.Semaphore(CONCURRENCY)
 
     async def one(case: Case) -> CaseResult:
         async with gate:
-            return await run_case(case, mode, llm() if llm is not None else None, judge)
+            return await run_case(case, mode, llm() if llm is not None else None, judge, routing)
 
     return list(await asyncio.gather(*(one(case) for case in cases if case.label is not None)))

@@ -127,3 +127,14 @@ variable "atlassian_client_id" {
   type        = string
   default     = ""
 }
+
+variable "llm_routing" {
+  description = "Roteamento do modelo do Diagnóstico (#47, ADR-0020): fixed (sempre o maior), by_complexity (o menor nos casos simples) ou fast (sempre o menor). Mude só com a recomendação de aid_evaluation compare."
+  type        = string
+  default     = "fixed"
+
+  validation {
+    condition     = contains(["fixed", "by_complexity", "fast"], var.llm_routing)
+    error_message = "llm_routing: fixed, by_complexity ou fast."
+  }
+}

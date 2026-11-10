@@ -1,5 +1,7 @@
-"""Diferença de qualidade e de custo entre perfis de IA (#45, ADR-0018): compara os JSONs de
-métricas de `run --profile …` (um por perfil) contra o primeiro, modo a modo."""
+"""Diferença de qualidade e de custo entre perfis de IA (#45, ADR-0018) e entre modelos e
+roteamentos (#47): compara os JSONs de métricas de `run` contra o primeiro, modo a modo, e diz
+se cada variante pode ser adotada pelo critério do #47 (custo médio por Diagnóstico ao menos
+30% menor, sem perder mais de 2 p.p. de precisão)."""
 
 import json
 from pathlib import Path
@@ -37,6 +39,34 @@ def change(value: float | None, base: float | None) -> str:
     if value is None or base is None or base == 0:
         return "—"
     return f"{(value / base - 1) * 100:+.0f}%"
+
+
+SAVING = 0.30
+TOLERANCE = 0.02
+# A precisão que o critério confere (a Causa só conta se o juiz rodou nos dois).
+GUARDED = ("category_accuracy", "cause_accuracy")
+
+
+def recommend(base: dict[str, Any], candidate: dict[str, Any]) -> str:
+    """Adotar ou não, com o motivo, pelo critério do #47."""
+    losses = [
+        (key, float(base[key]) - float(candidate[key]))
+        for key in GUARDED
+        if base.get(key) is not None and candidate.get(key) is not None
+    ]
+    if not losses:
+        return "sem precisão medida nos dois: rode com o mesmo dataset (e o mesmo juiz)"
+    worst_key, worst = max(losses, key=lambda item: item[1])
+    base_cost, cost = per_case(base), per_case(candidate)
+    if base_cost is None or cost is None or base_cost == 0:
+        return "sem custo medido nos dois: preencha tests/evaluation/prices.json"
+    saving = 1 - cost / base_cost
+    detail = f"custo {change(cost, base_cost)}, pior perda {points(-worst, 0.0)} em {worst_key}"
+    if worst > TOLERANCE:
+        return f"não adotar: perda acima de 2 p.p. ({detail})"
+    if saving < SAVING:
+        return f"não adotar: economia abaixo de 30% ({detail})"
+    return f"adotar ({detail})"
 
 
 def render(reports: dict[str, dict[str, dict[str, Any]]]) -> str:
@@ -77,6 +107,12 @@ def render(reports: dict[str, dict[str, dict[str, Any]]]) -> str:
         lines.append("| Custo por Diagnóstico | " + " | ".join(cost_cells) + " |")
         lines.append("| Latência p95 | " + " | ".join(latency_cells) + " |")
         lines.append("")
+        if mode == "hybrid" and len(names) > 1:
+            lines += ["**Recomendação (critério do #47):**", ""]
+            lines += [
+                f"- {name}: {recommend(base, reports[name].get(mode, {}))}" for name in names[1:]
+            ]
+            lines.append("")
     lines.append("Confiança e precisão são da avaliação offline (#30); a confiança é heurística.")
     return "\n".join(lines) + "\n"
 

@@ -37,10 +37,21 @@ PRICES = ROOT / "prices.json"
 TOLERANCE = 0.02
 
 
+LOCAL: dict[str, str] = {}
+
+
 def guarded(provider: str) -> Any:
     from aid_diagnosis_engine.llm.client import GuardedLLM
     from aid_diagnosis_engine.llm.registry import provider_for
 
+    if provider == "local":
+        # Modelos open-weights (8 a 70B, #47) num servidor compatível com a API da OpenAI.
+        from aid_diagnosis_engine.llm.local import LocalProvider, PrivateEndpoint
+
+        if not LOCAL.get("url") or not LOCAL.get("model"):
+            raise SystemExit("o provedor local precisa de --local-url e --local-model")
+        local = LocalProvider(PrivateEndpoint(LOCAL["url"], 300.0), LOCAL["model"], 300.0)
+        return lambda: GuardedLLM(local)
     chosen = provider_for(provider)
     return lambda: GuardedLLM(chosen)
 
@@ -56,6 +67,7 @@ async def evaluate(
     provider: str | None,
     judge: bool,
     judge_provider: str | None = None,
+    routing: str = "fixed",
 ) -> tuple[list[Metrics], list[CaseResult]]:
     """`judge_provider`: o mesmo juiz em todos os perfis (#45), para a diferença de qualidade
     ser do modelo avaliado e não do juiz; sem ele, o juiz é o próprio provedor."""
@@ -76,6 +88,7 @@ async def evaluate(
             cast("Any", mode),
             llm if mode == "hybrid" else None,
             referee if mode == "hybrid" else None,
+            cast("Any", routing),
         )
         metrics.append(summarize(mode, results, prices))
         everything += results
@@ -92,6 +105,7 @@ def command_compare(args: argparse.Namespace) -> None:
 
 
 def command_run(args: argparse.Namespace) -> None:
+    LOCAL.update(url=args.local_url or "", model=args.local_model or "")
     if args.profile:
         from aid_diagnosis_engine.llm.registry import PROFILES
 
@@ -101,7 +115,7 @@ def command_run(args: argparse.Namespace) -> None:
     cases = dataset(args.dataset)
     cases = cases[: args.limit] if args.limit else cases
     metrics, results = asyncio.run(
-        evaluate(cases, args.modes, args.provider, args.judge, args.judge_provider)
+        evaluate(cases, args.modes, args.provider, args.judge, args.judge_provider, args.routing)
     )
     notes = []
     if "hybrid" not in args.modes:
@@ -246,7 +260,11 @@ def main() -> None:
     runner.add_argument(
         "--modes", nargs="+", default=["rules_only"], choices=["rules_only", "hybrid"]
     )
-    runner.add_argument("--provider", choices=["anthropic", "vertex", "vertex_dedicated"])
+    runner.add_argument("--provider", choices=["anthropic", "vertex", "vertex_dedicated", "local"])
+    # #47: modelo menor em todas as etapas (`fast`) ou só nos casos simples (`by_complexity`).
+    runner.add_argument("--routing", choices=["fixed", "fast", "by_complexity"], default="fixed")
+    runner.add_argument("--local-url", help="servidor compatível com a API da OpenAI (/v1)")
+    runner.add_argument("--local-model", help="modelo servido (ex.: llama-3.1-70b-instruct)")
     # Perfil de IA (ADR-0018): escolhe o provedor dele.
     runner.add_argument("--profile", choices=["standard", "br_region", "dedicated"])
     # Juiz fixo entre perfis: compare só faz sentido com o mesmo juiz.

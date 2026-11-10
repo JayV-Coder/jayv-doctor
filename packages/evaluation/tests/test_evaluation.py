@@ -164,3 +164,16 @@ def test_compara_perfis_com_diferenca_de_qualidade_e_custo() -> None:
     assert "| Precisão de categoria | 90,0% | 87,0% (-3,0 p.p.) |" in report
     assert "| Custo por Diagnóstico | US$ 0,0200 | US$ 0,0120 (-40%) |" in report
     assert "7200 ms (-20%)" in report
+
+
+def test_recomendacao_pelo_criterio_de_custo_e_precisao() -> None:
+    from aid_evaluation.compare import recommend
+
+    base = {"cases": 100, "category_accuracy": 0.90, "cause_accuracy": 0.80, "cost_usd": 2.0}
+    cheaper = {**base, "category_accuracy": 0.89, "cost_usd": 1.2}
+    assert recommend(base, cheaper).startswith("adotar")
+    worse = {**base, "cause_accuracy": 0.77, "cost_usd": 1.0}
+    assert recommend(base, worse).startswith("não adotar: perda acima de 2 p.p.")
+    small_saving = {**base, "cost_usd": 1.8}
+    assert recommend(base, small_saving).startswith("não adotar: economia abaixo de 30%")
+    assert "prices.json" in recommend(base, {**base, "cost_usd": None})

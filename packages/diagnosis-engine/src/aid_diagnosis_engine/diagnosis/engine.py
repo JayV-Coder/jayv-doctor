@@ -2,15 +2,24 @@
 conhecimento, 5 LLM e 6 verificação. O modo `rules_only` pula as etapas 4 e 5; a Cota de IA
 esgotada e a falha do LLM caem nele também, com a nota e, na falha, o status `failed_llm`."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
+from typing import Literal
 
 from aid_diagnosis_engine.diagnosis.enrichment import apply_enrichment
-from aid_diagnosis_engine.diagnosis.model import DiagnosisDraft, Loader, Mode, Stage
+from aid_diagnosis_engine.diagnosis.model import (
+    DiagnosisDraft,
+    EventItem,
+    IncidentInfo,
+    Loader,
+    Mode,
+    RuleItem,
+    Stage,
+)
 from aid_diagnosis_engine.diagnosis.prompt import SYSTEM, instructions, knowledge_query, untrusted
 from aid_diagnosis_engine.diagnosis.rules_only import rules_draft
 from aid_diagnosis_engine.diagnosis.schema import LLMDiagnosis
 from aid_diagnosis_engine.diagnosis.verify import verify
-from aid_diagnosis_engine.llm.base import LLMError, Usage
+from aid_diagnosis_engine.llm.base import LLMError, Tier, Usage
 from aid_diagnosis_engine.llm.client import GuardedLLM
 
 OnStage = Callable[[Stage], Awaitable[None]]
@@ -25,6 +34,35 @@ async def _nothing(stage: Stage) -> None:
     return None
 
 
+# Roteamento por complexidade (#47): `fixed` usa sempre o modelo maior (o padrão até a avaliação
+# decidir), `fast` sempre o menor, e `by_complexity` o menor quando as Regras já explicam o caso
+# e o maior quando a confiança delas é baixa.
+Routing = Literal["fixed", "fast", "by_complexity"]
+SIMPLE_EVENTS = 30
+
+
+def choose_tier(
+    routing: Routing,
+    incident: IncidentInfo,
+    events: Sequence[EventItem],
+    rules: Sequence[RuleItem],
+) -> Tier:
+    """Caso simples: uma categoria só entre as Regras que dispararam, categoria conhecida e
+    poucos Eventos. O resto (sem Regra, categorias em conflito, muito Evento) vai ao maior."""
+    if routing == "fixed":
+        return "reasoning"
+    if routing == "fast":
+        return "fast"
+    categories = {rule.category for rule in rules}
+    simple = (
+        len(categories) == 1
+        and "UNKNOWN" not in categories
+        and incident.category not in (None, "UNKNOWN")
+        and len(events) <= SIMPLE_EVENTS
+    )
+    return "fast" if simple else "reasoning"
+
+
 class DiagnosisEngine:
     def __init__(
         self,
@@ -32,12 +70,14 @@ class DiagnosisEngine:
         *,
         scope: str,
         without_ai: str = "Cota de IA indisponível: Diagnóstico só com as Regras.",
+        routing: Routing = "fixed",
     ) -> None:
         """`llm` ausente = sem IA (modo rules_only, sem Cota ou envio desligado), e `without_ai`
-        diz por quê; `scope` é a Organização."""
+        diz por quê; `scope` é a Organização; `routing` escolhe o modelo do caso (#47)."""
         self.llm = llm
         self.scope = scope
         self.without_ai = without_ai
+        self.routing = routing
         self.usage: list[Usage] = []
         if llm is not None:
             llm.usage_sink = self._record
@@ -96,7 +136,7 @@ class DiagnosisEngine:
                 instructions=instructions(incident),
                 untrusted=untrusted(rules, events, knowledge, enrichment),
                 schema=LLMDiagnosis,
-                tier="reasoning",
+                tier=choose_tier(self.routing, incident, events, rules),
                 max_tokens=MAX_TOKENS,
             )
         except LLMError:

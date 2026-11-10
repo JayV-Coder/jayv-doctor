@@ -25,6 +25,7 @@ from aid_diagnosis_engine.diagnosis import (
     RuleItem,
     Stage,
 )
+from aid_diagnosis_engine.diagnosis.engine import Routing
 from aid_diagnosis_engine.diagnosis.model import Mode
 from aid_diagnosis_engine.llm.base import LLMProvider, LLMUnavailableError
 from aid_diagnosis_engine.llm.client import GuardedLLM
@@ -118,6 +119,13 @@ def estimate_cost(model: str | None, input_tokens: int, output_tokens: int) -> f
     if price is None:
         return None
     return round(input_tokens / 1e6 * price[0] + output_tokens / 1e6 * price[1], 6)
+
+
+def routing() -> Routing:
+    """`AID_LLM_ROUTING` (#47): `fixed` (padrão, o modelo maior), `by_complexity` ou `fast`.
+    Muda com a recomendação da avaliação; valor desconhecido fica no padrão."""
+    found = os.environ.get("AID_LLM_ROUTING", "fixed")
+    return found if found in ("fixed", "fast", "by_complexity") else "fixed"  # type: ignore[return-value]
 
 
 def guarded(provider: LLMProvider, tenant: str) -> GuardedLLM:
@@ -684,6 +692,7 @@ async def diagnose(
         motor = DiagnosisEngine(
             guarded(provider, diagnosis.tenant_id) if allowed and provider is not None else None,
             scope=diagnosis.tenant_id,
+            routing=routing(),
             without_ai=LLM_DISABLED
             if not enabled
             else LOCAL_MISSING

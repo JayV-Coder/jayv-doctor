@@ -221,7 +221,11 @@ module "workers" {
       OTEL_ENABLED   = "true"
     },
     # O backup do Storage (#33) roda no worker de diagnóstico, que tem a chave do Storage.
-    each.key == "diagnosis" ? { BACKUP_BUCKET = google_storage_bucket.storage_backup.name } : {},
+    each.key == "diagnosis" ? {
+      BACKUP_BUCKET = google_storage_bucket.storage_backup.name
+      # Roteamento de modelo por complexidade (#47): muda com a recomendação da avaliação.
+      AID_LLM_ROUTING = var.llm_routing
+    } : {},
     # Os links das notificações levam ao app (#41).
     each.key == "notifier" ? {
       APP_URL                 = var.app_url

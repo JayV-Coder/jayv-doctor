@@ -423,3 +423,42 @@ async def test_consulta_na_origem_ou_fora_do_risco_de_reenvio_so_vira_evidencia(
     draft = await diagnosis.run(Loader(incident=divergence, enrichment=[FOUND]), mode="rules_only")
     assert not any(r.text.startswith("Não reenvie") for r in draft.recommendations)
     assert not any("depois do timeout" in h.statement for h in draft.hypotheses)
+
+
+def test_roteamento_por_complexidade_escolhe_o_modelo_do_caso() -> None:
+    """#47: menor quando as Regras explicam o caso; maior quando não."""
+    from aid_diagnosis_engine.diagnosis.engine import choose_tier
+    from aid_diagnosis_engine.diagnosis.model import IncidentInfo, RuleItem
+
+    incident = IncidentInfo.__new__(IncidentInfo)
+    object.__setattr__(incident, "category", "TIMEOUT")
+
+    def rule(category: str) -> RuleItem:
+        found = RuleItem.__new__(RuleItem)
+        object.__setattr__(found, "category", category)
+        return found
+
+    one = [rule("TIMEOUT")]
+    assert choose_tier("fixed", incident, [], one) == "reasoning"
+    assert choose_tier("fast", incident, [], []) == "fast"
+    assert choose_tier("by_complexity", incident, [], one) == "fast"
+    assert choose_tier("by_complexity", incident, [], []) == "reasoning"
+    assert (
+        choose_tier("by_complexity", incident, [], [rule("TIMEOUT"), rule("AUTH")]) == "reasoning"
+    )
+    assert choose_tier("by_complexity", incident, [object()] * 31, one) == "reasoning"  # type: ignore[list-item]
+
+
+@pytest.mark.asyncio
+async def test_motor_com_roteamento_usa_o_modelo_menor_no_caso_simples() -> None:
+    """A Loader padrão tem uma Regra de TIMEOUT: caso simples vai ao modelo menor."""
+    provider = FakeProvider([answer(), answer()])
+    llm = GuardedLLM(
+        provider, breaker=CircuitBreaker(), policy=RetryPolicy(attempts=1, base_seconds=0)
+    )
+    routed = await DiagnosisEngine(llm, scope="t", routing="by_complexity").run(
+        Loader(), mode="hybrid"
+    )
+    fixed = await DiagnosisEngine(llm, scope="t2").run(Loader(), mode="hybrid")
+    assert [r["tier"] for r in provider.requests] == ["fast", "reasoning"]
+    assert (routed.model, fixed.model) == ("fake-fast", "fake-reasoning")

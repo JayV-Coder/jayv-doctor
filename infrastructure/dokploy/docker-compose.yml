@@ -1,0 +1,172 @@
+# Integration AI Doctor no Dokploy (teste fora do GCP). No GCP, o deploy é o Terraform
+# (infrastructure/terraform). Aqui, o Pub/Sub é o emulador e o Cloud Scheduler é o serviço
+# `scheduler`. Só `web` e `api` ganham domínio no Dokploy; workers e emulador ficam na rede
+# interna. Variáveis: infrastructure/dokploy/.env.example (cada valor uma vez só).
+
+x-worker-build: &worker-build
+  context: ../..
+  dockerfile: infrastructure/docker/python.Dockerfile
+  args:
+    PACKAGE: aid-worker
+    APP: aid_worker.main:app
+    # O PDF do Relatório técnico (WeasyPrint): só o worker de diagnóstico usa, mas a imagem é uma só.
+    SYSTEM_PACKAGES: libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core
+
+x-worker-env: &worker-env
+  SUPABASE_DB_URL: ${SUPABASE_DB_URL:?defina SUPABASE_DB_URL}
+  SUPABASE_URL: ${SUPABASE_URL:?defina SUPABASE_URL}
+  GCP_PROJECT_ID: ${GCP_PROJECT_ID:-aid-local}
+  PUBSUB_EMULATOR_HOST: pubsub:8085
+  OTEL_ENABLED: "false"
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+x-worker: &worker
+  build: *worker-build
+  image: aid-worker:dokploy
+  restart: unless-stopped
+  depends_on:
+    pubsub-setup:
+      condition: service_completed_successfully
+
+services:
+  web:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/web.Dockerfile
+      args:
+        # Vão para o JavaScript do navegador no build: mudar exige um novo deploy.
+        NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL:?defina SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:?defina SUPABASE_PUBLISHABLE_KEY}
+        NEXT_PUBLIC_SITE_URL: ${APP_URL:?defina APP_URL}
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY}
+      NEXT_PUBLIC_SITE_URL: ${APP_URL}
+      # O servidor do Next fala com a API pela rede interna.
+      API_URL: http://api:8080
+    expose: ["3000"]
+    depends_on: [api]
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/python.Dockerfile
+      args:
+        PACKAGE: aid-api
+        APP: aid_api.main:app
+    restart: unless-stopped
+    environment:
+      SUPABASE_DB_URL: ${SUPABASE_DB_URL}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_JWT_ISSUER: ${SUPABASE_URL}/auth/v1
+      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY}
+      APP_URL: ${APP_URL}
+      AID_PUBLIC_API_URL: ${API_PUBLIC_URL:?defina API_PUBLIC_URL}
+      HMAC_MASTER_KEY: ${HMAC_MASTER_KEY:?defina HMAC_MASTER_KEY}
+      SMTP_URL: ${SMTP_URL:?defina SMTP_URL}
+      MAIL_FROM: ${MAIL_FROM:-}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+      AID_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      AID_ATLASSIAN_CLIENT_ID: ${ATLASSIAN_CLIENT_ID:-}
+      AID_ATLASSIAN_CLIENT_SECRET: ${ATLASSIAN_CLIENT_SECRET:-}
+      AID_ATLASSIAN_REDIRECT_URI: ${APP_URL}/chamados/jira
+      AID_AGENT_CA_KEY: ${AGENT_CA_KEY:-}
+      AID_AGENT_CA_CERT: ${AGENT_CA_CERT:-}
+      # Atrás do Traefik do Dokploy: um proxy só antes da API.
+      AID_TRUSTED_PROXY_HOPS: "1"
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-120}
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-aid-local}
+      OTEL_ENABLED: "false"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    expose: ["8080"]
+
+  pubsub:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085 --project=${GCP_PROJECT_ID:-aid-local}
+    restart: unless-stopped
+    expose: ["8085"]
+
+  # Tópicos e assinaturas push (os mesmos do Terraform). O emulador guarda tudo em memória:
+  # se ele reiniciar, rode este serviço de novo (Dokploy: Deploy, ou `docker compose up pubsub-setup`).
+  pubsub-setup:
+    build: *worker-build
+    image: aid-worker:dokploy
+    environment:
+      PUBSUB_EMULATOR_HOST: pubsub:8085
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-aid-local}
+      AID_WORKER_URL: http://worker-{worker}:8080
+    command:
+      - sh
+      - -c
+      - until python -c "import httpx; httpx.get('http://pubsub:8085')" 2>/dev/null; do sleep 2; done; python -m aid_relay.emulator
+    restart: "no"
+    depends_on: [pubsub]
+
+  worker-ingestion:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      WORKER_NAME: ingestion
+      HMAC_MASTER_KEY: ${HMAC_MASTER_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?defina SUPABASE_SERVICE_ROLE_KEY}
+
+  worker-correlation:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      WORKER_NAME: correlation
+
+  worker-diagnosis:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      WORKER_NAME: diagnosis
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      SMTP_URL: ${SMTP_URL}
+      MAIL_FROM: ${MAIL_FROM:-}
+      AID_LLM_ROUTING: ${LLM_ROUTING:-{}}
+      AID_LLM_PRICES: ${LLM_PRICES:-}
+
+  worker-connectors:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      WORKER_NAME: connectors
+
+  worker-notifier:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      WORKER_NAME: notifier
+      APP_URL: ${APP_URL}
+      AID_PUBLIC_API_URL: ${API_PUBLIC_URL}
+      SMTP_URL: ${SMTP_URL}
+      MAIL_FROM: ${MAIL_FROM:-}
+      AID_VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      AID_VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:alertas@jayv.dev}
+      AID_ATLASSIAN_CLIENT_ID: ${ATLASSIAN_CLIENT_ID:-}
+      AID_ATLASSIAN_CLIENT_SECRET: ${ATLASSIAN_CLIENT_SECRET:-}
+
+  worker-relay:
+    <<: *worker
+    environment:
+      <<: *worker-env
+      WORKER_NAME: relay
+
+  # Os jobs do Cloud Scheduler (os mesmos do Terraform, menos métricas e backup, que são do GCP).
+  scheduler:
+    image: aid-worker:dokploy
+    command: ["python", "-m", "aid_worker.scheduler"]
+    restart: unless-stopped
+    environment:
+      AID_WORKER_URL: http://worker-{worker}:8080
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      - worker-relay
+      - worker-correlation
+      - worker-connectors
+      - worker-notifier
+      - worker-diagnosis

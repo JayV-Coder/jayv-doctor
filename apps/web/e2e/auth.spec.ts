@@ -169,3 +169,30 @@ test("token expirado é renovado de forma transparente", async ({ page, context 
   const renewed = (await context.cookies()).find((cookie) => cookie.name === session.name);
   expect(renewed?.value).not.toBe(`base64-${expired}`);
 });
+
+test("cria a conta pelo login com as regras da senha e entra", async ({ page }) => {
+  const email = uniqueEmail();
+  const password = randomPassword();
+  await page.goto("/login");
+  await page.getByRole("button", { name: "Ainda não tem conta? Criar conta" }).click();
+  await page.getByLabel("E-mail corporativo").fill(email);
+  await page.getByLabel("Nome").fill("Ana Integradora");
+  await page.getByLabel("Senha", { exact: true }).fill("curta");
+  const create = page.getByRole("button", { name: "Criar conta" });
+  await expect(create).toBeDisabled();
+  await expect(page.getByRole("list", { name: "Regras da senha" })).toContainText(
+    "Ao menos 12 caracteres (pendente)",
+  );
+  await page.getByLabel("Senha", { exact: true }).fill(password);
+  await page.getByLabel("Confirmar senha").fill(`${password}x`);
+  await expect(page.getByText("As senhas não conferem.")).toBeVisible();
+  await page.getByLabel("Confirmar senha").fill(password);
+  await expectNoHorizontalScroll(page);
+  await create.click();
+  // A stack local não pede confirmação de e-mail: a conta já entra (no projeto hospedado, a
+  // tela pede para confirmar pelo e-mail antes).
+  await expect(page).not.toHaveURL(/\/login/);
+  await page.context().clearCookies();
+  await signInWithPassword(page, email, password);
+  await expect(page).not.toHaveURL(/\/login/);
+});

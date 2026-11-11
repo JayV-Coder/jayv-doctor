@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
@@ -32,6 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -49,6 +53,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
@@ -124,6 +130,8 @@ jobs:
         working-directory: infrastructure/terraform
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
       - uses: hashicorp/setup-terraform@v3
       - uses: terraform-linters/setup-tflint@v5
       - run: terraform fmt -check -recursive
@@ -146,6 +154,8 @@ jobs:
             }
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
       - run: >-
           docker build -f infrastructure/docker/python.Dockerfile
           --build-arg PACKAGE=${{ matrix.package }} --build-arg APP=${{ matrix.app }}
@@ -156,6 +166,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
       - run: docker build -f infrastructure/docker/agent.Dockerfile -t aid-agent .
       - name: Sem porta exposta
         run: test "$(docker image inspect aid-agent --format '{{json .Config.ExposedPorts}}')" = "null"
@@ -165,6 +177,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
@@ -186,6 +200,8 @@ jobs:
       ACTIONLINT_VERSION: 1.7.8
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
       - name: Instalar actionlint
         run: |
           curl -sSfL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
@@ -201,6 +217,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
+          submodules: true
           fetch-depth: 0
       - name: Instalar gitleaks
         run: |
@@ -214,6 +231,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true
       - name: Verificar projeto Supabase
         id: supabase
         run: echo "present=$([ -f supabase/config.toml ] && echo true || echo false)" >> "$GITHUB_OUTPUT"

@@ -49,6 +49,8 @@ Tudo foi validado na stack local e no CI. A configuração do GCP e do Supabase 
 - [ ] Auditoria (#28): conferir, no projeto real, os nomes das ações de MFA em `auth.audit_log_entries` (o mapeamento em `doctor.import_auth_events` usa `login`, `logout`, `factor_*` e `mfa_code_login`) e se o projeto grava o IP nesses eventos.
 - [ ] Segurança (#27): rodar os Advisors do Supabase (security e performance) no projeto e conferir que assinar `doctor.diagnoses` de outra Organização pelo Realtime não entrega eventos (o CI sobe sem Realtime). Ver `docs/security/isolamento-e-asvs-l2.md`.
 - [ ] Diagnóstico (#24): a Cota de IA ainda libera tudo (`ai_allowed` no worker de diagnóstico); o controle de consumo entra com o #31 (`usage_records`, `usage_llm`).
+- [ ] Banco no repositório `JayV-Coder/supabase` (ADR-0022): as migrações do Doctor estão em `doctor.schema_migrations`, mas não em `supabase_migrations.schema_migrations`. Antes do próximo `supabase db push` daquele repositório, marcar as 39 versões como aplicadas (`supabase migration repair --status applied <versões>`), senão o push tenta recriar o schema `doctor`. Decidir também quem aplica migração nova do Doctor daí em diante: o script (e o `repair` logo depois) ou o próprio `db push`, que passaria a aplicar as duas.
+- [ ] Aplicar a migração `20261112100000_coder_schema.sql` (tabelas do app em `coder`, views em `public`) numa janela combinada.
 - [ ] Rodar `python -m aid_knowledge.global_seed` (com `SUPABASE_DB_URL` e `VOYAGE_API_KEY`) depois das migrações, para gravar a Base global v1 com embeddings.
 - [ ] Confirmar que nenhum Custom Access Token Hook está ativo e ativar `doctor.custom_access_token_hook`.
 - [ ] Incluir as URLs do app web nas URLs de redirecionamento do Auth.

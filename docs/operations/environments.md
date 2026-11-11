@@ -4,7 +4,7 @@ Todos os ambientes usam o projeto Supabase `exvsozyemolrjbjetqww` (`jayv-coder`,
 
 ## Aplicar migrações
 
-Nunca use `supabase db push` nem `apply_migration`: eles usam `supabase_migrations.schema_migrations`, que é do jayv-coder. Use o script, que confere as tabelas de `public`, ignora o stub local e registra cada versão em `doctor.schema_migrations`:
+Nunca use `supabase db push` nem `apply_migration`: eles usam `supabase_migrations.schema_migrations`, que é do jayv-coder. Use o script, que confere as tabelas de `public`, aplica só as migrações `*_doctor_*` de `vendor/supabase` e registra cada versão em `doctor.schema_migrations`:
 
 ```bash
 SUPABASE_DB_URL=<url direta> uv run python scripts/apply-doctor-migrations.py --check   # só leitura

@@ -19,4 +19,4 @@ SaaS B2B que diagnostica falhas de integrações (SAP, Salesforce, GCP). Supabas
 - Confiança é exibida sempre como "heurística".
 
 ## Fluxo de trabalho
-Teste primeiro (`/tdd`), migração em `supabase/migrations`, tipos regenerados, revisão com `/code-review`.
+Teste primeiro (`/tdd`), migração em `JayV-Coder/supabase` (`migrations/<versão>_doctor_<nome>.sql`, submódulo em `vendor/supabase`; [ADR-0022](docs/adr/0022-banco-no-repositorio-supabase.md)), tipos regenerados, revisão com `/code-review`.

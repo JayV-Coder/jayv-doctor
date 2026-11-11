@@ -19,6 +19,7 @@ Supabase (Postgres + pgvector, Auth, Storage, Realtime, Vault) · Python 3.12 + 
 Requisitos: Node 22 com pnpm 9 (`corepack enable`), [uv](https://docs.astral.sh/uv/) e GNU make. Docker e Supabase CLI são necessários a partir do ticket #2.
 
 ```bash
+git submodule update --init   # banco em JayV-Coder/supabase (ADR-0022)
 cp .env.example .env
 make dev-setup   # pnpm install, uv sync, hooks de pre-commit
 make check       # lint + typecheck + testes (o mesmo que o CI)
@@ -27,6 +28,7 @@ make check       # lint + typecheck + testes (o mesmo que o CI)
 | Pasta | Conteúdo |
 |---|---|
 | `apps/web`, `apps/api` | Next.js (PWA) e FastAPI |
+| `vendor/supabase` | submódulo `JayV-Coder/supabase`: migrações (`*_doctor_*`) e testes de banco (`tests/doctor/`) |
 | `workers/*` | ingestion, correlation, diagnosis, connectors, retention |
 | `packages/*` | contracts, connectors, diagnosis-engine, knowledge, security |
 | `supabase/` | migrações, seed e testes pgTAP |

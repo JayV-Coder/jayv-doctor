@@ -6,7 +6,7 @@ Alternativa ao GCP para testar a plataforma inteira: [infrastructure/dokploy/doc
 
 O Dokploy usa o projeto `exvsozyemolrjbjetqww`, junto com o jayv-coder ([environments.md](environments.md)). Na janela combinada:
 
-1. Aplicar as migrações do Doctor com `scripts/apply-doctor-migrations.py --check` e depois `--apply` (URL direta, porta 5432).
+1. Aplicar as migrações do Doctor com `scripts/apply-doctor-migrations.py --check` e depois `--apply` (URL direta, porta 5432). Elas vêm do submódulo `vendor/supabase` (ADR-0022): no servidor, rode `git submodule update --init` na pasta do código antes, ou ligue os submódulos na fonte Git do serviço no Dokploy.
 2. Ligar o Custom Access Token Hook (`doctor.custom_access_token_hook`), conferindo antes que não há outro hook. Em seguida, testar o login do jayv-coder.
 3. Acrescentar `https://<APP_URL>/auth/callback**` às URLs de redirecionamento do Auth.
 4. Rodar a Base global uma vez: `python -m aid_knowledge.global_seed`, com `SUPABASE_DB_URL` e `VOYAGE_API_KEY`.

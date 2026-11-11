@@ -44,7 +44,7 @@ Corpo em Markdown…
 ## Definition of Done (vale para todo ticket)
 
 1. Testes escritos antes da implementação (`/tdd`) e passando no CI: unitários, integração e, quando houver tabela nova, **teste de isolamento entre tenants** em pgTAP ou pytest.
-2. Migração em `supabase/migrations` com RLS ativado. O `supabase db lint` e os advisors de segurança passam.
+2. Migração em `JayV-Coder/supabase` (`migrations/<versão>_doctor_<nome>.sql`, ADR-0022) com RLS ativado. O `supabase db lint` e os advisors de segurança passam.
 3. Tipos regenerados (`supabase gen types`) e contratos atualizados em `packages/contracts`.
 4. Telas: funcionam em 390 px sem rolagem horizontal, com alvos de toque ≥ 44 px, nos temas claro e escuro, e com textos em pt-BR.
 5. Ações relevantes geram registro em `audit_logs` (a partir do ticket 28; antes disso, deixar o ponto de chamada pronto).

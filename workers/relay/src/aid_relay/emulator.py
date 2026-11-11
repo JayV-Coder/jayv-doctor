@@ -58,6 +58,23 @@ def setup(base: str, project: str, worker_url: str, client: httpx.Client) -> lis
     return done
 
 
+def missing(base: str, project: str, client: httpx.Client) -> list[str]:
+    """Tópicos que o emulador não tem (ele guarda tudo em memória e perde ao reiniciar)."""
+    found = client.get(f"{base}/v1/projects/{project}/topics", params={"pageSize": 1000})
+    found.raise_for_status()
+    names = {t["name"].rsplit("/", 1)[-1] for t in found.json().get("topics", [])}
+    return [topic for topic in TOPICS if topic not in names]
+
+
+def ensure(base: str, project: str, worker_url: str, client: httpx.Client) -> int:
+    """Recria tópicos e assinaturas se faltar algum; devolve quantos faltavam."""
+    gone = missing(base, project, client)
+    if gone:
+        setup(base, project, worker_url, client)
+        log.warning("emulador sem %d tópicos (reiniciou?): recriados", len(gone))
+    return len(gone)
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO)
     host = os.environ.get("PUBSUB_EMULATOR_HOST")

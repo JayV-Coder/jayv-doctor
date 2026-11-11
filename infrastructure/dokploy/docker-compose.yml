@@ -1,6 +1,6 @@
 # Integration AI Doctor no Dokploy (teste fora do GCP). No GCP, o deploy é o Terraform
 # (infrastructure/terraform). Aqui, o Pub/Sub é o emulador e o Cloud Scheduler é o serviço
-# `scheduler`. Só `web` e `api` ganham domínio no Dokploy; workers e emulador ficam na rede
+# `scheduler`, que também mantém os tópicos do emulador. Só `web` e `api` ganham domínio no Dokploy; workers e emulador ficam na rede
 # interna. Variáveis: infrastructure/dokploy/.env.example (cada valor uma vez só).
 
 x-worker-build: &worker-build
@@ -24,9 +24,7 @@ x-worker: &worker
   build: *worker-build
   image: aid-worker:dokploy
   restart: unless-stopped
-  depends_on:
-    pubsub-setup:
-      condition: service_completed_successfully
+  depends_on: [pubsub]
 
 services:
   web:
@@ -87,22 +85,6 @@ services:
     restart: unless-stopped
     expose: ["8085"]
 
-  # Tópicos e assinaturas push (os mesmos do Terraform). O emulador guarda tudo em memória:
-  # se ele reiniciar, rode este serviço de novo (Dokploy: Deploy, ou `docker compose up pubsub-setup`).
-  pubsub-setup:
-    build: *worker-build
-    image: aid-worker:dokploy
-    environment:
-      PUBSUB_EMULATOR_HOST: pubsub:8085
-      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-aid-local}
-      AID_WORKER_URL: http://worker-{worker}:8080
-    command:
-      - sh
-      - -c
-      - until python -c "import httpx; httpx.get('http://pubsub:8085')" 2>/dev/null; do sleep 2; done; python -m aid_relay.emulator
-    restart: "no"
-    depends_on: [pubsub]
-
   worker-ingestion:
     <<: *worker
     environment:
@@ -157,14 +139,20 @@ services:
       WORKER_NAME: relay
 
   # Os jobs do Cloud Scheduler (os mesmos do Terraform, menos métricas e backup, que são do GCP).
+  # A cada minuto, antes dos jobs, confere os tópicos e as assinaturas push do emulador e recria o
+  # que faltar (o emulador guarda tudo em memória e perde ao reiniciar).
   scheduler:
+    build: *worker-build
     image: aid-worker:dokploy
     command: ["python", "-m", "aid_worker.scheduler"]
     restart: unless-stopped
     environment:
       AID_WORKER_URL: http://worker-{worker}:8080
+      PUBSUB_EMULATOR_HOST: pubsub:8085
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-aid-local}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
+      - pubsub
       - worker-relay
       - worker-correlation
       - worker-connectors

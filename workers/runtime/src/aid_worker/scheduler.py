@@ -3,6 +3,10 @@ dos workers cujo horário bate. No GCP quem agenda é o Terraform (`google_cloud
 um teste confere que estes horários são os de lá. Ficam de fora o envio de métricas ao Cloud
 Monitoring e o backup do Storage no GCS, que dependem do GCP.
 
+Com o emulador do Pub/Sub (`PUBSUB_EMULATOR_HOST`), confere a cada minuto, antes dos jobs, se
+os tópicos e as assinaturas push existem e recria o que faltar: o emulador guarda tudo em memória
+e perde ao reiniciar, e o relay publicaria em tópicos que não existem.
+
     AID_WORKER_URL=http://worker-{worker}:8080 python -m aid_worker.scheduler
 """
 
@@ -12,6 +16,7 @@ import os
 from datetime import UTC, datetime, timedelta
 
 import httpx
+from aid_relay import emulator
 
 log = logging.getLogger(__name__)
 # (cron em UTC, worker, rota)
@@ -58,13 +63,28 @@ async def fire(client: httpx.AsyncClient, url: str) -> None:
         log.warning("job %s falhou: %s", url, type(exc).__name__)
 
 
+def ensure_topics(worker_url: str) -> None:
+    host = os.environ.get("PUBSUB_EMULATOR_HOST")
+    if not host:
+        return
+    try:
+        with httpx.Client(timeout=httpx.Timeout(15.0)) as client:
+            emulator.ensure(
+                f"http://{host}", os.environ.get("GCP_PROJECT_ID", "aid-local"), worker_url, client
+            )
+    except httpx.HTTPError as exc:
+        log.warning("emulador do Pub/Sub indisponível: %s", type(exc).__name__)
+
+
 async def loop(worker_url: str) -> None:
     running: set[asyncio.Task[None]] = set()
+    await asyncio.to_thread(ensure_topics, worker_url)
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         while True:
             now = datetime.now(UTC)
             following = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
             await asyncio.sleep((following - now).total_seconds())
+            await asyncio.to_thread(ensure_topics, worker_url)
             # Cada job em paralelo, sem segurar o minuto seguinte.
             for cron, worker, path in JOBS:
                 if due(cron, following):

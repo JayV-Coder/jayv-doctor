@@ -1,0 +1,13 @@
+**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!tsconfig.base.json
+!packages/contracts/**
+!apps/web/**
+**/node_modules
+**/.next
+**/test-results
+**/playwright-report
+apps/web/e2e
+apps/web/.env*

@@ -14,8 +14,10 @@ from pathlib import Path
 
 import asyncpg
 
-MIGRATIONS = Path(__file__).parent.parent / "supabase" / "migrations"
-LOCAL_ONLY = "00000000000000_shared_public_stub.sql"
+# As migrações moram no repositório JayV-Coder/supabase (submódulo em vendor/supabase), junto
+# com as do jayv-coder; as do Doctor têm `_doctor_` logo depois da versão.
+MIGRATIONS = Path(__file__).parent.parent / "vendor" / "supabase" / "migrations"
+DOCTOR_GLOB = "*_doctor_*.sql"
 
 # O que o Doctor lê em `public`: renomear algo aqui no jayv-coder quebra o Doctor.
 REQUIRED_COLUMNS = {
@@ -65,8 +67,8 @@ async def run(apply: bool) -> int:
         applied = await applied_versions(connection)
         pending = [
             migration
-            for migration in sorted(MIGRATIONS.glob("*.sql"))
-            if migration.name != LOCAL_ONLY and version_of(migration) not in applied
+            for migration in sorted(MIGRATIONS.glob(DOCTOR_GLOB))
+            if version_of(migration) not in applied
         ]
         for migration in pending:
             print(("aplicando " if apply else "pendente ") + migration.name)

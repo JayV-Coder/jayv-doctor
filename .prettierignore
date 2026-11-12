@@ -12,3 +12,5 @@ packages/contracts/src/database.types.ts
 # Fixtures de importação: arquivos de propósito inválidos ou em Latin-1.
 apps/api/tests/fixtures/
 workers/ingestion/tests/fixtures/
+# Submódulo JayV-Coder/supabase (ADR-0022): o estilo é o daquele repositório.
+vendor/

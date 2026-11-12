@@ -2,6 +2,7 @@
 .PHONY: dev-setup dev lint typecheck test format check contracts eval eval-hybrid eval-gate load\:ingestion load\:read load\:diagnoses load\:report db\:reset db\:types db\:test db\:lint
 
 dev-setup: ## instala dependências TS e Python e os hooks de pre-commit
+	git submodule update --init
 	pnpm install
 	uv sync --all-packages
 	uvx pre-commit install

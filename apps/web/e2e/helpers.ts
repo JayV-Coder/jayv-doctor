@@ -95,7 +95,6 @@ export async function signInWithPassword(
 ): Promise<void> {
   await page.goto("/login");
   await page.getByLabel("E-mail corporativo").fill(email);
-  await page.getByRole("button", { name: "Entrar com senha" }).click();
   await page.getByLabel("Senha").fill(password);
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
 }

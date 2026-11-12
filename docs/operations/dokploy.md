@@ -1,12 +1,12 @@
 # Teste no Dokploy
 
-Alternativa ao GCP para testar a plataforma inteira: [infrastructure/dokploy/docker-compose.yml](../../infrastructure/dokploy/docker-compose.yml). O Pub/Sub vira o emulador (`pubsub` + `pubsub-setup`, que cria os 18 tópicos e as assinaturas push) e o Cloud Scheduler vira o serviço `scheduler`. Ficam de fora o envio de métricas ao Cloud Monitoring e o backup do Storage no GCS, e o tracing (OTEL desligado). Testes conferem que tópicos e jobs são os mesmos do Terraform.
+Alternativa ao GCP para testar a plataforma inteira: [infrastructure/dokploy/docker-compose.yml](../../infrastructure/dokploy/docker-compose.yml). O Pub/Sub vira o emulador (`pubsub`) e o Cloud Scheduler vira o serviço `scheduler`, que também cria os 18 tópicos e as assinaturas push e confere a cada minuto se o emulador ainda os tem (ele guarda tudo em memória e perde ao reiniciar). Ficam de fora o envio de métricas ao Cloud Monitoring e o backup do Storage no GCS, e o tracing (OTEL desligado). Testes conferem que tópicos e jobs são os mesmos do Terraform.
 
 ## Antes do primeiro deploy (projeto Supabase compartilhado)
 
 O Dokploy usa o projeto `exvsozyemolrjbjetqww`, junto com o jayv-coder ([environments.md](environments.md)). Na janela combinada:
 
-1. Aplicar as migrações do Doctor com `scripts/apply-doctor-migrations.py --check` e depois `--apply` (URL direta, porta 5432).
+1. Aplicar as migrações do Doctor com `scripts/apply-doctor-migrations.py --check` e depois `--apply` (URL direta, porta 5432). Elas vêm do submódulo `vendor/supabase` (ADR-0022): no servidor, rode `git submodule update --init` na pasta do código antes, ou ligue os submódulos na fonte Git do serviço no Dokploy.
 2. Ligar o Custom Access Token Hook (`doctor.custom_access_token_hook`), conferindo antes que não há outro hook. Em seguida, testar o login do jayv-coder.
 3. Acrescentar `https://<APP_URL>/auth/callback**` às URLs de redirecionamento do Auth.
 4. Rodar a Base global uma vez: `python -m aid_knowledge.global_seed`, com `SUPABASE_DB_URL` e `VOYAGE_API_KEY`.
@@ -16,7 +16,7 @@ O Dokploy usa o projeto `exvsozyemolrjbjetqww`, junto com o jayv-coder ([environ
 1. Crie um serviço **Docker Compose** apontando para o repositório e a branch a testar, com o arquivo `infrastructure/dokploy/docker-compose.yml`.
 2. Em **Environment**, cole as variáveis de [infrastructure/dokploy/.env.example](../../infrastructure/dokploy/.env.example), preenchidas (tabela abaixo).
 3. Em **Domains**, crie dois domínios com HTTPS: `web`, porta 3000 (`APP_URL`), e `api`, porta 8080 (`API_PUBLIC_URL`). Os workers, o emulador e o agendador não recebem domínio.
-4. Faça o deploy. O `pubsub-setup` sai com código 0 depois de criar os tópicos. Se o `pubsub` reiniciar, ele perde tudo (o emulador guarda em memória): rode o deploy de novo.
+4. Faça o deploy. No log do `scheduler`, a primeira rodada cria os tópicos; depois disso, só aparece aviso se o emulador reiniciar e os tópicos forem recriados.
 
 ## Variáveis
 

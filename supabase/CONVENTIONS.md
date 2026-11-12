@@ -42,9 +42,9 @@ using (tenant_id = (select doctor.current_tenant_id()))
 
 ## Migrações
 
-- Fonte única: `supabase/migrations/<versão>_<nome>.sql`. Nunca edite uma migração já aplicada; crie outra.
+- Fonte única: o repositório `JayV-Coder/supabase`, em `migrations/<versão>_doctor_<nome>.sql` (submódulo em `vendor/supabase`; [ADR-0022](../docs/adr/0022-banco-no-repositorio-supabase.md)). Nunca edite uma migração já aplicada; crie outra.
 - Não entram em `supabase_migrations.schema_migrations`, que é do jayv-coder: ver [environments.md](../docs/operations/environments.md).
-- `00000000000000_shared_public_stub.sql` é só da stack local e do CI.
+- Testes pgTAP do Doctor ficam em `tests/doctor/` daquele repositório.
 
 ## Testes
 

@@ -123,7 +123,6 @@ test("Admin configura o GCP pelo assistente, retoma o rascunho e o Analyst só v
   await page.goto(link);
   await page.getByRole("link", { name: "Entrar para aceitar" }).click();
   await page.getByLabel("E-mail corporativo").fill(analyst);
-  await page.getByRole("button", { name: "Entrar com senha" }).click();
   await page.getByLabel("Senha").fill(PASSWORD);
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await page.getByRole("button", { name: "Aceitar convite" }).click();

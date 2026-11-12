@@ -9,6 +9,8 @@ export default tseslint.config(
       "**/coverage/**",
       "**/node_modules/**",
       "**/database.types.ts",
+      // Submódulo JayV-Coder/supabase (ADR-0022).
+      "vendor/**",
     ],
   },
   js.configs.recommended,

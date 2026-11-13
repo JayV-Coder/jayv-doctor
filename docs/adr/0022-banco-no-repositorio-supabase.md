@@ -7,9 +7,11 @@ No mesmo movimento, o `public` passou a ser o schema compartilhado entre os apps
 ## Consequências
 
 - **Migração nova do Doctor** nasce em `JayV-Coder/supabase` como `migrations/<versão>_doctor_<nome>.sql` e o teste em `tests/doctor/`. A PR daqui sobe o submódulo para o commit que a traz.
-- **Aplicar** continua sendo `scripts/apply-doctor-migrations.py`, que agora escolhe só os arquivos `*_doctor_*` e registra em `doctor.schema_migrations`.
+- **Dois aplicadores, separados pelo nome.** Em `JayV-Coder/supabase`, merge na `main` é deploy: o workflow roda `supabase db push` e aplica as migrações dos outros schemas, deixando de fora os arquivos `^[0-9]+_doctor_`. As do Doctor continuam com `scripts/apply-doctor-migrations.py`, que escolhe só esses arquivos e registra em `doctor.schema_migrations`, na janela combinada (ADR-0009). O `Conferir migrations` de lá recusa uma migração que mexa no schema `doctor` sem o nome.
+- **O submódulo aponta para um commit da `main` de lá.** Um commit só de branch some quando a branch é apagada, e o checkout do CI falha. Enquanto a PR de lá não entra, a PR daqui fica em rascunho.
+- **Sem o submódulo, o script falha** (`git submodule update --init`), em vez de dizer que não há nada pendente. Ele também avisa quando o deploy de lá ainda não aplicou uma migração anterior às pendentes do Doctor.
 - **Sem stub de `public`:** a stack local e o CI rodam as migrações reais do jayv-coder, então uma mudança lá que quebre o Doctor aparece nos testes dos dois repositórios.
-- **CI** faz checkout com `submodules: true`. O repositório `supabase` é público.
+- **CI** faz checkout com `submodules: true` nos jobs que sobem o Supabase local (banco e E2E). O repositório `supabase` é público.
 
 ## Considered Options
 

@@ -3,21 +3,64 @@
 `--check` só lê: confere o que o Doctor usa em `public` e lista o que falta aplicar.
 `--apply` aplica cada arquivo pendente numa transação e registra em `doctor.schema_migrations`.
 
+As migrações vêm do submódulo `vendor/supabase` (ADR-0022). As dos outros schemas, na mesma
+pasta, são aplicadas pelo deploy daquele repositório (`supabase db push` a cada merge na `main`),
+nunca por aqui.
+
     SUPABASE_DB_URL=... uv run python scripts/apply-doctor-migrations.py --check
 """
 
 import argparse
 import asyncio
 import os
+import re
 import sys
 from pathlib import Path
 
 import asyncpg
 
-# As migrações moram no repositório JayV-Coder/supabase (submódulo em vendor/supabase), junto
-# com as do jayv-coder; as do Doctor têm `_doctor_` logo depois da versão.
 MIGRATIONS = Path(__file__).parent.parent / "vendor" / "supabase" / "migrations"
-DOCTOR_GLOB = "*_doctor_*.sql"
+# Do Doctor é só o arquivo com `_doctor_` logo depois da versão: `<versão>_site_doctor_x.sql` é
+# de outro app e vai pelo `db push`.
+DOCTOR_NAME = re.compile(r"^\d+_doctor_.+\.sql$")
+
+
+class MigrationsMissingError(RuntimeError):
+    pass
+
+
+def doctor_migrations(folder: Path) -> list[Path]:
+    found = (
+        sorted(path for path in folder.glob("*.sql") if DOCTOR_NAME.match(path.name))
+        if folder.is_dir()
+        else []
+    )
+    if not found:
+        # Sem o submódulo, a pasta fica vazia: "nada pendente" seria mentira.
+        raise MigrationsMissingError(
+            f"nenhuma migração do Doctor em {folder}: rode `git submodule update --init`"
+        )
+    return found
+
+
+def version_of(migration: Path) -> str:
+    return migration.name.split("_", 1)[0]
+
+
+def shared_not_deployed(folder: Path, pending: list[Path], deployed: set[str]) -> list[str]:
+    """Migrações dos outros schemas anteriores à última pendente do Doctor que o deploy ainda não
+    aplicou. Localmente tudo sobe em ordem; aqui, uma do Doctor que dependa delas falharia."""
+    if not pending:
+        return []
+    newest = max(version_of(migration) for migration in pending)
+    return [
+        path.name
+        for path in sorted(folder.glob("*.sql"))
+        if not DOCTOR_NAME.match(path.name)
+        and version_of(path) < newest
+        and version_of(path) not in deployed
+    ]
+
 
 # O que o Doctor lê em `public`: renomear algo aqui no jayv-coder quebra o Doctor.
 REQUIRED_COLUMNS = {
@@ -52,11 +95,23 @@ async def applied_versions(connection: asyncpg.Connection) -> set[str]:
     return {row["version"] for row in rows}
 
 
-def version_of(migration: Path) -> str:
-    return migration.name.split("_", 1)[0]
+async def deployed_versions(connection: asyncpg.Connection) -> set[str]:
+    """O histórico do `supabase db push` (o deploy de JayV-Coder/supabase)."""
+    if (
+        await connection.fetchval("select to_regclass('supabase_migrations.schema_migrations')")
+        is None
+    ):
+        return set()
+    rows = await connection.fetch("select version from supabase_migrations.schema_migrations")
+    return {row["version"] for row in rows}
 
 
 async def run(apply: bool) -> int:
+    try:
+        migrations = doctor_migrations(MIGRATIONS)
+    except MigrationsMissingError as exc:
+        print(exc, file=sys.stderr)
+        return 1
     connection = await asyncpg.connect(os.environ["SUPABASE_DB_URL"], statement_cache_size=0)
     try:
         problems = await public_problems(connection)
@@ -65,11 +120,14 @@ async def run(apply: bool) -> int:
             return 1
 
         applied = await applied_versions(connection)
-        pending = [
-            migration
-            for migration in sorted(MIGRATIONS.glob(DOCTOR_GLOB))
-            if version_of(migration) not in applied
-        ]
+        pending = [migration for migration in migrations if version_of(migration) not in applied]
+        behind = shared_not_deployed(MIGRATIONS, pending, await deployed_versions(connection))
+        if behind:
+            print(
+                "aviso: o deploy de JayV-Coder/supabase ainda não aplicou migrações anteriores"
+                " às pendentes do Doctor: " + ", ".join(behind),
+                file=sys.stderr,
+            )
         for migration in pending:
             print(("aplicando " if apply else "pendente ") + migration.name)
             if not apply:

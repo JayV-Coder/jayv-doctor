@@ -4,7 +4,7 @@ Todos os ambientes usam o projeto Supabase `exvsozyemolrjbjetqww` (`jayv-coder`,
 
 ## Aplicar migrações
 
-Nunca use `supabase db push` nem `apply_migration`: eles usam `supabase_migrations.schema_migrations`, que é do jayv-coder. Use o script, que confere as tabelas de `public`, aplica só as migrações `*_doctor_*` de `vendor/supabase` e registra cada versão em `doctor.schema_migrations`:
+Nunca use `supabase db push` nem `apply_migration`: eles usam `supabase_migrations.schema_migrations`, que é do jayv-coder. Use o script, que confere as tabelas de `public`, aplica só as migrações do Doctor (`<versão>_doctor_<nome>.sql`) de `vendor/supabase` e registra cada versão em `doctor.schema_migrations`. As migrações dos outros schemas, na mesma pasta, são aplicadas pelo deploy de `JayV-Coder/supabase` a cada merge na `main` de lá ([ADR-0022](../adr/0022-banco-no-repositorio-supabase.md)). Sem o submódulo (`git submodule update --init`), o script falha:
 
 ```bash
 SUPABASE_DB_URL=<url direta> uv run python scripts/apply-doctor-migrations.py --check   # só leitura

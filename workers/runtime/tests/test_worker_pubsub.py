@@ -104,6 +104,8 @@ def test_worker_de_alertas_registra_o_topico_e_a_varredura() -> None:
         "itsm.ticket",
         "itsm.sync",
         "itsm.comment",
+        "sso.domain",
+        "sso.sync",
     }
     paths = {route.path for router in routers_for("notifier") for route in router.routes}  # type: ignore[attr-defined]
     assert paths == {"/alerts/scan"}

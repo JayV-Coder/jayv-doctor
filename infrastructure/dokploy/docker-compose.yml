@@ -131,6 +131,9 @@ services:
       AID_VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:alertas@jayv.dev}
       AID_ATLASSIAN_CLIENT_ID: ${ATLASSIAN_CLIENT_ID:-}
       AID_ATLASSIAN_CLIENT_SECRET: ${ATLASSIAN_CLIENT_SECRET:-}
+      # SSO (#48): sem os dois, a conexão SAML fica `pending_platform`.
+      SUPABASE_ACCESS_TOKEN: ${SUPABASE_ACCESS_TOKEN:-}
+      SUPABASE_PROJECT_REF: ${SUPABASE_PROJECT_REF:-}
 
   worker-relay:
     <<: *worker

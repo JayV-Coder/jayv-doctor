@@ -52,6 +52,19 @@ async def tenant_tx(
                 "trace": traceparent() or "",
             },
         )
+        if claims.tenant_id is not None:
+            # O JWT vale por até 1 h; o Vínculo, não: removido (SCIM, #48, ou na tela), o acesso
+            # cai no pedido seguinte, sem esperar o token vencer.
+            alive = await connection.scalar(
+                text(
+                    "select exists (select 1 from doctor.memberships m"
+                    " where m.tenant_id = doctor.current_tenant_id() and m.user_id = auth.uid())"
+                )
+            )
+            if not alive:
+                raise ApiError(
+                    401, "membership_revoked", "Seu acesso a esta Organização foi encerrado."
+                )
         yield connection
 
 

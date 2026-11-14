@@ -11,4 +11,5 @@
 | Outbox e relay | [outbox.md](outbox.md) |
 | Conectores, correlação, Regras e IA | [conectores.md](conectores.md), [correlacao.md](correlacao.md), [regras.md](regras.md), [ia.md](ia.md) |
 | Avaliação do motor | [avaliacao.md](avaliacao.md) |
+| SSO corporativo: ligar o SAML no projeto Supabase | [sso.md](sso.md) |
 | O que falta configurar e testar no ambiente real | [pendencias.md](pendencias.md) |

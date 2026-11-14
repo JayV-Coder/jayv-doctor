@@ -1,0 +1,21 @@
+# SSO SAML pelo Supabase Auth do projeto, registrado pela plataforma
+
+O SSO corporativo (ticket #48) usa o SAML 2.0 do próprio Supabase Auth. O projeto Supabase é um só para o Doctor e o jayv-coder (ADR-0009), e os provedores SAML são do projeto inteiro. Por isso a Organização não registra o provedor: ela informa os metadados do IdP e prova os domínios, e o worker `notifier` registra o provedor pela Management API do Supabase (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`). Sem esse token, a conexão fica `pending_platform`, e a operação decide quando ligar.
+
+- **Domínio** se prova por TXT `_aid-sso.<domínio>` com `aid-sso=<token>`, consultado por DNS sobre HTTPS. Cadastrar sem provar não reserva nada (senão qualquer Organização travaria o domínio das outras): quem verifica primeiro fica com ele, e daí em diante o domínio é de uma Organização só. Só domínios verificados vão para o provedor. A verificação não se desfaz sozinha: DNS fora do ar ou TXT removido depois da prova não desligam o SSO; quem tira o domínio é o Owner.
+- **Exigir SSO** fica no hook de claims: quem tem e-mail de domínio verificado de uma Organização que exige SSO e não entrou pelo SSO (`amr` sem `sso`) recebe o token sem as claims do Doctor. A regra só vale com a conexão `active`: com o provedor pendente ou com erro, o SSO não funciona, e bloquear a senha deixaria a Organização inteira sem entrar. O login no jayv-coder não muda, e o RLS do Doctor nega tudo. O Owner fica de fora da regra: se o IdP cair, é ele quem entra por senha, com MFA, e a desliga. A tela de login também consulta `GET /api/v1/sso/discover` e manda direto ao IdP.
+- **JIT**: depois do login pelo IdP, a web chama `POST /api/v1/sso/provision`, que cria ou ajusta o Vínculo pelo grupo de maior Papel em `groups` (ou o Papel padrão) e ativa a Organização. Os grupos são lidos da identidade do provedor (`auth.identities`), que só o Auth grava no login pelo IdP; o `user_metadata` fica de fora, porque o próprio Usuário escreve nele. Sem nenhum grupo mapeado, o IdP não manda nos Papéis e o que foi dado na tela fica. Gente nova ocupa vaga do plano (`409 plan_limit` no limite); quem já é Membro entra mesmo com a Organização cheia. Owner nunca vem do IdP, e um Owner nunca é rebaixado por ele. Quem sai de todos os grupos mapeados, sem Papel padrão, perde o Vínculo no login seguinte.
+- **SCIM 2.0** (`/scim/v2/Users`), com token por Organização guardado só como hash. Desativar ou apagar um Usuário tira o Vínculo do Doctor de toda conta com o e-mail (a de senha e a do SSO são contas diferentes no Auth); a linha de `public.organization_members` fica, como na remoção pela tela. As sessões do Auth são do projeto inteiro, jayv-coder incluso, então só são apagadas quando o e-mail é de um domínio verificado da Organização e havia Vínculo: sem isso, um token SCIM deslogaria qualquer usuário do projeto. O JWT já emitido vale até vencer, por isso `tenant_tx` confere o Vínculo a cada pedido e responde `401 membership_revoked`: o acesso pela API cai no pedido seguinte.
+
+## Consequências
+
+- **Limite conhecido:** "Exigir SSO" e o SCIM acham a pessoa pelo e-mail atual da conta. Uma conta de senha que troque o e-mail para um domínio de fora deixa de ser alcançada pelos dois (contas do SSO não trocam de e-mail). O Owner vê o e-mail na tela de Membros e remove o Vínculo; fechar isso de vez pede guardar o e-mail no Vínculo, e fica para o ticket de políticas (#49).
+- O SAML do Supabase exige o plano Pro (ou superior) no projeto, e ligar o SSO afeta o projeto do jayv-coder. Fica em pendências, com janela combinada.
+- Cada pedido autenticado com Organização faz uma consulta a mais (`doctor.memberships` pela chave única).
+- Leituras feitas direto pelo PostgREST ou pelo Realtime, sem a API, seguem o JWT até ele vencer (no máximo 1 h). O Realtime do Doctor só leva ids, e a tela relê pela API.
+
+## Considered Options
+
+- **Provedor SAML próprio na API** (python3-saml): mais código de segurança para manter, e uma segunda sessão além da do Supabase Auth.
+- **A Organização registrar o provedor com a própria chave da Management API:** daria a ela poder sobre o projeto inteiro, inclusive o jayv-coder.
+- **Bloquear senha e magic link no Auth:** o Supabase não tem regra por domínio, e a política vale para os dois produtos.

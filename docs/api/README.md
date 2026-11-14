@@ -12,6 +12,7 @@ Todas as rotas ficam em `/api/v1`, com `Authorization: Bearer <JWT do Supabase>`
 | Agentes locais (SAP on-premises) | [agents.md](agents.md) |
 | Alertas e notificações (Regras, canais, push) | [alerts.md](alerts.md) |
 | Webhooks de saída assinados | [webhooks.md](webhooks.md) |
+| SSO corporativo (SAML 2.0) e SCIM | [sso.md](sso.md) |
 | Chamados no Jira Service Management e no ServiceNow | [itsm.md](itsm.md) |
 | Mapas de identificadores (correlação entre sistemas, enriquecimento) | [correlation.md](correlation.md) |
 | Execuções, Eventos e Logs brutos | [executions.md](executions.md) |

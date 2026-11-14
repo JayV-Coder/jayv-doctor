@@ -129,6 +129,8 @@ async def org(engine: AsyncEngine) -> AsyncIterator[dict[str, str]]:
         "incident_comments",
         "incident_tickets",
         "itsm_connections",
+        "sso_domains",
+        "sso_connections",
         "alert_rules",
         "push_subscriptions",
         "alert_preferences",
@@ -1397,3 +1399,177 @@ async def test_leitura_que_falha_vai_para_o_fim_da_fila(
         t=ticket,
     )
     assert (row["status"], row["touched"]) == ("open", True)
+
+
+# --- SSO (#48): DNS do domínio e o provedor SAML no Supabase Auth. ---
+
+
+async def sso_setup(engine: AsyncEngine, org: dict[str, str]) -> tuple[str, str, str]:
+    connection, domain = str(uuid4()), str(uuid4())
+    name = f"acme{uuid4().hex[:8]}.com.br"
+    await run(
+        engine,
+        "insert into doctor.sso_connections (id, tenant_id, metadata_url) values"
+        " (cast(:c as uuid), :t, 'https://idp.acme.test/metadata')",
+        c=connection,
+        t=org["tenant"],
+    )
+    await run(
+        engine,
+        "insert into doctor.sso_domains (id, tenant_id, domain, token) values"
+        " (cast(:d as uuid), :t, :n, 'tok123')",
+        d=domain,
+        t=org["tenant"],
+        n=name,
+    )
+    return connection, domain, name
+
+
+@pytest.mark.asyncio
+async def test_dominio_verificado_pelo_txt_e_provedor_registrado(
+    engine: AsyncEngine, org: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from aid_notifier.sso import sync as sso_sync
+    from aid_notifier.sso import verify_domain
+
+    connection, domain, name = await sso_setup(engine, org)
+    records = ["v=spf1 -all"]
+
+    def dns(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["name"] == f"_aid-sso.{name}"
+        return httpx.Response(200, json={"Answer": [{"data": f'"{r}"'} for r in records]})
+
+    assert not await verify_domain(engine, {"domain_id": domain}, httpx.MockTransport(dns))
+    records.append("aid-sso=tok123")
+    assert await verify_domain(engine, {"domain_id": domain}, httpx.MockTransport(dns))
+
+    # Sem o token da Management API, a conexão espera a operação.
+    monkeypatch.delenv("SUPABASE_ACCESS_TOKEN", raising=False)
+    assert await sso_sync(engine, {"connection_id": connection}) == "pending_platform"
+
+    sent: list[dict[str, Any]] = []
+
+    def management(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"items": []})
+        sent.append({"method": request.method, "body": json.loads(request.content)})
+        return httpx.Response(201, json={"id": "00000000-0000-4000-8000-00000000c599"})
+
+    monkeypatch.setenv("SUPABASE_ACCESS_TOKEN", "sbp_teste")
+    monkeypatch.setenv("SUPABASE_PROJECT_REF", "projeto")
+    status = await sso_sync(engine, {"connection_id": connection}, httpx.MockTransport(management))
+    assert status == "active"
+    assert sent[0]["method"] == "POST"
+    assert sent[0]["body"]["domains"] == [name]
+    assert sent[0]["body"]["attribute_mapping"]["keys"]["groups"]["array"] is True
+    [row] = await rows(
+        engine,
+        "select status, provider_id::text from doctor.sso_connections where id = cast(:c as uuid)",
+        c=connection,
+    )
+    assert (row["status"], row["provider_id"]) == ("active", "00000000-0000-4000-8000-00000000c599")
+
+
+@pytest.mark.asyncio
+async def test_dns_fora_do_ar_ou_txt_removido_nao_desfaz_o_dominio_verificado(
+    engine: AsyncEngine, org: dict[str, str]
+) -> None:
+    from aid_notifier.sso import DnsUnavailableError, verify_domain
+
+    _, domain, _ = await sso_setup(engine, org)
+    answers: list[httpx.Response] = [
+        httpx.Response(200, json={"Answer": [{"data": '"aid-sso=tok123"'}]}),
+        httpx.Response(503),
+        httpx.Response(200, json={"Status": 3}),
+    ]
+
+    def dns(_: httpx.Request) -> httpx.Response:
+        return answers.pop(0)
+
+    transport = httpx.MockTransport(dns)
+    assert await verify_domain(engine, {"domain_id": domain}, transport)
+    # O DNS público falhou: a mensagem volta para a fila, e nada muda.
+    with pytest.raises(DnsUnavailableError):
+        await verify_domain(engine, {"domain_id": domain}, transport)
+    # O TXT saiu do DNS depois da prova: o domínio continua verificado (quem tira é o Owner).
+    assert not await verify_domain(engine, {"domain_id": domain}, transport)
+    [row] = await rows(
+        engine,
+        "select verified_at is not null as verified from doctor.sso_domains"
+        " where id = cast(:d as uuid)",
+        d=domain,
+    )
+    assert row["verified"] is True
+
+
+@pytest.mark.asyncio
+async def test_provedor_saml_nao_fica_orfao_nem_duplicado(
+    engine: AsyncEngine, org: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from aid_notifier.sso import sync as sso_sync
+
+    connection, domain, name = await sso_setup(engine, org)
+    await run(
+        engine,
+        "update doctor.sso_domains set verified_at = now() where id = cast(:d as uuid)",
+        d=domain,
+    )
+    monkeypatch.setenv("SUPABASE_ACCESS_TOKEN", "sbp_teste")
+    monkeypatch.setenv("SUPABASE_PROJECT_REF", "projeto")
+    existing = "00000000-0000-4000-8000-00000000c601"
+    calls: list[str] = []
+
+    # Reentrega depois de um POST que deu certo: o provedor do domínio já existe no Supabase.
+    def already_there(request: httpx.Request) -> httpx.Response:
+        calls.append(request.method)
+        if request.method == "GET":
+            return httpx.Response(
+                200, json={"items": [{"id": existing, "domains": [{"domain": name}]}]}
+            )
+        assert request.url.path.endswith(existing)
+        return httpx.Response(200, json={"id": existing})
+
+    status = await sso_sync(
+        engine, {"connection_id": connection}, httpx.MockTransport(already_there)
+    )
+    assert (status, calls) == ("active", ["GET", "PUT"])
+
+    # A remoção só conta quando o Supabase confirma (ou diz que já não existe).
+    def broken(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(500)
+
+    with pytest.raises(httpx.HTTPStatusError):
+        await sso_sync(engine, {"remove_provider": existing}, httpx.MockTransport(broken))
+
+    def gone(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(404)
+
+    assert await sso_sync(engine, {"remove_provider": existing}, httpx.MockTransport(gone)) == (
+        "removed"
+    )
+
+    # O Owner desliga o SSO enquanto a plataforma registra: o provedor recém-criado sai.
+    await run(
+        engine,
+        "update doctor.sso_connections set provider_id = null, status = 'pending_platform'"
+        " where id = cast(:c as uuid)",
+        c=connection,
+    )
+    created = "00000000-0000-4000-8000-00000000c602"
+    removed: list[str] = []
+
+    async def racing(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"items": []})
+        if request.method == "POST":
+            await run(
+                engine,
+                "delete from doctor.sso_connections where id = cast(:c as uuid)",
+                c=connection,
+            )
+            return httpx.Response(201, json={"id": created})
+        removed.append(f"{request.method} {request.url.path.rsplit('/', 1)[-1]}")
+        return httpx.Response(200, json={})
+
+    status = await sso_sync(engine, {"connection_id": connection}, httpx.MockTransport(racing))
+    assert (status, removed) == ("removed", [f"DELETE {created}"])

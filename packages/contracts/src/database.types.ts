@@ -663,48 +663,6 @@ isOneToOne: false
       referencedColumns: ["tenant_id","id"]
     }
                   ]
-                },"events_2026_10": {
-                  Row: {
-                    "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"correlated_by": string | null,"cross_keys": (string)[] | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"execution_ref": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"cross_keys"?: (string)[] | null,"dedup_key": string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id": string,"ingested_at"?: string,"integration_id": string,"operation": string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id"?: string | null
-                  }
-                  Update: {
-                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"cross_keys"?: (string)[] | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
-                  }
-                  Relationships: [
-
-                  ]
-                },"events_2026_11": {
-                  Row: {
-                    "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"correlated_by": string | null,"cross_keys": (string)[] | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"execution_ref": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"cross_keys"?: (string)[] | null,"dedup_key": string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id": string,"ingested_at"?: string,"integration_id": string,"operation": string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id"?: string | null
-                  }
-                  Update: {
-                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"cross_keys"?: (string)[] | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
-                  }
-                  Relationships: [
-
-                  ]
-                },"events_2026_12": {
-                  Row: {
-                    "attributes": Json | null,"business_context": Json | null,"business_reference": string | null,"correlated_by": string | null,"cross_keys": (string)[] | null,"dedup_key": string,"error": Json | null,"execution_id": string | null,"execution_ref": string | null,"id": string,"ingested_at": string,"integration_id": string,"operation": string,"raw_log_object_id": string | null,"sanitization_report": Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id": string | null
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"cross_keys"?: (string)[] | null,"dedup_key": string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id": string,"ingested_at"?: string,"integration_id": string,"operation": string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version": string,"severity": string,"source": NonNullable<Json>,"tenant_id": string,"timestamp": string,"trace_id"?: string | null
-                  }
-                  Update: {
-                    "attributes"?: Json | null,"business_context"?: Json | null,"business_reference"?: string | null,"correlated_by"?: string | null,"cross_keys"?: (string)[] | null,"dedup_key"?: string,"error"?: Json | null,"execution_id"?: string | null,"execution_ref"?: string | null,"id"?: string,"ingested_at"?: string,"integration_id"?: string,"operation"?: string,"raw_log_object_id"?: string | null,"sanitization_report"?: Json | null,"schema_version"?: string,"severity"?: string,"source"?: NonNullable<Json>,"tenant_id"?: string,"timestamp"?: string,"trace_id"?: string | null
-                  }
-                  Relationships: [
-
-                  ]
                 },"execution_merges": {
                   Row: {
                     "id": string,"merged_at": string,"merged_id": string,"merged_keys": NonNullable<Json>,"survivor_id": string,"tenant_id": string,"updated_at": string
@@ -1647,6 +1605,86 @@ isOneToOne: false
                   Relationships: [
 
                   ]
+                },"sso_connections": {
+                  Row: {
+                    "created_at": string,"created_by": string | null,"default_role": string | null,"id": string,"last_error": string | null,"metadata_url": string,"provider_id": string | null,"require_sso": boolean,"scim_token_hash": string | null,"status": string,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by"?: string | null,"default_role"?: string | null,"id"?: string,"last_error"?: string | null,"metadata_url": string,"provider_id"?: string | null,"require_sso"?: boolean,"scim_token_hash"?: string | null,"status"?: string,"tenant_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string | null,"default_role"?: string | null,"id"?: string,"last_error"?: string | null,"metadata_url"?: string,"provider_id"?: string | null,"require_sso"?: boolean,"scim_token_hash"?: string | null,"status"?: string,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sso_connections_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: true
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sso_domains": {
+                  Row: {
+                    "created_at": string,"domain": string,"id": string,"tenant_id": string,"token": string,"updated_at": string,"verified_at": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"domain": string,"id"?: string,"tenant_id": string,"token"?: string,"updated_at"?: string,"verified_at"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"domain"?: string,"id"?: string,"tenant_id"?: string,"token"?: string,"updated_at"?: string,"verified_at"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sso_domains_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sso_group_roles": {
+                  Row: {
+                    "created_at": string,"group_name": string,"id": string,"role": string,"tenant_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"group_name": string,"id"?: string,"role": string,"tenant_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"group_name"?: string,"id"?: string,"role"?: string,"tenant_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sso_group_roles_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"sso_scim_users": {
+                  Row: {
+                    "active": boolean,"created_at": string,"external_id": string | null,"id": string,"tenant_id": string,"updated_at": string,"user_name": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"created_at"?: string,"external_id"?: string | null,"id"?: string,"tenant_id": string,"updated_at"?: string,"user_name": string
+                  }
+                  Update: {
+                    "active"?: boolean,"created_at"?: string,"external_id"?: string | null,"id"?: string,"tenant_id"?: string,"updated_at"?: string,"user_name"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "sso_scim_users_tenant_id_fkey"
+      columns: ["tenant_id"]
+isOneToOne: false
+      referencedRelation: "tenants"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"tenants": {
                   Row: {
                     "ai_profile": string,"ai_project": string | null,"auto_diagnose_critical": boolean,"created_at": string,"deletion_requested_at": string | null,"deletion_requested_by": string | null,"deletion_scheduled_for": string | null,"dpa_accepted_at": string | null,"id": string,"llm_enabled": boolean,"llm_provider": string,"mttr_baseline_minutes": number | null,"plan": string,"quota_tolerance": number,"segment": string | null,"status": string,"updated_at": string
@@ -1859,6 +1897,9 @@ isOneToOne: false
 "add_incident_comment":
 { Args: { "body": string,"mentioned": (string)[],"target": string }; Returns: string
                            },
+"add_sso_domain":
+{ Args: { "domain": string }; Returns: string
+                           },
 "agent_seen":
 { Args: { "secret_hash": string,"version": string }; Returns: undefined
                            },
@@ -1891,6 +1932,9 @@ isOneToOne: false
                            },
 "configure_servicenow":
 { Args: { "assignment_groups": Json,"client_id": string,"client_secret": string,"default_group": string,"hook_token": string,"impact_map": Json,"instance_url": string,"sync_status": boolean }; Returns: string
+                           },
+"configure_sso":
+{ Args: { "default_role": string,"metadata_url": string,"require_sso": boolean }; Returns: string
                            },
 "create_agent":
 { Args: { "config": Json,"integration_id": string,"name": string,"token_hash": string }; Returns: string
@@ -1954,6 +1998,9 @@ isOneToOne: false
                            },
 "diagnosis_snapshot":
 { Args: { "target": string }; Returns: Json
+                           },
+"disable_sso":
+{ Args: Record<PropertyKey, never>; Returns: undefined
                            },
 "disconnect_jira":
 { Args: Record<PropertyKey, never>; Returns: undefined
@@ -2128,6 +2175,9 @@ isOneToOne: false
         isOneToOne: true
         isSetofReturn: false
       } },
+"mark_sso_domain":
+{ Args: { "target": string }; Returns: boolean
+                           },
 "my_retention":
 { Args: { "data_class": string }; Returns: number
                            },
@@ -2196,6 +2246,9 @@ isOneToOne: false
 "remove_member":
 { Args: { "target": string }; Returns: undefined
                            },
+"remove_sso_domain":
+{ Args: { "target": string }; Returns: undefined
+                           },
 "report_reviews":
 { Args: { "diagnosis": string,"tenant": string }; Returns: {
               "comment": string,"created_at": string,"reviewer": string,"verdict": string
@@ -2228,6 +2281,9 @@ isOneToOne: false
                            },
 "require_other_owner":
 { Args: { "membership": Omit<Database["doctor"]['Tables']["memberships"]['Row'], Database["doctor"]['Tables']["memberships"]['ComputedFields']> }; Returns: undefined
+                           },
+"require_sso_owner":
+{ Args: Record<PropertyKey, never>; Returns: string
                            },
 "resend_invitation":
 { Args: { "target": string,"token_hash": string }; Returns: {
@@ -2279,6 +2335,29 @@ isOneToOne: false
 "rotate_webhook_secret":
 { Args: { "secret": string,"target": string }; Returns: undefined
                            },
+"scim_connection":
+{ Args: { "token_hash": string }; Returns: string
+                           },
+"scim_delete_user":
+{ Args: { "target": string,"token_hash": string }; Returns: boolean
+                           },
+"scim_revoke":
+{ Args: { "tenant": string,"user_name": string }; Returns: undefined
+                           },
+"scim_set_active":
+{ Args: { "active": boolean,"target": string,"token_hash": string }; Returns: boolean
+                           },
+"scim_upsert_user":
+{ Args: { "active": boolean,"external_id": string,"token_hash": string,"user_name": string }; Returns: string
+                           },
+"scim_user_count":
+{ Args: { "filter_name": string,"token_hash": string }; Returns: number
+                           },
+"scim_users":
+{ Args: { "filter_name": string,"page_offset": number,"page_size": number,"target": string,"token_hash": string }; Returns: {
+              "active": boolean,"created_at": string,"external_id": string,"id": string,"updated_at": string,"user_name": string
+            }[]
+                           },
 "servicenow_hook":
 { Args: { "number": string,"token_hash": string }; Returns: boolean
                            },
@@ -2300,8 +2379,33 @@ isOneToOne: false
 "set_retention_policy":
 { Args: { "data_class": string,"days": number }; Returns: undefined
                            },
+"set_scim_token":
+{ Args: { "token_hash": string }; Returns: undefined
+                           },
+"set_sso_groups":
+{ Args: { "mapping": Json }; Returns: undefined
+                           },
+"set_sso_provider":
+{ Args: { "connection": string,"error": string,"provider": string,"status": string }; Returns: boolean
+                           },
 "set_usage":
 { Args: { "resource": string,"tenant": string,"value": number }; Returns: undefined
+                           },
+"sso_discover":
+{ Args: { "email": string }; Returns: {
+              "domain": string,"required": boolean
+            }[]
+                           },
+"sso_provision":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "role": string,"tenant_id": string
+            }[]
+                           },
+"sso_rank":
+{ Args: { "role": string }; Returns: number
+                           },
+"sso_scim_enabled":
+{ Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "start_itsm_oauth":
 { Args: { "state_hash": string }; Returns: undefined
@@ -2353,6 +2457,9 @@ isOneToOne: false
                            },
 "utc_hour":
 { Args: { "moment": string }; Returns: string
+                           },
+"verify_sso_domain":
+{ Args: { "target": string }; Returns: undefined
                            },
 "write_audit":
 { Args: { "action": string,"after": Json,"before": Json,"resource_id": string,"resource_type": string,"tenant": string }; Returns: undefined

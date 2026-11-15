@@ -8,14 +8,18 @@
 Depois, os textos voltam aos limites do contrato: um marcador pode deixar o valor mais longo.
 """
 
+import logging
 from collections import Counter
 from collections.abc import Mapping
 from typing import Any
 from uuid import UUID
 
-from aid_security import Sanitizer, derive_tenant_key
+from aid_security import Rules, Sanitizer, derive_tenant_key
+from aid_security.sanitizer import compile_extra
 
 from aid_ingestion.sap import enrich
+
+logger = logging.getLogger(__name__)
 
 UNTOUCHED = {"schema_version", "event_id", "integration_id", "timestamp", "severity"}
 IDENTIFIERS = ("execution_id", "trace_id")
@@ -48,14 +52,39 @@ def fit_contract(event: dict[str, Any]) -> dict[str, Any]:
     return event
 
 
+def usable_rules(
+    extra_patterns: Mapping[str, Any], detect_ips: bool, allow_private_ips: bool
+) -> Rules:
+    """As regras da Organização como o Sanitizer as aceita. Padrão que não compila (gravado por
+    fora da API) é ignorado com aviso: uma regra ruim não para a ingestão."""
+    patterns: dict[str, str] = {}
+    for kind, pattern in extra_patterns.items():
+        if not isinstance(pattern, str):
+            continue
+        try:
+            compile_extra(kind, pattern)
+        except ValueError:
+            logger.warning("regra de Sanitização ignorada: padrão %s inválido", kind)
+            continue
+        patterns[kind] = pattern
+    return Rules(
+        extra_patterns=patterns, detect_ips=detect_ips, allow_private_ips=allow_private_ips
+    )
+
+
 class EventSanitizer:
     """Sem chave (`EventSanitizer()`), sanitiza igual, só sem a chave das Referências: é o que o
     agente local (#39) roda na rede do cliente antes de enviar."""
 
-    def __init__(self, master_key: bytes | None = None, tenant_id: str | None = None) -> None:
+    def __init__(
+        self,
+        master_key: bytes | None = None,
+        tenant_id: str | None = None,
+        rules: Rules | None = None,
+    ) -> None:
         key = derive_tenant_key(master_key, UUID(tenant_id)) if master_key and tenant_id else None
-        self.content = Sanitizer(reference_key=key)
-        self.identifiers = Sanitizer(reference_key=key, exclude_kinds=("cartao",))
+        self.content = Sanitizer(rules, reference_key=key)
+        self.identifiers = Sanitizer(rules, reference_key=key, exclude_kinds=("cartao",))
 
     def __call__(self, event: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         """O Evento sanitizado e o relatório (`counts`, `truncated`) que vai para o banco."""

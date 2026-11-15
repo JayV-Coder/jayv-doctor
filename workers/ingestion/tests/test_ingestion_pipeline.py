@@ -472,3 +472,79 @@ async def test_lote_com_erro_permanente_fica_registrado(
     )
     assert dict(result) == {"failed": True, "error": "Erro inesperado ao processar o lote."}
     assert await pipeline.process_batch({"batch_id": batch_id}, engine, MASTER) == "ignored"
+
+
+# --- Regras de Sanitização da Organização (#13). ---
+
+RULES_NDJSON = (
+    b'{"timestamp": "2026-11-02T14:05:00Z", "operation": "BAPI_SALESORDER", "level": "E",'
+    b' "message": "Matricula MAT-123456 sem acesso ao host 10.0.0.12 nem a 200.160.2.3"}\n'
+)
+
+
+async def set_rules(engine: AsyncEngine, tenant_id: str, patterns: str, private: bool) -> None:
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "insert into doctor.sanitization_rules"
+                " (tenant_id, extra_patterns, allow_private_ips) values (:t, cast(:p as jsonb), :a)"
+            ),
+            {"t": tenant_id, "p": patterns, "a": private},
+        )
+
+
+async def clear_rules(engine: AsyncEngine, tenant_id: str) -> None:
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("delete from doctor.sanitization_rules where tenant_id = :t"), {"t": tenant_id}
+        )
+
+
+@pytest.mark.asyncio
+async def test_importacao_aplica_os_padroes_e_a_liberacao_de_ip_da_organizacao(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    await set_rules(engine, tenant["tenant"], '{"matricula": "MAT-[0-9]{6}"}', True)
+    try:
+        import_id, path = await uploaded_import(engine, tenant, RULES_NDJSON)
+        assert await run(engine, import_id, path, RULES_NDJSON) == "done"
+        message = await scalar(
+            engine,
+            "select error ->> 'message' from doctor.events where tenant_id = :t",
+            t=tenant["tenant"],
+        )
+        # O padrão da Organização sai; o IP interno fica (liberado); o público continua saindo.
+        assert "MAT-123456" not in message
+        assert "[REMOVIDO:matricula]" in message
+        assert "10.0.0.12" in message
+        assert "200.160.2.3" not in message
+    finally:
+        await clear_rules(engine, tenant["tenant"])
+
+
+@pytest.mark.asyncio
+async def test_lote_da_api_aplica_as_regras_e_padrao_ruim_nao_para_a_ingestao(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    from aid_ingestion.pipeline import process_batch
+
+    # Um padrão que não compila (gravado por fora da API) é ignorado; o outro vale.
+    await set_rules(
+        engine, tenant["tenant"], '{"ruim": "([a-z", "matricula": "MAT-[0-9]{6}"}', False
+    )
+    try:
+        event = api_event(
+            "0190f3a1-7b2c-7d4e-8f00-123456789aff",
+            error={"category": "AUTH", "message": "MAT-654321 bloqueada no host 10.0.0.12"},
+        )
+        batch_id = await api_batch(engine, tenant, [event])
+        assert await process_batch({"batch_id": batch_id}, engine, MASTER) == "done"
+        message = await scalar(
+            engine,
+            "select error ->> 'message' from doctor.events where tenant_id = :t",
+            t=tenant["tenant"],
+        )
+        assert "MAT-654321" not in message
+        assert "10.0.0.12" not in message
+    finally:
+        await clear_rules(engine, tenant["tenant"])

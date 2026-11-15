@@ -1421,6 +1421,30 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/privacy/sanitization": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Sanitization
+     * @description Padrões extras e IPs internos (#13); sem configuração, os padrões do Sanitizer.
+     */
+    get: operations["get_sanitization_api_v1_privacy_sanitization_get"];
+    /**
+     * Put Sanitization
+     * @description Vale para os Eventos que chegarem daqui em diante; os já gravados não mudam.
+     */
+    put: operations["put_sanitization_api_v1_privacy_sanitization_put"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/privacy/llm": {
     parameters: {
       query?: never;
@@ -3815,6 +3839,26 @@ export interface components {
       description: string;
       /** Matched Event Ids */
       matched_event_ids: string[];
+    };
+    /**
+     * SanitizationRules
+     * @description Regras de Sanitização da Organização (#13), aplicadas antes de gravar o Evento.
+     */
+    SanitizationRules: {
+      /** Extra Patterns */
+      extra_patterns?: {
+        [key: string]: string;
+      };
+      /**
+       * Detect Ips
+       * @default true
+       */
+      detect_ips: boolean;
+      /**
+       * Allow Private Ips
+       * @default false
+       */
+      allow_private_ips: boolean;
     };
     /** ServiceNowConfig */
     ServiceNowConfig: {
@@ -7661,6 +7705,73 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_sanitization_api_v1_privacy_sanitization_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SanitizationRules"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  put_sanitization_api_v1_privacy_sanitization_put: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SanitizationRules"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SanitizationRules"];
+        };
       };
       /** @description Validation Error */
       422: {

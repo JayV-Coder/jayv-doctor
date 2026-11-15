@@ -6942,6 +6942,128 @@
         }
       }
     },
+    "/api/v1/privacy/sanitization": {
+      "get": {
+        "tags": ["privacy"],
+        "summary": "Get Sanitization",
+        "description": "Padrões extras e IPs internos (#13); sem configuração, os padrões do Sanitizer.",
+        "operationId": "get_sanitization_api_v1_privacy_sanitization_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SanitizationRules"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["privacy"],
+        "summary": "Put Sanitization",
+        "description": "Vale para os Eventos que chegarem daqui em diante; os já gravados não mudam.",
+        "operationId": "put_sanitization_api_v1_privacy_sanitization_put",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SanitizationRules"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SanitizationRules"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/privacy/llm": {
       "put": {
         "tags": ["privacy"],
@@ -13515,6 +13637,34 @@
         "type": "object",
         "required": ["rule_code", "rule_version", "category", "description", "matched_event_ids"],
         "title": "RuleHit"
+      },
+      "SanitizationRules": {
+        "properties": {
+          "extra_patterns": {
+            "patternProperties": {
+              "^[a-z][a-z0-9_]{1,30}$": {
+                "type": "string"
+              }
+            },
+            "type": "object",
+            "maxProperties": 20,
+            "title": "Extra Patterns"
+          },
+          "detect_ips": {
+            "type": "boolean",
+            "title": "Detect Ips",
+            "default": true
+          },
+          "allow_private_ips": {
+            "type": "boolean",
+            "title": "Allow Private Ips",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SanitizationRules",
+        "description": "Regras de Sanitização da Organização (#13), aplicadas antes de gravar o Evento."
       },
       "ServiceNowConfig": {
         "properties": {

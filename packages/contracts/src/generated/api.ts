@@ -299,6 +299,67 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/imports/mapping-suggestion": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Suggest Mapping
+     * @description A sugestão pelo nome das colunas do cabeçalho (o mesmo que o worker reconheceria).
+     */
+    post: operations["suggest_mapping_api_v1_imports_mapping_suggestion_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/imports/mappings/{target}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Mapping */
+    get: operations["get_mapping_api_v1_imports_mappings__target__get"];
+    /**
+     * Put Mapping
+     * @description Vale para as próximas Importações da Integração; vazio volta à detecção pelo nome.
+     */
+    put: operations["put_mapping_api_v1_imports_mappings__target__put"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/imports/{target}/rejections": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Download Rejections
+     * @description As linhas recusadas, em CSV (`linha,motivo`), para corrigir o arquivo e importar de novo.
+     */
+    get: operations["download_rejections_api_v1_imports__target__rejections_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/imports/{target}/upload-url": {
     parameters: {
       query?: never;
@@ -2697,6 +2758,24 @@ export interface components {
        */
       created_at: string;
     };
+    /** ImportMapping */
+    ImportMapping: {
+      /** Columns */
+      columns: {
+        [key: string]: string;
+      };
+      /** Fields */
+      fields?: {
+        [key: string]: string[];
+      };
+    };
+    /** ImportMappingChange */
+    ImportMappingChange: {
+      /** Columns */
+      columns: {
+        [key: string]: string;
+      };
+    };
     /** IncidentChange */
     IncidentChange: {
       /** Status */
@@ -3238,6 +3317,18 @@ export interface components {
        */
       reconcile: boolean;
       lookup?: components["schemas"]["Lookup"] | null;
+    };
+    /** MappingSuggestion */
+    MappingSuggestion: {
+      /** Columns */
+      columns: {
+        [key: string]: string;
+      };
+    };
+    /** MappingSuggestionRequest */
+    MappingSuggestionRequest: {
+      /** Columns */
+      columns: string[];
     };
     /** Me */
     Me: {
@@ -4838,6 +4929,143 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["CreatedImport"];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  suggest_mapping_api_v1_imports_mapping_suggestion_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["MappingSuggestionRequest"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MappingSuggestion"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_mapping_api_v1_imports_mappings__target__get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ImportMapping"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  put_mapping_api_v1_imports_mappings__target__put: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ImportMappingChange"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ImportMapping"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  download_rejections_api_v1_imports__target__rejections_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Validation Error */
       422: {

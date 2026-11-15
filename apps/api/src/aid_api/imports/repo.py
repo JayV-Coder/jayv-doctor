@@ -1,6 +1,9 @@
 """Importações dentro de `tenant_tx`. Escritas pelas funções do banco, que conferem o Papel na
 tabela e montam o caminho no Storage a partir do tenant da claim."""
 
+import csv
+import io
+import json
 from dataclasses import dataclass
 
 from sqlalchemy import text
@@ -9,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from aid_api.core.auth import Claims
 from aid_api.core.db import translated_tx
 from aid_api.core.errors import ApiError
-from aid_api.imports.schemas import Import, NewImport, Status
+from aid_api.imports.schemas import Import, ImportMapping, ImportMappingChange, NewImport, Status
 
 COLUMNS = (
     "id::text, integration_id::text, filename, size_bytes, format, status, duplicate_of::text,"
@@ -102,6 +105,55 @@ class ImportRepository:
                 {"t": target, "size": size, "reason": reason},
             )
             return (await fetch(connection, target))[0]
+
+    async def mapping(self, claims: Claims, integration: str) -> ImportMapping:
+        async with translated_tx(claims, ERRORS, self.engine) as connection:
+            exists = await connection.scalar(
+                text(
+                    "select exists (select 1 from doctor.integrations"
+                    " where id = cast(:g as uuid) and archived_at is null)"
+                ),
+                {"g": integration},
+            )
+            if not exists:
+                raise not_found()
+            columns = await connection.scalar(
+                text(
+                    "select columns from doctor.import_mappings"
+                    " where integration_id = cast(:g as uuid)"
+                ),
+                {"g": integration},
+            )
+        return ImportMapping(columns=columns or {})
+
+    async def set_mapping(
+        self, claims: Claims, integration: str, change: ImportMappingChange
+    ) -> ImportMapping:
+        async with translated_tx(claims, ERRORS, self.engine) as connection:
+            await connection.execute(
+                text("select doctor.set_import_mapping(cast(:g as uuid), cast(:c as jsonb))"),
+                {"g": integration, "c": json.dumps(change.columns)},
+            )
+        return ImportMapping(columns=change.columns)
+
+    async def rejections_csv(self, claims: Claims, target: str) -> tuple[str, str]:
+        """O nome do arquivo e o CSV `linha,motivo`, na ordem do arquivo. O motivo é do worker
+        (nunca o conteúdo da linha), então não carrega dado do cliente."""
+        async with translated_tx(claims, ERRORS, self.engine) as connection:
+            current, _ = await fetch(connection, target)
+            rows = await connection.execute(
+                text(
+                    "select line_number, reason from doctor.import_rejections"
+                    " where import_id = cast(:i as uuid) order by line_number"
+                ),
+                {"i": target},
+            )
+            output = io.StringIO()
+            writer = csv.writer(output, lineterminator="\n")
+            writer.writerow(["linha", "motivo"])
+            for line_number, reason in rows:
+                writer.writerow([line_number, reason])
+        return current.filename, output.getvalue()
 
 
 def get_import_repository() -> ImportRepository:

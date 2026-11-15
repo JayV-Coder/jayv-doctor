@@ -8,6 +8,10 @@ Exigem `Authorization: Bearer <JWT do Supabase Auth>` e Organização ativa. Tod
 | `POST /api/v1/imports` | Cria a Importação → `201 { id, status, error, duplicate_of }` |
 | `POST /api/v1/imports/{id}/upload-url` | URL assinada para subir o arquivo de uma Importação `pending` → `200 { upload_url }`; pode ser repetida para reenviar |
 | `POST /api/v1/imports/{id}/complete` | Confere o arquivo no Storage e enfileira o processamento → `200` com a Importação |
+| `GET /api/v1/imports/{id}/rejections` | As linhas recusadas em CSV (`linha,motivo`, na ordem do arquivo), para corrigir e importar de novo. O motivo é do worker, sem o conteúdo da linha |
+| `GET /api/v1/imports/mappings/{integration_id}` | O mapeamento de colunas da Integração (`columns`: campo do Contrato de evento → coluna do arquivo) e, em `fields`, os nomes que cada campo reconhece sem mapeamento |
+| `PUT /api/v1/imports/mappings/{integration_id}` | Owner, Admin ou Analyst. `{ "columns": { "timestamp": "Data/Hora", … } }` vale para as próximas Importações da Integração; `{}` volta à detecção pelo nome. Campo fora do contrato → `422` |
+| `POST /api/v1/imports/mapping-suggestion` | Owner, Admin ou Analyst. `{ "columns": [<cabeçalho do arquivo>] }` → a sugestão pelo nome de cada coluna |
 
 Fluxo:
 
@@ -56,3 +60,9 @@ O tenant e o caminho no Storage nunca vêm do payload: campos extras viram `422`
 | 422 | `validation_error` | Corpo inválido |
 | 422 | `invalid_filename` | Nome de arquivo com caminho ou caractere de controle |
 | 503 | `storage_unavailable` | Storage fora do ar; tente de novo |
+
+## Mapeamento de colunas (#11)
+
+Sem mapeamento, o worker reconhece cada campo pelo nome da coluna, sem diferença de maiúsculas (por exemplo, `timestamp`, `data_hora` ou `data` para a data; `msgty` ou `level` para a severidade). Exportações com nomes próprios (`Data/Hora`, `Texto da mensagem`) precisam do mapeamento: ele põe a coluna escolhida no campo do contrato antes da detecção e vale para JSON, NDJSON e CSV. As colunas que sobram vão para `attributes`, com o nome em minúsculas.
+
+Os campos mapeáveis são `timestamp`, `severity`, `operation`, `execution_id`, `trace_id`, `message`, `http_status` e `error_code`.

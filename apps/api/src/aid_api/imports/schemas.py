@@ -1,10 +1,11 @@
 """Contratos das rotas de Importação manual."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from aid_contracts.aliases import FIELDS
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 Status = Literal["pending", "uploaded", "processing", "done", "failed", "rejected"]
 Format = Literal["json", "ndjson", "csv"]
@@ -48,3 +49,42 @@ class Import(BaseModel):
     secrets_removed: int
     error: str | None
     created_at: datetime
+
+
+# Mapeamento de colunas por Integração (#11): campo do Contrato de evento → coluna do arquivo.
+ContractField = Literal[
+    "timestamp",
+    "severity",
+    "operation",
+    "execution_id",
+    "trace_id",
+    "message",
+    "http_status",
+    "error_code",
+]
+ColumnName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+
+
+class ImportMapping(BaseModel):
+    columns: dict[ContractField, ColumnName]
+    # Os campos do contrato e os nomes de coluna que cada um reconhece sem mapeamento.
+    fields: dict[str, list[str]] = Field(
+        default_factory=lambda: {field: list(names) for field, names in FIELDS.items()}
+    )
+
+
+class ImportMappingChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    columns: dict[ContractField, ColumnName] = Field(max_length=8)
+
+
+class MappingSuggestionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # O cabeçalho do arquivo, lido no navegador.
+    columns: list[Annotated[str, StringConstraints(max_length=200)]] = Field(max_length=500)
+
+
+class MappingSuggestion(BaseModel):
+    columns: dict[str, str]

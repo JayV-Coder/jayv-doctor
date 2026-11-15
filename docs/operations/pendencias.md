@@ -50,6 +50,7 @@ Tudo foi validado na stack local e no CI. A configuração do GCP e do Supabase 
 - [ ] Segurança (#27): rodar os Advisors do Supabase (security e performance) no projeto e conferir que assinar `doctor.diagnoses` de outra Organização pelo Realtime não entrega eventos (o CI sobe sem Realtime). Ver `docs/security/isolamento-e-asvs-l2.md`.
 - [ ] Diagnóstico (#24): a Cota de IA ainda libera tudo (`ai_allowed` no worker de diagnóstico); o controle de consumo entra com o #31 (`usage_records`, `usage_llm`).
 - [ ] Schema `coder` (ADR-0022): a migração `20261112100000_coder_schema.sql` foi aplicada em produção pelo deploy de `JayV-Coder/supabase` em 13/11/2026 (tabelas do app em `coder`, views em `public`). Conferido só na stack local (testes pgTAP e o upsert do app pela view) e por leitura anônima em produção. Falta conferir com uma conta real no app do jayv-coder e no site: sincronização, chat, uso e Painel.
+- [ ] SSO (#48): plano Pro no projeto, SAML ligado no Auth, token da Management API no segredo `supabase-access-token` e `SUPABASE_PROJECT_REF` (passo a passo em `docs/operations/sso.md`). Afeta o jayv-coder: janela combinada.
 - [ ] Rodar `python -m aid_knowledge.global_seed` (com `SUPABASE_DB_URL` e `VOYAGE_API_KEY`) depois das migrações, para gravar a Base global v1 com embeddings.
 - [ ] Confirmar que nenhum Custom Access Token Hook está ativo e ativar `doctor.custom_access_token_hook`.
 - [ ] Incluir as URLs do app web nas URLs de redirecionamento do Auth.

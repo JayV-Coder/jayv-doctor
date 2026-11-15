@@ -1599,6 +1599,148 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/sso": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Sso */
+    get: operations["get_sso_api_v1_sso_get"];
+    /** Configure Sso */
+    put: operations["configure_sso_api_v1_sso_put"];
+    post?: never;
+    /** Disable Sso */
+    delete: operations["disable_sso_api_v1_sso_delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/sso/domains": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Add Domain */
+    post: operations["add_domain_api_v1_sso_domains_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/sso/domains/{target}/verify": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Verify Domain */
+    post: operations["verify_domain_api_v1_sso_domains__target__verify_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/sso/domains/{target}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Remove Domain */
+    delete: operations["remove_domain_api_v1_sso_domains__target__delete"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/sso/groups": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Set Groups */
+    put: operations["set_groups_api_v1_sso_groups_put"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/sso/scim-token": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Rotate Scim Token */
+    post: operations["rotate_scim_token_api_v1_sso_scim_token_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/sso/provision": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Provision
+     * @description Logo depois do login pelo IdP: cria ou ajusta o Vínculo pelo grupo e ativa a
+     *     Organização. A web renova a sessão em seguida, para o token trazer as claims dela.
+     */
+    post: operations["provision_api_v1_sso_provision_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/sso/discover": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Discover */
+    get: operations["discover_api_v1_sso_discover_get"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3816,6 +3958,13 @@ export interface components {
       /** Matched Event Ids */
       matched_event_ids: string[];
     };
+    /** ScimToken */
+    ScimToken: {
+      /** Token */
+      token: string;
+      /** Base Url */
+      base_url: string;
+    };
     /** ServiceNowConfig */
     ServiceNowConfig: {
       /** Instance Url */
@@ -3881,6 +4030,97 @@ export interface components {
     SharedReportRequest: {
       /** Token */
       token: string;
+    };
+    /** SsoConfigIn */
+    SsoConfigIn: {
+      /** Metadata Url */
+      metadata_url: string;
+      /**
+       * Require Sso
+       * @default false
+       */
+      require_sso: boolean;
+      /** Default Role */
+      default_role?: ("admin" | "analyst" | "viewer") | null;
+    };
+    /** SsoConnection */
+    SsoConnection: {
+      /** Id */
+      id: string;
+      /**
+       * Status
+       * @enum {string}
+       */
+      status: "pending_platform" | "active" | "error";
+      /** Metadata Url */
+      metadata_url: string;
+      /** Require Sso */
+      require_sso: boolean;
+      /** Default Role */
+      default_role: ("admin" | "analyst" | "viewer") | null;
+      /** Last Error */
+      last_error: string | null;
+      /** Scim Enabled */
+      scim_enabled: boolean;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
+    /**
+     * SsoDiscovery
+     * @description Para a tela de login: o domínio do e-mail tem SSO ativo? É obrigatório?
+     */
+    SsoDiscovery: {
+      /** Sso */
+      sso: boolean;
+      /** Required */
+      required: boolean;
+      /** Domain */
+      domain: string | null;
+    };
+    /** SsoDomain */
+    SsoDomain: {
+      /** Id */
+      id: string;
+      /** Domain */
+      domain: string;
+      /** Verified At */
+      verified_at: string | null;
+      /** Txt Name */
+      txt_name: string;
+      /** Txt Value */
+      txt_value: string;
+    };
+    /** SsoDomainIn */
+    SsoDomainIn: {
+      /** Domain */
+      domain: string;
+    };
+    /** SsoGroupsIn */
+    SsoGroupsIn: {
+      /** Groups */
+      groups: {
+        [key: string]: "admin" | "analyst" | "viewer";
+      };
+    };
+    /** SsoProvisioned */
+    SsoProvisioned: {
+      /** Tenant Id */
+      tenant_id: string;
+      /** Role */
+      role: string;
+    };
+    /** SsoSettings */
+    SsoSettings: {
+      connection: components["schemas"]["SsoConnection"] | null;
+      /** Domains */
+      domains: components["schemas"]["SsoDomain"][];
+      /** Groups */
+      groups: {
+        [key: string]: "admin" | "analyst" | "viewer";
+      };
     };
     /** SubjectErased */
     SubjectErased: {
@@ -8065,6 +8305,335 @@ export interface operations {
         content: {
           "application/pdf": unknown;
           "text/markdown": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_sso_api_v1_sso_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SsoSettings"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  configure_sso_api_v1_sso_put: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SsoConfigIn"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SsoSettings"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  disable_sso_api_v1_sso_delete: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  add_domain_api_v1_sso_domains_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SsoDomainIn"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SsoDomain"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  verify_domain_api_v1_sso_domains__target__verify_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  remove_domain_api_v1_sso_domains__target__delete: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        target: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  set_groups_api_v1_sso_groups_put: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SsoGroupsIn"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SsoSettings"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  rotate_scim_token_api_v1_sso_scim_token_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ScimToken"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  provision_api_v1_sso_provision_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SsoProvisioned"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  discover_api_v1_sso_discover_get: {
+    parameters: {
+      query: {
+        email: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SsoDiscovery"];
         };
       };
       /** @description Validation Error */

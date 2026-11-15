@@ -18,6 +18,7 @@ from aid_api.privacy.schemas import (
     LlmChange,
     PrivacySettings,
     RetentionChange,
+    SanitizationRules,
     SubjectErased,
     SubjectEvents,
     SubjectQuery,
@@ -63,6 +64,21 @@ async def put_ai_profile(
     """Perfil de IA (ADR-0018): Owner com MFA troca entre o padrão e o Brasil."""
     await repository.set_ai_profile(claims, change.profile)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/sanitization", response_model=SanitizationRules)
+async def get_sanitization(claims: Viewer, repository: Repository) -> SanitizationRules:
+    """Padrões extras e IPs internos (#13); sem configuração, os padrões do Sanitizer."""
+    return await repository.sanitization(claims)
+
+
+@router.put("/sanitization", response_model=SanitizationRules)
+async def put_sanitization(
+    rules: SanitizationRules, claims: Manager, repository: Repository, _: Idempotent
+) -> SanitizationRules:
+    """Vale para os Eventos que chegarem daqui em diante; os já gravados não mudam."""
+    await repository.set_sanitization(claims, rules)
+    return rules
 
 
 @router.put("/llm", status_code=status.HTTP_204_NO_CONTENT)

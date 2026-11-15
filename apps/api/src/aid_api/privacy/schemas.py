@@ -1,9 +1,10 @@
 """Contratos de retenção e LGPD (ticket #29)."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from aid_security.sanitizer import compile_extra
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 DataClass = Literal["raw_logs", "events", "incidents", "audit"]
 
@@ -101,3 +102,26 @@ class SubjectEvents(BaseModel):
 
 class SubjectErased(BaseModel):
     events_erased: int
+
+
+# O tipo vira o marcador `[REMOVIDO:<tipo>]` nos Eventos.
+PatternKind = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{1,30}$")]
+
+
+class SanitizationRules(BaseModel):
+    """Regras de Sanitização da Organização (#13), aplicadas antes de gravar o Evento."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    extra_patterns: dict[PatternKind, str] = Field(default_factory=dict, max_length=20)
+    detect_ips: bool = True
+    allow_private_ips: bool = False
+
+    @field_validator("extra_patterns")
+    @classmethod
+    def patterns_are_safe(cls, value: dict[str, str]) -> dict[str, str]:
+        # A mesma conferência do Sanitizer: inválido, catastrófico ou que casa com vazio é recusado
+        # aqui, em vez de virar um padrão ignorado no worker.
+        for kind, pattern in value.items():
+            compile_extra(kind, pattern)
+        return value

@@ -1,5 +1,7 @@
 """Retenção e LGPD dentro de `tenant_tx`; as funções do banco conferem Papel e MFA."""
 
+import json
+
 from aid_diagnosis_engine.llm.registry import EMBEDDING_MODELS
 from sqlalchemy import text
 
@@ -14,6 +16,7 @@ from aid_api.privacy.schemas import (
     Reindex,
     Retention,
     RetentionChange,
+    SanitizationRules,
     SubjectEvents,
 )
 
@@ -116,6 +119,33 @@ class PrivacyRepository:
         varredura de hora em hora; a busca usa o índice antigo permitido até lá."""
         async with translated_tx(claims, ERRORS) as connection:
             await connection.execute(text("select doctor.set_ai_profile(:p)"), {"p": profile})
+
+    async def sanitization(self, claims: Claims) -> SanitizationRules:
+        async with translated_tx(claims, ERRORS) as connection:
+            row = (
+                (
+                    await connection.execute(
+                        text(
+                            "select extra_patterns, detect_ips, allow_private_ips"
+                            " from doctor.sanitization_rules"
+                        )
+                    )
+                )
+                .mappings()
+                .first()
+            )
+        return SanitizationRules.model_validate(dict(row)) if row else SanitizationRules()
+
+    async def set_sanitization(self, claims: Claims, rules: SanitizationRules) -> None:
+        async with translated_tx(claims, ERRORS) as connection:
+            await connection.execute(
+                text("select doctor.set_sanitization_rules(cast(:p as jsonb), :d, :a)"),
+                {
+                    "p": json.dumps(rules.extra_patterns),
+                    "d": rules.detect_ips,
+                    "a": rules.allow_private_ips,
+                },
+            )
 
     async def set_llm(self, claims: Claims, enabled: bool) -> None:
         async with translated_tx(claims, ERRORS) as connection:

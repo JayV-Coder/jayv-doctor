@@ -21,11 +21,12 @@ import httpx
 from aid_contracts.events import EventValidationError, validate_event
 from aid_db import platform_role
 from aid_observability.tracing import tracer
+from aid_security import Rules
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from aid_ingestion.cleaning import EventSanitizer, secrets_removed
+from aid_ingestion.cleaning import EventSanitizer, secrets_removed, usable_rules
 from aid_ingestion.mapping import RejectedLineError, to_event
 from aid_ingestion.parsing import Line, read_records
 
@@ -137,11 +138,29 @@ INSERT_REJECTION = text(
 )
 
 
+async def tenant_rules(engine: AsyncEngine, tenant_id: str) -> Rules:
+    """As regras de Sanitização da Organização (#13); sem linha, as padrão."""
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        found = (
+            await connection.execute(
+                text(
+                    "select extra_patterns, detect_ips, allow_private_ips"
+                    " from doctor.sanitization_rules where tenant_id = cast(:t as uuid)"
+                ),
+                {"t": tenant_id},
+            )
+        ).first()
+    if found is None:
+        return Rules()
+    return usable_rules(found.extra_patterns or {}, found.detect_ips, found.allow_private_ips)
+
+
 class Importer:
-    def __init__(self, engine: AsyncEngine, job: Job, master_key: bytes) -> None:
+    def __init__(self, engine: AsyncEngine, job: Job, master_key: bytes, rules: Rules) -> None:
         self.engine = engine
         self.job = job
-        self.sanitize = EventSanitizer(master_key, job.tenant_id)
+        self.sanitize = EventSanitizer(master_key, job.tenant_id, rules)
         self.source = {
             "provider": "manual",
             "service": "importacao",
@@ -349,7 +368,9 @@ async def ingest_batch(batch_id: str, engine: AsyncEngine, master_key: bytes) ->
         ).first()
     if found is None or found.closed:
         return "ignored"
-    sanitize = EventSanitizer(master_key, found.tenant_id)
+    sanitize = EventSanitizer(
+        master_key, found.tenant_id, await tenant_rules(engine, found.tenant_id)
+    )
     rows, skipped = [], 0
     for event in found.events:
         cleaned, report = sanitize(event)
@@ -434,7 +455,7 @@ async def ingest(job: Job, engine: AsyncEngine, store: ObjectStore, master_key: 
     if hashlib.sha256(data).hexdigest() != job.sha256:
         return await fail(engine, job, "Arquivo diferente do que foi enviado")
 
-    importer = Importer(engine, job, master_key)
+    importer = Importer(engine, job, master_key, await tenant_rules(engine, job.tenant_id))
     batch = Batch()
     for line in read_records(data, job.file_format):
         importer.line(line, batch)

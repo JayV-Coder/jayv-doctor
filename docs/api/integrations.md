@@ -26,7 +26,7 @@ Corpo do `POST`:
 - O nome é único por Organização e Ambiente entre as ativas: arquivar libera o nome. O mesmo nome vale em outra Organização.
 - O payload não define tenant, autor nem arquivamento: campos extras viram `422`.
 - Não há exclusão física, porque Execuções e Incidentes apontam para a Integração. Arquivada, ela some das listas padrão e fica congelada: não volta e não muda. Os Conectores (ticket #14) devem ignorar Integrações arquivadas ao sincronizar.
-- `error_rate_24h` fica `null` até existirem Execuções (ticket #17): sem Execução não há taxa, nem 0%.
+- `error_rate_24h`: falhas ÷ Execuções das últimas 24 h, pelas estatísticas por hora (as mesmas do painel); `null` sem Execuções no período: sem Execução não há taxa, nem 0%.
 
 ## Erros (`application/problem+json`)
 

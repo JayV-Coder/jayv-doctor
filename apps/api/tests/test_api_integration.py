@@ -1074,3 +1074,44 @@ async def test_relatorio_lista_com_os_links_ativos_contra_o_banco(
             await connection.execute(
                 text("delete from public.organization_members where org_id = :t"), {"t": tenant}
             )
+
+
+@pytest.mark.asyncio
+async def test_lista_traz_a_taxa_de_erro_das_ultimas_24_horas(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str
+) -> None:
+    first, _ = tenants
+    await add_admin(engine, first, user)
+    repository = IntegrationRepository(engine)
+    admin = claims_for(first, user, "admin", "aal2")
+    busy = await repository.create(
+        admin,
+        NewIntegration(
+            name="Pedidos", source_system="salesforce", target_system="sap", environment="prd"
+        ),
+    )
+    quiet = await repository.create(
+        admin,
+        NewIntegration(name="Notas", source_system="sap", target_system="gcp", environment="prd"),
+    )
+    now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    async with engine.begin() as connection:
+        for hour, total, failed in (
+            (now, 6, 2),
+            (now - timedelta(hours=5), 4, 1),
+            (now - timedelta(hours=30), 50, 50),
+        ):
+            await connection.execute(
+                text(
+                    "insert into doctor.execution_stats_hourly"
+                    " (tenant_id, integration_id, hour, total, failed)"
+                    " values (:t, :i, :h, :total, :failed)"
+                ),
+                {"t": first, "i": busy.id, "h": hour, "total": total, "failed": failed},
+            )
+
+    listed = {item.id: item for item in await repository.list(admin, include_archived=False)}
+    # 3 falhas em 10 Execuções nas últimas 24 h; a hora de 30 h atrás não conta.
+    assert listed[busy.id].error_rate_24h == pytest.approx(0.3)
+    # Sem Execução não há taxa: nulo, não 0.
+    assert listed[quiet.id].error_rate_24h is None

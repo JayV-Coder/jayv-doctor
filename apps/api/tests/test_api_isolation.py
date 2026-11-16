@@ -79,6 +79,8 @@ ROUTES: list[tuple[str, str, str, dict[str, Any] | None]] = [
     ("GET", "/api/v1/imports/mappings/{target}", "integration", None),
     ("PUT", "/api/v1/imports/mappings/{target}", "integration", {"columns": {}}),
     ("GET", "/api/v1/imports/{target}/rejections", "import", None),
+    ("POST", "/api/v1/sso/domains/{target}/verify", "sso_domain", None),
+    ("DELETE", "/api/v1/sso/domains/{target}", "sso_domain", None),
     ("GET", "/api/v1/integrations/{target}/correlation-mappings", "integration", None),
     (
         "POST",
@@ -199,6 +201,7 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
             "push",
             "webhook",
             "webhook_delivery",
+            "sso_domain",
             "mapping",
             "document",
             "own_integration",
@@ -265,6 +268,8 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
         " array['incident.opened'], gen_random_uuid())",
         "insert into doctor.webhook_deliveries (id, tenant_id, webhook_id, event, subject)"
         " values (:webhook_delivery, :tenant, :webhook, 'incident.opened', '{}')",
+        "insert into doctor.sso_domains (id, tenant_id, domain)"
+        " values (:sso_domain, :tenant, :sso_domain_name)",
         "insert into doctor.correlation_mappings (id, tenant_id, integration_id, name, keys)"
         " values (:mapping, :tenant, :integration, 'Pedido',"
         ' \'[{"system": "sap", "field": "execution_id"}]\')',
@@ -290,6 +295,7 @@ async def seed(engine: AsyncEngine) -> dict[str, str]:
         "path": f"{ids['tenant']}/api/lote.json",
         "doc_path": f"{ids['tenant']}/{ids['document']}/document.md",
         "report_path": f"{ids['tenant']}/{ids['report']}.pdf",
+        "sso_domain_name": f"b-{ids['tenant'][:8]}.test",
     }
     async with engine.begin() as connection:
         for sql in statements:

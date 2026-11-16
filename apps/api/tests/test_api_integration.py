@@ -65,7 +65,9 @@ async def user(engine: AsyncEngine) -> AsyncIterator[str]:
 
 
 @pytest_asyncio.fixture
-async def tenants(engine: AsyncEngine) -> AsyncIterator[tuple[str, str]]:
+async def tenants(engine: AsyncEngine, user: str) -> AsyncIterator[tuple[str, str]]:
+    """Duas Organizações, com o `user` de Viewer nas duas: a API confere o Vínculo a cada pedido
+    (#48), e um JWT com Organização sempre vem de quem tem Vínculo nela."""
     first, second = str(uuid4()), str(uuid4())
     async with engine.begin() as connection:
         for tenant in (first, second):
@@ -75,6 +77,20 @@ async def tenants(engine: AsyncEngine) -> AsyncIterator[tuple[str, str]]:
             )
             await connection.execute(
                 text("insert into doctor.tenants (id) values (:i)"), {"i": tenant}
+            )
+            await connection.execute(
+                text(
+                    "insert into public.organization_members (org_id, user_id, role)"
+                    " values (:t, :u, 'member')"
+                ),
+                {"t": tenant, "u": user},
+            )
+            await connection.execute(
+                text(
+                    "insert into doctor.memberships (tenant_id, user_id, role)"
+                    " values (:t, :u, 'viewer')"
+                ),
+                {"t": tenant, "u": user},
             )
     yield first, second
     async with engine.begin() as connection:
@@ -174,13 +190,14 @@ async def add_admin(engine: AsyncEngine, tenant_id: str, user_id: str) -> None:
         await connection.execute(
             text(
                 "insert into public.organization_members (org_id, user_id, role)"
-                " values (:t, :u, 'member')"
+                " values (:t, :u, 'member') on conflict do nothing"
             ),
             {"t": tenant_id, "u": user_id},
         )
         await connection.execute(
             text(
                 "insert into doctor.memberships (tenant_id, user_id, role) values (:t, :u, 'admin')"
+                " on conflict (tenant_id, user_id) do update set role = excluded.role"
             ),
             {"t": tenant_id, "u": user_id},
         )
@@ -915,13 +932,13 @@ async def test_auditoria_registra_a_troca_de_papel_com_a_requisicao_e_so_o_gesto
     assert entry.actor_label is not None
     found = await repository.search(admin, AuditSearch(q=entry.actor_label))
     assert any(item.action == "org.switched" for item in found.items)
-    # O add_admin passou pelos triggers: o Vínculo novo está na trilha, com o after.
-    created = await repository.search(admin, AuditSearch(q="membership.created"))
+    # O add_admin passou pelos triggers: a troca de Papel está na trilha, com o after.
+    changed = await repository.search(admin, AuditSearch(q="membership"))
     # `_` é literal na busca, não curinga nem removido.
     assert (await repository.search(admin, AuditSearch(q="org_switched"))).items == []
     assert (await repository.search(admin, AuditSearch(q="org.switched"))).items
-    assert created.items[0].after is not None
-    assert created.items[0].after["role"] == "admin"
+    assert changed.items[0].after is not None
+    assert changed.items[0].after["role"] == "admin"
     assert (await repository.search(admin, AuditSearch(category="diagnosis"))).items == []
     with pytest.raises(ApiError) as denied:
         await repository.search(claims_for(first, user, "admin", aal="aal1"), AuditSearch())
@@ -1034,8 +1051,9 @@ async def test_relatorio_lista_com_os_links_ativos_contra_o_banco(
     async with engine.begin() as connection:
         for sql in (
             "insert into public.organization_members (org_id, user_id, role)"
-            " values (:t, :u, 'member')",
-            "insert into doctor.memberships (tenant_id, user_id, role) values (:t, :u, 'analyst')",
+            " values (:t, :u, 'member') on conflict do nothing",
+            "insert into doctor.memberships (tenant_id, user_id, role) values (:t, :u, 'analyst')"
+            " on conflict (tenant_id, user_id) do update set role = excluded.role",
             "insert into doctor.integrations (id, tenant_id, name, source_system, target_system,"
             " environment) values (:g, :t, 'Pedidos', 'salesforce', 'sap', 'prd')",
             "insert into doctor.incidents (id, tenant_id, integration_id, title, category,"

@@ -9,7 +9,7 @@ locals {
     diagnosis   = { secrets = ["supabase-db-url", "anthropic-api-key", "voyage-api-key", "supabase-service-role-key", "smtp-url"], memory = "1Gi", timeout = "600s" }
     connectors  = { secrets = ["supabase-db-url"], memory = "512Mi", timeout = "600s" }
     # Alertas (#41, ADR-0017): só ele lê os webhooks dos canais e a chave privada do push.
-    notifier = { secrets = ["supabase-db-url", "smtp-url", "vapid-private-key", "atlassian-client-secret"], memory = "512Mi", timeout = "300s", max_instances = 1 }
+    notifier = { secrets = ["supabase-db-url", "smtp-url", "vapid-private-key", "atlassian-client-secret", "supabase-access-token"], memory = "512Mi", timeout = "300s", max_instances = 1 }
     # Relay da outbox: o único que publica nos tópicos, chamado pelo Cloud Scheduler.
     relay = { secrets = ["supabase-db-url"], memory = "256Mi", timeout = "60s" }
   }
@@ -42,6 +42,9 @@ locals {
     "itsm.ticket"  = { worker = "notifier", publishers = ["relay"], ack_deadline = 300 }
     "itsm.sync"    = { worker = "notifier", publishers = ["relay"], ack_deadline = 300 }
     "itsm.comment" = { worker = "notifier", publishers = ["relay"], ack_deadline = 300 }
+    # SSO (#48): DNS do domínio e o provedor SAML no Supabase Auth.
+    "sso.domain" = { worker = "notifier", publishers = ["relay"], ack_deadline = 300 }
+    "sso.sync"   = { worker = "notifier", publishers = ["relay"], ack_deadline = 300 }
     # Consultas de leitura do enriquecimento (#40): só o worker de Conectores lê credenciais.
     "enrichment.requested" = { worker = "connectors", publishers = ["relay"], ack_deadline = 600 }
   }
@@ -61,6 +64,8 @@ locals {
     "vapid-private-key" = "AID_VAPID_PRIVATE_KEY"
     # App OAuth 2.0 (3LO) da plataforma no Atlassian (#43): API e `notifier`.
     "atlassian-client-secret" = "AID_ATLASSIAN_CLIENT_SECRET"
+    # SSO (#48): o `notifier` registra o provedor SAML pela Management API do Supabase.
+    "supabase-access-token" = "SUPABASE_ACCESS_TOKEN"
     # Só o worker de ingestão: lê o Log bruto no Storage como job de plataforma.
     "supabase-service-role-key" = "SUPABASE_SERVICE_ROLE_KEY"
   }
@@ -233,6 +238,8 @@ module "workers" {
       AID_ATLASSIAN_CLIENT_ID = var.atlassian_client_id
       # O endereço do webhook do Jira aponta para a API pública.
       AID_PUBLIC_API_URL = "https://${var.api_domain}"
+      # SSO (#48): o projeto Supabase onde o provedor SAML é registrado.
+      SUPABASE_PROJECT_REF = trimsuffix(trimprefix(trimsuffix(var.supabase_jwt_issuer, "/auth/v1"), "https://"), ".supabase.co")
     } : {},
   )
   secret_env = { for secret in each.value.secrets : local.secret_env[secret] => secret }

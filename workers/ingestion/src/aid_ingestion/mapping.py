@@ -13,6 +13,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from aid_contracts.aliases import FIELDS
+
 from aid_ingestion.sap import adapt_record
 
 SCHEMA_VERSION = "1.0"
@@ -21,30 +23,15 @@ LOCAL = ZoneInfo("America/Sao_Paulo")
 OLDEST = datetime(2000, 1, 1, tzinfo=UTC)
 FUTURE_TOLERANCE = timedelta(days=1)
 
-TIMESTAMP_KEYS = ("timestamp", "time", "@timestamp", "datetime", "date", "ts", "data_hora", "data")
-SEVERITY_KEYS = ("severity", "severidade", "level", "nivel", "log_level", "msgty", "type")
-OPERATION_KEYS = (
-    "operation",
-    "operacao",
-    "bapi",
-    "method",
-    "action",
-    "event",
-    "evento",
-    "endpoint",
-)
-EXECUTION_KEYS = (
-    "execution_id",
-    "correlation_id",
-    "message_id",
-    "transaction_id",
-    "docnum",
-    "idoc",
-)
-TRACE_KEYS = ("trace_id", "traceid", "trace")
-MESSAGE_KEYS = ("message", "mensagem", "msg", "error_message", "text", "texto")
-STATUS_KEYS = ("http_status", "status_code", "status", "http_code")
-CODE_KEYS = ("error_code", "code", "codigo", "msgno")
+# Os nomes aceitos de cada campo moram no contrato: a API sugere o mapeamento com os mesmos (#11).
+TIMESTAMP_KEYS = FIELDS["timestamp"]
+SEVERITY_KEYS = FIELDS["severity"]
+OPERATION_KEYS = FIELDS["operation"]
+EXECUTION_KEYS = FIELDS["execution_id"]
+TRACE_KEYS = FIELDS["trace_id"]
+MESSAGE_KEYS = FIELDS["message"]
+STATUS_KEYS = FIELDS["http_status"]
+CODE_KEYS = FIELDS["error_code"]
 
 SEVERITIES = {
     "debug": "DEBUG",

@@ -1,6 +1,7 @@
 """Pipeline contra um Postgres real. Roda só com INTEGRATION_DB_URL, no job de E2E do CI."""
 
 import hashlib
+import json
 import os
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -472,6 +473,73 @@ async def test_lote_com_erro_permanente_fica_registrado(
     )
     assert dict(result) == {"failed": True, "error": "Erro inesperado ao processar o lote."}
     assert await pipeline.process_batch({"batch_id": batch_id}, engine, MASTER) == "ignored"
+
+
+# --- Mapeamento de colunas por Integração (#11). ---
+
+EXPORT_CSV = (
+    b"Quando;Tipo;Rotina;Texto da mensagem;Cliente\n"
+    b"02.11.2026 14:05:00;E;BAPI_SALESORDER;Timeout no SAP;ACME\n"
+    b"02.11.2026 14:06:00;S;BAPI_SALESORDER;Pedido criado;ACME\n"
+)
+
+
+@pytest.mark.asyncio
+async def test_csv_com_nomes_proprios_entra_pelo_mapeamento_da_integracao(
+    engine: AsyncEngine, tenant: dict[str, str]
+) -> None:
+    # Sem mapeamento, nenhuma coluna é reconhecida como data: tudo rejeitado.
+    import_id, path = await uploaded_import(engine, tenant, EXPORT_CSV, "csv")
+    assert await run(engine, import_id, path, EXPORT_CSV) == "done"
+    assert (
+        await scalar(engine, "select accepted from doctor.imports where id = :i", i=import_id) == 0
+    )
+
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "insert into doctor.import_mappings (tenant_id, integration_id, columns)"
+                " values (:t, :g, cast(:c as jsonb))"
+            ),
+            {
+                "t": tenant["tenant"],
+                "g": tenant["integration"],
+                "c": json.dumps(
+                    {
+                        "timestamp": "Quando",
+                        "severity": "Tipo",
+                        "operation": "Rotina",
+                        "message": "Texto da mensagem",
+                    }
+                ),
+            },
+        )
+    try:
+        second = EXPORT_CSV + b"02.11.2026 14:07:00;E;BAPI_CUSTOMER;Bloqueado;ACME\n"
+        import_id, path = await uploaded_import(engine, tenant, second, "csv")
+        assert await run(engine, import_id, path, second) == "done"
+        assert (
+            await scalar(engine, "select accepted from doctor.imports where id = :i", i=import_id)
+            == 3
+        )
+        stored = await row(
+            engine,
+            "select operation, error ->> 'message' as message, attributes ->> 'cliente' as client"
+            " from doctor.events where tenant_id = :t and severity = 'ERROR'"
+            " order by timestamp limit 1",
+            t=tenant["tenant"],
+        )
+        assert dict(stored) == {
+            "operation": "BAPI_SALESORDER",
+            "message": "Timeout no SAP",
+            "client": "ACME",
+        }
+    finally:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("delete from doctor.import_mappings where tenant_id = :t"),
+                {"t": tenant["tenant"]},
+            )
 
 
 # --- Regras de Sanitização da Organização (#13). ---

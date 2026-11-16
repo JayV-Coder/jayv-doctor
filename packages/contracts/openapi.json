@@ -1484,6 +1484,256 @@
         }
       }
     },
+    "/api/v1/imports/mapping-suggestion": {
+      "post": {
+        "tags": ["imports"],
+        "summary": "Suggest Mapping",
+        "description": "A sugestão pelo nome das colunas do cabeçalho (o mesmo que o worker reconheceria).",
+        "operationId": "suggest_mapping_api_v1_imports_mapping_suggestion_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MappingSuggestionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingSuggestion"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/mappings/{target}": {
+      "get": {
+        "tags": ["imports"],
+        "summary": "Get Mapping",
+        "operationId": "get_mapping_api_v1_imports_mappings__target__get",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportMapping"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["imports"],
+        "summary": "Put Mapping",
+        "description": "Vale para as próximas Importações da Integração; vazio volta à detecção pelo nome.",
+        "operationId": "put_mapping_api_v1_imports_mappings__target__put",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportMappingChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportMapping"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/{target}/rejections": {
+      "get": {
+        "tags": ["imports"],
+        "summary": "Download Rejections",
+        "description": "As linhas recusadas, em CSV (`linha,motivo`), para corrigir o arquivo e importar de novo.",
+        "operationId": "download_rejections_api_v1_imports__target__rejections_get",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Target"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/imports/{target}/upload-url": {
       "post": {
         "tags": ["imports"],
@@ -11392,6 +11642,74 @@
         ],
         "title": "Import"
       },
+      "ImportMapping": {
+        "properties": {
+          "columns": {
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 200,
+              "minLength": 1
+            },
+            "propertyNames": {
+              "enum": [
+                "timestamp",
+                "severity",
+                "operation",
+                "execution_id",
+                "trace_id",
+                "message",
+                "http_status",
+                "error_code"
+              ]
+            },
+            "type": "object",
+            "title": "Columns"
+          },
+          "fields": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Fields"
+          }
+        },
+        "type": "object",
+        "required": ["columns"],
+        "title": "ImportMapping"
+      },
+      "ImportMappingChange": {
+        "properties": {
+          "columns": {
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 200,
+              "minLength": 1
+            },
+            "propertyNames": {
+              "enum": [
+                "timestamp",
+                "severity",
+                "operation",
+                "execution_id",
+                "trace_id",
+                "message",
+                "http_status",
+                "error_code"
+              ]
+            },
+            "type": "object",
+            "maxProperties": 8,
+            "title": "Columns"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["columns"],
+        "title": "ImportMappingChange"
+      },
       "IncidentChange": {
         "properties": {
           "status": {
@@ -12876,6 +13194,37 @@
         "type": "object",
         "required": ["name", "keys"],
         "title": "MappingIn"
+      },
+      "MappingSuggestion": {
+        "properties": {
+          "columns": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Columns"
+          }
+        },
+        "type": "object",
+        "required": ["columns"],
+        "title": "MappingSuggestion"
+      },
+      "MappingSuggestionRequest": {
+        "properties": {
+          "columns": {
+            "items": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Columns"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["columns"],
+        "title": "MappingSuggestionRequest"
       },
       "Me": {
         "properties": {

@@ -18,6 +18,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import httpx
+from aid_contracts.aliases import apply_mapping
 from aid_contracts.events import EventValidationError, validate_event
 from aid_db import platform_role
 from aid_observability.tracing import tracer
@@ -138,6 +139,24 @@ INSERT_REJECTION = text(
 )
 
 
+async def integration_mapping(
+    engine: AsyncEngine, tenant_id: str, integration_id: str
+) -> dict[str, str]:
+    """O mapeamento de colunas salvo para a Integração (#11); sem ele, só a detecção pelo nome."""
+    async with engine.begin() as connection:
+        await platform_role(connection)
+        columns = await connection.scalar(
+            text(
+                "select columns from doctor.import_mappings"
+                " where tenant_id = cast(:t as uuid) and integration_id = cast(:i as uuid)"
+            ),
+            {"t": tenant_id, "i": integration_id},
+        )
+    if not isinstance(columns, dict):
+        return {}
+    return {field: column for field, column in columns.items() if isinstance(column, str)}
+
+
 async def tenant_rules(engine: AsyncEngine, tenant_id: str) -> Rules:
     """As regras de Sanitização da Organização (#13); sem linha, as padrão."""
     async with engine.begin() as connection:
@@ -157,9 +176,17 @@ async def tenant_rules(engine: AsyncEngine, tenant_id: str) -> Rules:
 
 
 class Importer:
-    def __init__(self, engine: AsyncEngine, job: Job, master_key: bytes, rules: Rules) -> None:
+    def __init__(
+        self,
+        engine: AsyncEngine,
+        job: Job,
+        master_key: bytes,
+        mapping: Mapping[str, str],
+        rules: Rules,
+    ) -> None:
         self.engine = engine
         self.job = job
+        self.mapping = mapping
         self.sanitize = EventSanitizer(master_key, job.tenant_id, rules)
         self.source = {
             "provider": "manual",
@@ -174,7 +201,8 @@ class Importer:
         reason = line.reason
         if line.record is not None:
             try:
-                mapped = to_event(line.record, self.job.integration_id, self.source)
+                record = apply_mapping(line.record, self.mapping)
+                mapped = to_event(record, self.job.integration_id, self.source)
                 payload, report = self.sanitize(mapped)
                 validate_event(payload)
             except RejectedLineError as exc:
@@ -455,7 +483,9 @@ async def ingest(job: Job, engine: AsyncEngine, store: ObjectStore, master_key: 
     if hashlib.sha256(data).hexdigest() != job.sha256:
         return await fail(engine, job, "Arquivo diferente do que foi enviado")
 
-    importer = Importer(engine, job, master_key, await tenant_rules(engine, job.tenant_id))
+    mapping = await integration_mapping(engine, job.tenant_id, job.integration_id)
+    rules = await tenant_rules(engine, job.tenant_id)
+    importer = Importer(engine, job, master_key, mapping, rules)
     batch = Batch()
     for line in read_records(data, job.file_format):
         importer.line(line, batch)

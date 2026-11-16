@@ -15,6 +15,14 @@ COLUMNS = (
     "id::text, name, description, source_system, target_system, owner_team, environment,"
     " archived_at, created_at"
 )
+# Taxa de erro das últimas 24 h pelas estatísticas por hora (as mesmas do painel): falhas sobre
+# o total. Sem Execução no período, nula: 0% passaria a ideia de que está tudo bem.
+ERROR_RATE = (
+    "(select sum(s.failed)::float8 / nullif(sum(s.total), 0)"
+    " from doctor.execution_stats_hourly s"
+    " where s.tenant_id = i.tenant_id and s.integration_id = i.id"
+    " and s.hour >= date_trunc('hour', now() - interval '24 hours')) as error_rate_24h"
+)
 # Lista fechada: os nomes de coluna entram no SQL, os valores vão sempre como parâmetro.
 UPDATABLE = ("name", "description", "source_system", "target_system", "owner_team", "environment")
 
@@ -73,7 +81,7 @@ class IntegrationRepository:
         async with translated_tx(claims, ERRORS, self.engine) as connection:
             result = await connection.execute(
                 text(
-                    f"select {COLUMNS} from doctor.integrations"  # noqa: S608
+                    f"select {COLUMNS}, {ERROR_RATE} from doctor.integrations i"  # noqa: S608
                     " where (:include_archived or archived_at is null)"
                     " order by name, environment"
                 ),

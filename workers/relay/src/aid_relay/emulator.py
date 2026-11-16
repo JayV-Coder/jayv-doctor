@@ -33,6 +33,8 @@ TOPICS: dict[str, tuple[str, int]] = {
     "itsm.ticket": ("notifier", 300),
     "itsm.sync": ("notifier", 300),
     "itsm.comment": ("notifier", 300),
+    "sso.domain": ("notifier", 300),
+    "sso.sync": ("notifier", 300),
 }
 
 

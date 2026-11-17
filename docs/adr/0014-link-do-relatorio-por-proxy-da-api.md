@@ -2,7 +2,7 @@
 
 O Relatório técnico (#32) tem um link opcional para quem não é da Organização: vale 7 dias, pode ser revogado e cada acesso fica na Trilha de auditoria. Uma URL assinada do Storage resolveria o download, mas não pode ser revogada antes de vencer e, por estar na própria URL, acaba em histórico, logs e cópias.
 
-Por isso o link aponta para o app, `…/compartilhado#<token>`. O token fica no fragmento, que o navegador não envia ao servidor (como no aceite do convite). A página manda o token no corpo de um `POST /api/v1/shared-reports`, sem sessão, e a API:
+Por isso o link aponta para o app, `…/compartilhado#<token>` (no site, `…/doctor/shared#<token>`, ADR-0023). O token fica no fragmento, que o navegador não envia ao servidor (como no aceite do convite). A página manda o token no corpo de um `POST /api/v1/shared-reports`, sem sessão, e a API:
 
 1. calcula o sha256 do token e chama `doctor.open_report_share` como `anon`. Ela e `record_report_share_access` são as únicas portas anônimas além da ingestão por token;
 2. a função confere se o link está ativo (não vencido nem revogado, Organização ativa, quem compartilhou ainda Analyst ou acima) e devolve a URL assinada guardada;

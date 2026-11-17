@@ -257,7 +257,7 @@ async def test_37_execucoes_no_mesmo_incidente_critico_geram_1_push(
         "https://fcm.googleapis.com/fcm/send/celular"
     ]
     _, message = fake.pushes[0]
-    assert message.url.endswith(f"/incidentes/{found}")
+    assert message.url.endswith(f"/doctor/incidents/{found}")
     assert "Timeout na criação de pedidos" in message.body
     statuses = await rows(
         engine,
@@ -529,7 +529,7 @@ async def test_incidente_aberto_chega_assinado_e_sem_eventos_brutos(
     body = json.loads(request.content)
     assert body["version"] == "webhook.v1"
     assert body["data"]["incident"]["id"] == found
-    assert body["data"]["incident"]["url"].endswith(f"/incidentes/{found}")
+    assert body["data"]["incident"]["url"].endswith(f"/doctor/incidents/{found}")
     assert "events" not in json.dumps(body)
     [done] = await deliveries(engine, org)
     assert (done["status"], done["response_status"]) == ("succeeded", 200)
@@ -806,7 +806,7 @@ async def test_incidente_critico_com_regra_automatica_abre_o_chamado_uma_vez(
         ["integration-ai-doctor", f"aid-{ticket['id']}"],
     )
     text_body = json.dumps(fields["description"], ensure_ascii=False)
-    assert f"/incidentes/{found}" in text_body
+    assert f"/doctor/incidents/{found}" in text_body
     assert "Diagnóstico ainda não publicado." in text_body
     [done] = await ticket_rows(engine, org)
     assert (done["status"], done["external_key"], done["url"]) == (
@@ -1247,7 +1247,7 @@ async def test_sistema_responsavel_sap_vai_para_o_grupo_mapeado_para_sap(
     assert created["correlation_id"] == ticket
     assert "Confiança heurística: 0,68" in created["work_notes"]
     assert "Sistema responsável: SAP" in created["work_notes"]
-    assert "/incidentes/" in created["work_notes"]
+    assert "/doctor/incidents/" in created["work_notes"]
     [row] = await rows(
         engine,
         "select status, external_key, assignment_group, url from doctor.incident_tickets"

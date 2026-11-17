@@ -111,7 +111,7 @@ def test_link_compartilhado_abre_sem_sessao_pelo_proxy() -> None:
     created = client("analyst").post(f"/api/v1/reports/{REPORT}/shares")
     assert created.status_code == 201
     url = created.json()["url"]
-    assert "/compartilhado#" in url
+    assert "/doctor/shared#" in url
     token = url.split("#", 1)[1]
     assert FakeStorage.signed[-1][1] == 7 * 24 * 3600
 

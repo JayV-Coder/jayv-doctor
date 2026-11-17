@@ -2,8 +2,9 @@
 
 import asyncio
 import hashlib
-import os
 import secrets
+
+from aid_alerts.links import app_link
 
 from aid_api.core.errors import ApiError
 from aid_api.orgs.mailer import Mailer
@@ -20,8 +21,7 @@ def new_token() -> tuple[str, str]:
 
 # O token vai no fragmento, que o navegador não envia: fica fora dos logs do servidor web.
 def invitation_url(token: str) -> str:
-    base = os.environ.get("APP_URL", "http://127.0.0.1:3000")
-    return f"{base}/convites/aceitar#{token}"
+    return f"{app_link('/invitations/accept')}#{token}"
 
 
 async def send_invitation(mailer: Mailer, email: str, organization: str, token: str) -> None:

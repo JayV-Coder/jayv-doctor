@@ -4,11 +4,11 @@ de 7 dias, revogável e auditado. Quem tem o link abre sem sessão, pela API (AD
 
 import hashlib
 import json
-import os
 import secrets
 from typing import Annotated
 from uuid import UUID, uuid4
 
+from aid_alerts.links import app_link
 from fastapi import APIRouter, Depends, Header, Response, status
 
 from aid_api.core.auth import Claims, get_bearer_token, require_role
@@ -107,9 +107,9 @@ async def share_report(
     signed = await storage.sign_download(token, path, SHARE_SECONDS, BUCKET)
     secret = secrets.token_urlsafe(32)
     share_id, expires_at = await repository.share(claims, str(target), secret, signed)
-    base = os.environ.get("APP_URL", "http://127.0.0.1:3000").rstrip("/")
+
     return ReportShareCreated(
-        id=share_id, url=f"{base}/compartilhado#{secret}", expires_at=expires_at
+        id=share_id, url=f"{app_link('/shared')}#{secret}", expires_at=expires_at
     )
 
 

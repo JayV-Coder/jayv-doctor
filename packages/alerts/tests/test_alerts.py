@@ -79,7 +79,7 @@ def test_silencio_que_atravessa_a_meia_noite_no_fuso_da_regra() -> None:
 
 def test_mensagem_so_com_titulo_severidade_integracao_e_link() -> None:
     message = message_for_incident(PRD_CRITICAL, "https://app.doctor.test", "opened")
-    assert message.url == "https://app.doctor.test/incidentes/inc-1"
+    assert message.url == "https://app.doctor.test/doctor/incidents/inc-1"
     assert message.title == "Incidente crítico #123"
     assert message.body == "Timeout na criação de pedidos · Pedidos Salesforce → SAP · prd"
 

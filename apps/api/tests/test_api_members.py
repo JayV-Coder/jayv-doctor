@@ -172,7 +172,7 @@ def test_convite_guarda_so_o_hash_e_envia_o_token_no_fragmento() -> None:
     email, organization, url = mailer.sent[0]
     assert (email, organization) == ("carla@acme.test", "Acme")
     prefix, token = url.split("#")
-    assert prefix.endswith("/convites/aceitar")
+    assert prefix.endswith("/doctor/invitations/accept")
     assert len(repository.token_hashes[0]) == 64
     assert token not in repository.token_hashes[0]
 

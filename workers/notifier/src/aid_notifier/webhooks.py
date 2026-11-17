@@ -21,6 +21,7 @@ from typing import Any
 
 import httpx
 from aid_alerts import Message
+from aid_alerts.links import app_link
 from aid_alerts.network import UnsafeUrlError, check_url, public_transport, shape
 from aid_alerts.signing import sign
 from aid_db import platform_role
@@ -28,7 +29,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from aid_notifier.channels import DeliveryError, Senders
-from aid_notifier.notify import app_url
 
 log = logging.getLogger(__name__)
 WINDOW = timedelta(hours=24)
@@ -62,7 +62,7 @@ async def claim(connection: AsyncConnection, delivery: str) -> Any:
 
 
 def with_link(snapshot: Mapping[str, Any], incident: str) -> dict[str, Any]:
-    return {**snapshot, "url": f"{app_url()}/incidentes/{incident}"}
+    return {**snapshot, "url": app_link(f"/incidents/{incident}")}
 
 
 async def build_body(connection: AsyncConnection, row: Any) -> dict[str, Any] | None:
@@ -175,7 +175,7 @@ async def finish(
                     "Webhook desligado após 50 falhas seguidas",
                     f"O webhook {row.name} parou de receber eventos. Confira o endereço e"
                     " religue em Mais → Webhooks.",
-                    f"{app_url()}/webhooks",
+                    app_link("/webhooks"),
                     "Abrir os Webhooks",
                 ),
             )

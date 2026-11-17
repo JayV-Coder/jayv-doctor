@@ -14,6 +14,8 @@ from urllib.parse import urlparse
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from aid_alerts.links import app_link
+
 SEVERITIES = ("low", "medium", "high", "critical")
 SEVERITY_PT = {"low": "baixa", "medium": "média", "high": "alta", "critical": "crítico"}
 ENVIRONMENTS = ("dev", "hml", "prd")
@@ -211,7 +213,7 @@ def message_for_incident(incident: IncidentFacts, app_url: str, event: str) -> M
     return Message(
         title=f"{prefix} {SEVERITY_PT.get(incident.severity, incident.severity)}{number}",
         body=f"{incident.title} · {incident.integration_name} · {incident.environment}"[:300],
-        url=f"{app_url.rstrip('/')}/incidentes/{incident.id}",
+        url=app_link(f"/incidents/{incident.id}", app_url),
     )
 
 

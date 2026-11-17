@@ -36,7 +36,7 @@ O Dokploy usa o projeto `exvsozyemolrjbjetqww`, junto com o jayv-coder ([environ
 | `LLM_PRICES` | opcional, preços por modelo (JSON) para o custo no Uso | diagnóstico |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | gerar com o comando de [alertas.md](alertas.md) (a privada em PEM numa linha só, com `\n`, ou DER em base64) | API (pública) e notifier (privada) |
 | `VAPID_SUBJECT` | `mailto:` de contato | notifier |
-| `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET` | app OAuth do Jira (opcional, [itsm.md](itsm.md)); callback `<APP_URL>/chamados/jira` | API e notifier |
+| `ATLASSIAN_CLIENT_ID`, `ATLASSIAN_CLIENT_SECRET` | app OAuth do Jira (opcional, [itsm.md](itsm.md)); callback `<APP_URL>/doctor/tickets/jira` | API e notifier |
 | `AGENT_CA_KEY`, `AGENT_CA_CERT` | CA do mTLS do agente (opcional, [agente.md](agente.md)) | API |
 | `GCP_PROJECT_ID`, `LOG_LEVEL`, `RATE_LIMIT_PER_MINUTE` | `aid-local`, `INFO`, `120` | todos |
 

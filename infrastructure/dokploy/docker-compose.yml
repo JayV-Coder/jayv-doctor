@@ -68,7 +68,7 @@ services:
       AID_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       AID_ATLASSIAN_CLIENT_ID: ${ATLASSIAN_CLIENT_ID:-}
       AID_ATLASSIAN_CLIENT_SECRET: ${ATLASSIAN_CLIENT_SECRET:-}
-      AID_ATLASSIAN_REDIRECT_URI: ${APP_URL}/chamados/jira
+      AID_ATLASSIAN_REDIRECT_URI: ${APP_URL}/doctor/tickets/jira
       AID_AGENT_CA_KEY: ${AGENT_CA_KEY:-}
       AID_AGENT_CA_CERT: ${AGENT_CA_CERT:-}
       # Atrás do Traefik do Dokploy: um proxy só antes da API.

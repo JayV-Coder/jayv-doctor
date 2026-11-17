@@ -26,11 +26,11 @@ from types import TracebackType
 from typing import Any
 
 import httpx
+from aid_alerts.links import app_link
 from aid_db import platform_role
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from aid_notifier.notify import app_url
 from aid_notifier.tickets import CLAIM, Claimed, claim, ticket_failed, touch
 
 log = logging.getLogger(__name__)
@@ -99,7 +99,7 @@ def confidence_text(value: float | None) -> str:
 
 
 def description(incident: Any, diagnosis: Any, recommendations: Sequence[str]) -> dict[str, Any]:
-    link = f"{app_url()}/incidentes/{incident.id}"
+    link = app_link(f"/incidents/{incident.id}")
     blocks = [
         paragraph(
             plain("Incidente ", bold=True),

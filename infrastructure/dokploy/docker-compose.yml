@@ -1,7 +1,7 @@
 # Integration AI Doctor no Dokploy (teste fora do GCP). No GCP, o deploy é o Terraform
 # (infrastructure/terraform). Aqui, o Pub/Sub é o emulador e o Cloud Scheduler é o serviço
-# `scheduler`, que também mantém os tópicos do emulador. Só `web` e `api` ganham domínio no Dokploy; workers e emulador ficam na rede
-# interna. Variáveis: infrastructure/dokploy/.env.example (cada valor uma vez só).
+# `scheduler`, que também mantém os tópicos do emulador. Só a `api` ganha domínio no Dokploy; workers e emulador ficam na rede interna. O app
+# é o site da JayV (JayV-Coder/site, `/doctor`, ADR-0023), com `DOCTOR_API_URL` apontando para a API. Variáveis: infrastructure/dokploy/.env.example (cada valor uma vez só).
 
 x-worker-build: &worker-build
   context: ../..
@@ -27,25 +27,6 @@ x-worker: &worker
   depends_on: [pubsub]
 
 services:
-  web:
-    build:
-      context: ../..
-      dockerfile: infrastructure/docker/web.Dockerfile
-      args:
-        # Vão para o JavaScript do navegador no build: mudar exige um novo deploy.
-        NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL:?defina SUPABASE_URL}
-        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:?defina SUPABASE_PUBLISHABLE_KEY}
-        NEXT_PUBLIC_SITE_URL: ${APP_URL:?defina APP_URL}
-    restart: unless-stopped
-    environment:
-      NEXT_PUBLIC_SUPABASE_URL: ${SUPABASE_URL}
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY}
-      NEXT_PUBLIC_SITE_URL: ${APP_URL}
-      # O servidor do Next fala com a API pela rede interna.
-      API_URL: http://api:8080
-    expose: ["3000"]
-    depends_on: [api]
-
   api:
     build:
       context: ../..

@@ -1,5 +1,7 @@
 # Kit CSS do mockup, dados no servidor e formatação com Intl no app web
 
+> Substituído pelo [ADR-0023](0023-app-no-site.md): as telas foram para o site da JayV, e `apps/web` saiu.
+
 O PRD e o ticket #9 citam Tailwind, shadcn/ui, `next-intl` e React Query. O app web segue outro caminho, por três motivos.
 
 **Estilo.** O canvas de mockups passou para o kit v2 (linguagem visual JayV: IBM Plex Mono, fundo `#f4f4f0`, acento `#dfff5f`, tema escuro equivalente), escrito como um kit de classes CSS com tokens em variáveis. As telas dos tickets #4 a #6 já usam esse kit em `apps/web/src/app/globals.css`. Portar para Tailwind e trocar os componentes por shadcn/ui (Radix) reescreveria telas prontas, sem ganho visual, e afastaria o código do mockup, que é a referência de UI. Os componentes base ficam em `apps/web/src/components/ui`, sobre o mesmo kit; diálogos e a folha inferior usam o `<dialog>` nativo, que já prende o foco e fecha com Esc.

@@ -112,7 +112,7 @@ Lê os Message Processing Logs do Cloud Integration (`/api/v1/MessageProcessingL
 }
 ```
 
-- **Credencial:** a service key do plano `api` do Process Integration Runtime, `{"client_id", "client_secret"}` no Vault, trocada por token com OAuth client credentials. Token e API só em hosts da SAP BTP (`*.hana.ondemand.com`, `*.cloud.sap`), com HTTPS e sem usuário na URL (SSRF); endereço local só com `AID_SAP_ALLOW_LOOPBACK=1`, que existe só no E2E. Resposta fora do formato esperado vira erro temporário classificado.
+- **Credencial:** a service key do plano `api` do Process Integration Runtime, `{"client_id", "client_secret"}` no Vault, trocada por token com OAuth client credentials. Token e API só em hosts da SAP BTP (`*.hana.ondemand.com`, `*.cloud.sap`), com HTTPS e sem usuário na URL (SSRF); endereço local só com `AID_SAP_ALLOW_LOOPBACK=1`, que existe só nos testes. Resposta fora do formato esperado vira erro temporário classificado.
 - **Eventos:** `FAILED`, `ESCALATED` e `RETRY` (e `COMPLETED` com `include_completed`), um por mensagem.
   - `execution_id` = `CorrelationId`: a Execução junta os passos do iFlow e o que veio antes e depois dele;
   - `operation` e `source.resource` = o iFlow;
@@ -134,7 +134,7 @@ Não coleta Eventos: responde às consultas do enriquecimento (o pedido existe n
 }
 ```
 
-- **Endereço:** só HTTPS na porta 443, com nome de host, sem usuário, query ou fragmento. O host precisa resolver só para endereços públicos, conferido na própria conexão (SSRF e DNS rebinding, ADR-0016). Loopback só com `AID_ODATA_ALLOW_LOOPBACK=1`, que existe só no E2E.
+- **Endereço:** só HTTPS na porta 443, com nome de host, sem usuário, query ou fragmento. O host precisa resolver só para endereços públicos, conferido na própria conexão (SSRF e DNS rebinding, ADR-0016). Loopback só com `AID_ODATA_ALLOW_LOOPBACK=1`, que existe só nos testes.
 - **Credencial:** `{"username", "password"}` (Basic, usuário técnico só de leitura) ou `{"client_id", "client_secret"}` com `auth: "oauth_client_credentials"` e `token_url`.
 - **Consulta:** `GET <service_url>/<entity>?$filter=<field> eq '<valor>'&$top=1&$select=…`, com os nomes no padrão de identificador e o valor com as aspas dobradas. O teste de conexão lê o `$metadata`.
 - **Salesforce** também consulta, com as credenciais da Sincronização: `SELECT Id[, status] FROM <objeto> WHERE <campo> = '<valor>' LIMIT 1`.
@@ -169,7 +169,7 @@ Config:
   - nanossegundos truncados em microssegundos.
 - **Teste de conexão sem `logging.viewer`:** a mensagem diz qual permissão falta (`logging.logEntries.list`), em qual Service Account e em qual projeto. Com a API do Logging desativada, a mensagem diz isso, e não manda conceder papel.
 - **Prévia:** o teste antes de salvar (`POST /connectors/test`, usado pelo assistente) lê uma página (até 1.000 entradas) da última hora com os filtros e diz quantas atendem ("48 registros na última hora…", ou "Mais de 1.000…"). O teste de um Conector salvo lê uma entrada só: prova o acesso sem gastar a cota do cliente.
-- **E2E:** `AID_GCP_OAUTH_URL` e `AID_GCP_LOGGING_URL` apontam o conector para o GCP falso de `apps/web/e2e/fake-gcp.mjs`. Só aceitam endereço de loopback: num ambiente real, uma delas esquecida derruba o Conector em vez de mandar o JWT assinado e os tokens dos clientes para outro host. O Terraform não as define.
+- **Testes:** `AID_GCP_OAUTH_URL` e `AID_GCP_LOGGING_URL` apontam o conector para um GCP falso (o E2E do antigo `apps/web` usava `fake-gcp.mjs`). Só aceitam endereço de loopback: num ambiente real, uma delas esquecida derruba o Conector em vez de mandar o JWT assinado e os tokens dos clientes para outro host. O Terraform não as define.
 - O enriquecimento com o Cloud Trace (opcional no ticket) fica para depois.
 
 ## Tela (ticket #16)

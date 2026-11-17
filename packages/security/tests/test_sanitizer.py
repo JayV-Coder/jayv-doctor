@@ -1,4 +1,8 @@
+import time
+
+import pytest
 from aid_security import Rules, Sanitizer
+from aid_security.sanitizer import compile_extra
 
 sanitizer = Sanitizer()
 
@@ -81,6 +85,27 @@ def test_padroes_extras_do_tenant() -> None:
     result, counts = clean("funcionário MAT-123456 aprovou", rules)
     assert result == "funcionário [REMOVIDO:matricula] aprovou"
     assert counts == {"matricula": 1}
+
+
+@pytest.mark.parametrize("pattern", [r"((a+))+", r"(?:x\d*)+b", r"(a+)+", r"(\w+\s?)*$"])
+def test_quantificador_aninhado_e_recusado(pattern: str) -> None:
+    with pytest.raises(ValueError, match="aninhado"):
+        compile_extra("ok_1", pattern)
+
+
+@pytest.mark.parametrize("pattern", [r"\(\d+\)+", r"([+]x)+", r"(MAT-\d{6})?X"])
+def test_parentese_escapado_ou_classe_nao_e_aninhado(pattern: str) -> None:
+    compile_extra("ok_1", pattern)
+
+
+def test_padrao_extra_lento_tem_tempo_limite_e_nada_sai_em_claro() -> None:
+    # `(a|aa)+$` passa na conferência, mas leva tempo exponencial em "aaa…b".
+    sanitizer = Sanitizer(Rules(extra_patterns={"lento": r"(a|aa)+$"}))
+    started = time.monotonic()
+    result, report = sanitizer.sanitize({"msg": "cliente " + "a" * 60 + "b", "ok": "pedido 123"})
+    assert time.monotonic() - started < 2
+    assert result == {"msg": "[REMOVIDO:lento]", "ok": "pedido 123"}
+    assert report.counts["lento"] == 1
 
 
 def test_chaves_de_nuvem() -> None:

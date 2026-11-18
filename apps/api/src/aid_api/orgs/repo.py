@@ -4,9 +4,11 @@ As escritas passam por funções do banco: o `authenticated` não escreve nessas
 o Papel é lido da tabela, porque a claim pode estar atrasada.
 """
 
+import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
@@ -27,6 +29,11 @@ from aid_api.orgs.schemas import (
 
 Deliver = Callable[[str, str], Awaitable[None]]
 logger = logging.getLogger(__name__)
+
+
+def loads(value: Any) -> Any:
+    """O asyncpg devolve `json` como texto; outro driver pode já devolver o objeto."""
+    return json.loads(value) if isinstance(value, str) else value
 
 
 def last_owner() -> ApiError:
@@ -96,28 +103,28 @@ class MeRepository:
                     await connection.execute(text(self.JOIN))
             except DBAPIError:
                 logger.warning("acesso automático às Organizações falhou", exc_info=True)
-            result = await connection.execute(
-                text(
-                    "select display_name as full_name, avatar_url, 'pt-BR' as locale"
-                    " from public.profiles where user_id = auth.uid()"
+            # Perfil, Organizações e as disponíveis num select só: com o banco longe, cada
+            # comando custa duas idas e voltas.
+            row = (
+                await connection.execute(
+                    text(
+                        "select"
+                        " (select json_build_object('full_name', p.display_name,"
+                        " 'avatar_url', p.avatar_url, 'locale', 'pt-BR')"
+                        " from public.profiles p where p.user_id = auth.uid()) as profile,"
+                        " coalesce((select json_agg(json_build_object('id', o.id::text,"
+                        " 'name', o.name, 'slug', o.slug, 'role', o.role) order by o.name)"
+                        " from doctor.list_organizations() o), '[]') as organizations,"
+                        " coalesce((select json_agg(json_build_object('id', a.id::text,"
+                        " 'name', a.name, 'slug', a.slug, 'coder_role', a.coder_role))"
+                        " from doctor.available_organizations() a), '[]') as available"
+                    )
                 )
-            )
-            row = result.mappings().first()
-            organizations = await connection.execute(
-                text(
-                    "select id::text, name, slug, role"
-                    " from doctor.list_organizations() order by name"
-                )
-            )
-            available = await connection.execute(
-                text(
-                    "select id::text, name, slug, coder_role from doctor.available_organizations()"
-                )
-            )
+            ).one()
             return (
-                Profile.model_validate(dict(row)) if row else None,
-                [Organization.model_validate(dict(item)) for item in organizations.mappings()],
-                [AvailableOrganization.model_validate(dict(item)) for item in available.mappings()],
+                Profile.model_validate(loads(row.profile)) if row.profile else None,
+                [Organization.model_validate(item) for item in loads(row.organizations)],
+                [AvailableOrganization.model_validate(item) for item in loads(row.available)],
             )
 
 

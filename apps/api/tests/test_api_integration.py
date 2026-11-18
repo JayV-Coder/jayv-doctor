@@ -1239,3 +1239,35 @@ async def test_conexao_reaproveitada_nao_leva_papel_nem_claims_do_pedido_anterio
             assert await connection.scalar(text("select pg_backend_pid()")) == backend
     finally:
         await pooled.dispose()
+
+
+@pytest.mark.asyncio
+async def test_me_le_perfil_e_organizacoes_numa_consulta_so(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Com o banco longe (Railway nos EUA, banco em São Paulo), cada comando custa duas idas e
+    voltas: o /me lê perfil, Organizações e as disponíveis num select só."""
+    import aid_api.core.db as db
+    from aid_api.orgs.repo import MeRepository
+    from sqlalchemy import event
+
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    statements: list[str] = []
+
+    def record(_conn: Any, _cursor: Any, statement: str, *_: Any) -> None:
+        statements.append(" ".join(statement.split()))
+
+    event.listen(engine.sync_engine, "before_cursor_execute", record)
+    try:
+        first, second = tenants
+        _, organizations, available = await MeRepository().me(claims_for(first, user))
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", record)
+    assert {item.id for item in organizations} == {first, second}
+    assert available == []
+    reads = [s for s in statements if "list_organizations" in s or "available_organizations" in s]
+    assert len(reads) == 1, statements
+    # set_config (papel e claims), Vínculo, acesso automático e a leitura; o savepoint que isola
+    # o acesso automático (SAVEPOINT/RELEASE) fica à parte.
+    work = [s for s in statements if not s.upper().startswith(("SAVEPOINT", "RELEASE"))]
+    assert len(work) <= 4, statements

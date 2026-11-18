@@ -8,6 +8,8 @@
 import { defineRailway, github, image, service, volume, type VariableValue } from "railway/iac";
 
 const REPO = "JayV-Coder/jayv-doctor";
+// Todo ambiente (production, development…) sobe a `main`: o nome do ambiente não é uma branch.
+const BRANCH = "main";
 const DOCKERFILE = "infrastructure/docker/python.Dockerfile";
 // O que entra na imagem Python: mudança fora disso não reconstrói os serviços.
 const WATCH = [
@@ -27,7 +29,6 @@ type Env = Record<string, string | VariableValue>;
 export default defineRailway((ctx, project) => {
   // Variável compartilhada do projeto (`${{shared.NOME}}`).
   const shared = (name: string): VariableValue => ctx.shared[name] as VariableValue;
-  const branch = ctx.isEnvironment("production") ? "main" : (ctx.environmentName ?? "main");
 
   const rabbitData = volume("rabbitmq-data", { sizeMB: 1024 });
   const rabbitmq = service("rabbitmq", {
@@ -55,7 +56,7 @@ export default defineRailway((ctx, project) => {
 
   const python = (name: string, env: Env, extra: { start?: string; healthcheck?: boolean } = {}) =>
     service(name, {
-      source: github(REPO, { branch }),
+      source: github(REPO, { branch: BRANCH }),
       build: { builder: "DOCKERFILE", dockerfilePath: DOCKERFILE, watchPatterns: WATCH },
       deploy: {
         restartPolicyType: "ALWAYS",

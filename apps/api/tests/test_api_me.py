@@ -3,18 +3,23 @@ from typing import Any
 from aid_api.core.auth import Claims, TokenVerifier, get_claims, get_verifier
 from aid_api.main import create_app
 from aid_api.orgs.repo import MeRepository, get_me_repository
-from aid_api.orgs.schemas import Organization, Profile
+from aid_api.orgs.schemas import AvailableOrganization, Organization, Profile
 from fastapi.testclient import TestClient
 
 USER_ID = "00000000-0000-4000-8000-0000000a0001"
 TENANT_ID = "00000000-0000-4000-8000-00000000ac01"
 PROFILE = Profile(full_name="Ana Souza", avatar_url=None, locale="pt-BR")
 ORGANIZATION = Organization(id=TENANT_ID, name="Acme", slug="acme", role="owner")
+AVAILABLE = AvailableOrganization(
+    id="00000000-0000-4000-8000-00000000be01", name="Varejo", slug="varejo", coder_role="owner"
+)
 
 
 class FakeRepository(MeRepository):
-    async def me(self, claims: Claims) -> tuple[Profile | None, list[Organization]]:
-        return PROFILE, [ORGANIZATION] if claims.tenant_id else []
+    async def me(
+        self, claims: Claims
+    ) -> tuple[Profile | None, list[Organization], list[AvailableOrganization]]:
+        return PROFILE, [ORGANIZATION] if claims.tenant_id else [], [AVAILABLE]
 
 
 def get_me(claims: Claims) -> Any:
@@ -34,6 +39,10 @@ def test_me_devolve_perfil_organizacoes_e_papel_ativo() -> None:
         "aal": "aal2",
         "profile": {"full_name": "Ana Souza", "avatar_url": None, "locale": "pt-BR"},
         "organizations": [{"id": TENANT_ID, "name": "Acme", "slug": "acme", "role": "owner"}],
+        # Organizações do jayv-coder ainda sem o Doctor, com o Papel de lá: o owner as ativa.
+        "available_organizations": [
+            {"id": AVAILABLE.id, "name": "Varejo", "slug": "varejo", "coder_role": "owner"}
+        ],
         "active_tenant_id": TENANT_ID,
         "active_role": "owner",
     }

@@ -72,6 +72,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/orgs/{tenant_id}/enable": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Enable Organization
+     * @description Ativa o Doctor numa Organização que já existe no jayv-coder (só o owner de lá).
+     */
+    post: operations["enable_organization_api_v1_orgs__tenant_id__enable_post"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/orgs/{tenant_id}/switch": {
     parameters: {
       query?: never;
@@ -2113,6 +2133,20 @@ export interface components {
       /** Url */
       url: string;
     };
+    /**
+     * AvailableOrganization
+     * @description Organização do jayv-coder de quem pede, ainda sem o Doctor (ADR-0025): o owner a ativa.
+     */
+    AvailableOrganization: {
+      /** Id */
+      id: string;
+      /** Name */
+      name: string;
+      /** Slug */
+      slug: string;
+      /** Coder Role */
+      coder_role: string;
+    };
     /** Bucket */
     Bucket: {
       /**
@@ -2599,6 +2633,25 @@ export interface components {
       created_at: string;
       /** Published At */
       published_at: string | null;
+    };
+    /**
+     * EnabledOrganization
+     * @description O que o Doctor pede para ativar numa Organização que já existe: nome e identificador são
+     *     os do jayv-coder.
+     */
+    EnabledOrganization: {
+      /** Segment */
+      segment: string;
+      /**
+       * Llm Provider
+       * @enum {string}
+       */
+      llm_provider: "anthropic" | "vertex";
+      /**
+       * Dpa Accepted
+       * @constant
+       */
+      dpa_accepted: true;
     };
     /**
      * EventDetail
@@ -3507,6 +3560,8 @@ export interface components {
       profile: components["schemas"]["Profile"] | null;
       /** Organizations */
       organizations: components["schemas"]["Organization"][];
+      /** Available Organizations */
+      available_organizations: components["schemas"]["AvailableOrganization"][];
       /** Active Tenant Id */
       active_tenant_id: string | null;
       /** Active Role */
@@ -4555,6 +4610,44 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": components["schemas"]["NewOrganization"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["CreatedOrganization"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  enable_organization_api_v1_orgs__tenant_id__enable_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path: {
+        tenant_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["EnabledOrganization"];
       };
     };
     responses: {

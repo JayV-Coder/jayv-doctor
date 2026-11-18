@@ -34,7 +34,9 @@ async def engine() -> AsyncIterator[AsyncEngine]:
     await created.dispose()
 
 
-def claims_for(tenant_id: str, user_id: str, role: str = "viewer", aal: str = "aal1") -> Claims:
+def claims_for(
+    tenant_id: str | None, user_id: str, role: str | None = "viewer", aal: str = "aal1"
+) -> Claims:
     raw = {
         "sub": user_id,
         "role": "authenticated",
@@ -42,9 +44,7 @@ def claims_for(tenant_id: str, user_id: str, role: str = "viewer", aal: str = "a
         "tenant_id": tenant_id,
         "tenant_role": role,
     }
-    return Claims(
-        sub=raw["sub"], email=None, aal=aal, tenant_id=tenant_id, tenant_role=role, raw=raw
-    )
+    return Claims(sub=user_id, email=None, aal=aal, tenant_id=tenant_id, tenant_role=role, raw=raw)
 
 
 @pytest_asyncio.fixture
@@ -1133,3 +1133,79 @@ async def test_lista_traz_a_taxa_de_erro_das_ultimas_24_horas(
     assert listed[busy.id].error_rate_24h == pytest.approx(0.3)
     # Sem Execução não há taxa: nulo, não 0.
     assert listed[quiet.id].error_rate_24h is None
+
+
+@pytest.mark.asyncio
+async def test_organizacao_do_jayv_coder_aparece_e_o_owner_ativa_o_doctor_sem_criar_outra(
+    engine: AsyncEngine, user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Quem já tem Organização no jayv-coder: o /me a lista para ativar; o owner ativa e os
+    membros entram com o Papel equivalente no próximo /me (ADR-0025)."""
+    import aid_api.core.db as db
+    from aid_api.orgs.repo import MeRepository, OrganizationRepository
+    from aid_api.orgs.schemas import EnabledOrganization
+
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    org, member = str(uuid4()), str(uuid4())
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "insert into auth.users (id, instance_id, aud, role, email)"
+                " values (:i, '00000000-0000-0000-0000-000000000000', 'authenticated',"
+                " 'authenticated', :e)"
+            ),
+            {"i": member, "e": f"{member}@integracao.test"},
+        )
+        await connection.execute(
+            text("insert into public.organizations (id, name, slug) values (:i, 'Acme', :s)"),
+            {"i": org, "s": f"c-{org}"[:40].rstrip("-")},
+        )
+        await connection.execute(
+            text(
+                "insert into public.organization_members (org_id, user_id, role)"
+                " values (:o, :u, 'owner'), (:o, :m, 'maintainer')"
+            ),
+            {"o": org, "u": user, "m": member},
+        )
+    try:
+        owner = claims_for(None, user, None)
+        _, organizations, available = await MeRepository().me(owner)
+        assert organizations == []
+        assert [(item.id, item.coder_role) for item in available] == [(org, "owner")]
+
+        settings = EnabledOrganization(
+            segment="Indústria", llm_provider="anthropic", dpa_accepted=True
+        )
+        assert await OrganizationRepository().enable(owner, org, settings) == org
+        _, organizations, available = await MeRepository().me(owner)
+        assert [(item.id, item.role) for item in organizations] == [(org, "owner")]
+        assert available == []
+
+        maintainer = claims_for(None, member, None)
+        _, organizations, _ = await MeRepository().me(maintainer)
+        assert [(item.id, item.role) for item in organizations] == [(org, "admin")]
+        with pytest.raises(ApiError) as again:
+            await OrganizationRepository().enable(owner, org, settings)
+        assert again.value.code == "already_enabled"
+    finally:
+        async with engine.begin() as connection:
+            await connection.execute(text("delete from doctor.tenants where id = :i"), {"i": org})
+            await connection.execute(
+                text("delete from public.organizations where id = :i"), {"i": org}
+            )
+            await connection.execute(text("delete from auth.users where id = :i"), {"i": member})
+
+
+@pytest.mark.asyncio
+async def test_me_responde_mesmo_se_o_acesso_automatico_falhar(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """O /me é leitura: uma falha ao dar o Vínculo automático (ADR-0025) não derruba o Doctor."""
+    import aid_api.core.db as db
+    from aid_api.orgs.repo import MeRepository
+
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    monkeypatch.setattr(MeRepository, "JOIN", "select doctor.funcao_que_nao_existe()")
+    first, second = tenants
+    _, organizations, _ = await MeRepository().me(claims_for(first, user))
+    assert {item.id for item in organizations} == {first, second}

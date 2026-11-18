@@ -4,7 +4,7 @@ O Doctor usa o projeto Supabase `exvsozyemolrjbjetqww`, o mesmo do jayv-coder em
 
 - `public.profiles`: perfil do Usuário, criado pelo trigger do jayv-coder.
 - `public.organizations`: nome e slug. `doctor.tenants` estende cada linha com o que é do Doctor, e só Organizações com linha ali usam o produto.
-- `public.organization_members`: o Vínculo. Os Papéis de lá são `owner`, `maintainer` e `member`, então o Papel do Doctor fica em `doctor.memberships`, com FK composta para o Vínculo. Remover alguém no jayv-coder remove o acesso ao Doctor, e estar em `public` não dá acesso ao Doctor.
+- `public.organization_members`: o Vínculo. Os Papéis de lá são `owner`, `maintainer` e `member`, então o Papel do Doctor fica em `doctor.memberships`, com FK composta para o Vínculo. Remover alguém no jayv-coder remove o acesso ao Doctor. Estar em `public` não dava acesso ao Doctor; desde o [ADR-0025](0025-organizacoes-do-jayv-coder-no-doctor.md), dá, quando o Doctor está ativo na Organização.
 
 Criar uma Organização passa por `public.create_organization`, para manter as regras do jayv-coder. Por isso nome e slug seguem os limites de lá: 80 e 40 caracteres.
 

@@ -4,10 +4,12 @@ As escritas passam por funções do banco: o `authenticated` não escreve nessas
 o Papel é lido da tabela, porque a claim pode estar atrasada.
 """
 
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from aid_api.core.auth import Claims
@@ -24,6 +26,7 @@ from aid_api.orgs.schemas import (
 )
 
 Deliver = Callable[[str, str], Awaitable[None]]
+logger = logging.getLogger(__name__)
 
 
 def last_owner() -> ApiError:
@@ -80,13 +83,19 @@ async def transaction(
 
 
 class MeRepository:
+    JOIN = "select doctor.join_organizations()"
+
     async def me(
         self, claims: Claims
     ) -> tuple[Profile | None, list[Organization], list[AvailableOrganization]]:
         """Antes de listar, dá o Vínculo que falta nas Organizações do jayv-coder em que o
-        Doctor está ativo (ADR-0025)."""
+        Doctor está ativo (ADR-0025). Num savepoint: se falhar, o /me responde com o que há."""
         async with transaction(claims) as connection:
-            await connection.execute(text("select doctor.join_organizations()"))
+            try:
+                async with connection.begin_nested():
+                    await connection.execute(text(self.JOIN))
+            except DBAPIError:
+                logger.warning("acesso automático às Organizações falhou", exc_info=True)
             result = await connection.execute(
                 text(
                     "select display_name as full_name, avatar_url, 'pt-BR' as locale"

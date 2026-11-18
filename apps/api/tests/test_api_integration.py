@@ -1194,3 +1194,18 @@ async def test_organizacao_do_jayv_coder_aparece_e_o_owner_ativa_o_doctor_sem_cr
                 text("delete from public.organizations where id = :i"), {"i": org}
             )
             await connection.execute(text("delete from auth.users where id = :i"), {"i": member})
+
+
+@pytest.mark.asyncio
+async def test_me_responde_mesmo_se_o_acesso_automatico_falhar(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """O /me é leitura: uma falha ao dar o Vínculo automático (ADR-0025) não derruba o Doctor."""
+    import aid_api.core.db as db
+    from aid_api.orgs.repo import MeRepository
+
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    monkeypatch.setattr(MeRepository, "JOIN", "select doctor.funcao_que_nao_existe()")
+    first, second = tenants
+    _, organizations, _ = await MeRepository().me(claims_for(first, user))
+    assert {item.id for item in organizations} == {first, second}

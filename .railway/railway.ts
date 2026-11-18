@@ -30,7 +30,9 @@ export default defineRailway((ctx, project) => {
   // Variável compartilhada do projeto (`${{shared.NOME}}`).
   const shared = (name: string): VariableValue => ctx.shared[name] as VariableValue;
 
-  const rabbitData = volume("rabbitmq-data", { sizeMB: 1024 });
+  // A região em que o volume foi criado (US East): sem ela, o apply tentaria mudá-la, e mudar a
+  // região de um volume é destrutivo.
+  const rabbitData = volume("rabbitmq-data", { sizeMB: 1024, region: "iad" });
   const rabbitmq = service("rabbitmq", {
     source: image("rabbitmq:4.1-alpine"),
     volumeMounts: { "/var/lib/rabbitmq": rabbitData },

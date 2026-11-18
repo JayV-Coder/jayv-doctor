@@ -5,7 +5,7 @@ Rotas em [docs/api/itsm.md](../api/itsm.md); a tela é **Mais → Chamados (ITSM
 ## Conexão (OAuth 2.0 3LO)
 
 1. Owner ou Admin com MFA clica em **Conectar Jira**; a API grava o hash do `state` (uso único, 10 min) e devolve a URL do consentimento no Atlassian (escopos `read:jira-work write:jira-work manage:jira-webhook read:jira-user offline_access`).
-2. O Atlassian volta para o app (`/chamados/jira`), que repassa `code` e `state` à API com a sessão de quem pediu. A API troca pelos tokens e os grava no Vault (`doctor/itsm/<tenant>`) pela função do banco; não os lê de volta.
+2. O Atlassian volta para o app (`/doctor/tickets/jira`, no site), que repassa `code` e `state` à API com a sessão de quem pediu. A API troca pelos tokens e os grava no Vault (`doctor/itsm/<tenant>`) pela função do banco; não os lê de volta.
 3. A pessoa escolhe o site, o projeto e o tipo de issue. A conexão fica ativa e o `notifier` registra o webhook dinâmico do Jira (`labels = integration-ai-doctor`, `jira:issue_updated` e `comment_created`), que vence em 30 dias e é renovado pela varredura.
 
 O refresh token do Atlassian gira a cada renovação; o `notifier` renova sob uma trava por conexão (`pg_advisory_xact_lock`), relê o Vault dentro dela e grava o novo na hora, para que dois workers não gastem o mesmo refresh token. Uma nova configuração tira o webhook anterior do Jira antes de registrar o novo; erro no registro fica em `last_error` e a varredura de 15 min segue lendo os chamados. Renovação recusada deixa a conexão `needs_reauth`, e a tela pede para conectar de novo.

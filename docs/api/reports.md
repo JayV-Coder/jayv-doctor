@@ -23,7 +23,7 @@ Exportação em português de um Incidente e do seu Diagnóstico atual (o últim
 
 ## Link compartilhável
 
-O token aparece uma vez, na `url` (`{APP_URL}/compartilhado#<token>`); o banco guarda só o sha256. O link abre enquanto não vencer nem for revogado, com a Organização ativa (sem suspensão nem exclusão marcada) e com quem compartilhou ainda Analyst ou acima nela. O acesso só conta, e só vai para a Trilha de auditoria como `report.share_accessed`, depois de o arquivo ser entregue (ADR-0014). O histórico da Tela 19 traz os links ativos de cada relatório na própria listagem. Pedido, geração, compartilhamento e revogação também ficam na trilha (`report.requested`, `report.generated`, `report.shared`, `report.share_revoked`).
+O token aparece uma vez, na `url` (`{APP_URL}/doctor/shared#<token>`); o banco guarda só o sha256. O link abre enquanto não vencer nem for revogado, com a Organização ativa (sem suspensão nem exclusão marcada) e com quem compartilhou ainda Analyst ou acima nela. O acesso só conta, e só vai para a Trilha de auditoria como `report.share_accessed`, depois de o arquivo ser entregue (ADR-0014). O histórico da Tela 19 traz os links ativos de cada relatório na própria listagem. Pedido, geração, compartilhamento e revogação também ficam na trilha (`report.requested`, `report.generated`, `report.shared`, `report.share_revoked`).
 
 ## Retenção
 

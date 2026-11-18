@@ -23,13 +23,13 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
+from aid_alerts.links import app_link
 from aid_alerts.network import public_transport
 from aid_db import platform_role
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from aid_notifier.jira import SYNC_BATCH, SYNC_EVERY, SYNC_SECONDS, confidence_text
-from aid_notifier.notify import app_url
 from aid_notifier.tickets import CLAIM, Claimed, claim, ticket_failed, touch
 
 log = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ def summary(incident: Any, diagnosis: Any, recommendations: Sequence[str]) -> st
         if recommendations:
             lines.append("Recomendações:")
             lines += [f"- {item}" for item in recommendations]
-    lines.append(f"Abrir no Integration AI Doctor: {app_url()}/incidentes/{incident.id}")
+    lines.append(f"Abrir no Integration AI Doctor: {app_link(f'/incidents/{incident.id}')}")
     return "\n".join(lines)
 
 
@@ -247,7 +247,7 @@ async def open_incident(
     weights = (connection.impact_map or {}).get(incident.severity) or DEFAULT_IMPACT
     fields: dict[str, Any] = {
         "short_description": f"[Doctor] {incident.title}"[:160],
-        "description": f"{incident.title}\n\n{app_url()}/incidentes/{incident.id}",
+        "description": f"{incident.title}\n\n{app_link(f'/incidents/{incident.id}')}",
         "impact": str(weights.get("impact", 2)),
         "urgency": str(weights.get("urgency", 2)),
         "correlation_id": ticket,

@@ -11,7 +11,6 @@ aguardando revisão. Para cada Regra que casa:
 """
 
 import logging
-import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -28,6 +27,7 @@ from aid_alerts import (
     parse_conditions,
     parse_quiet_hours,
 )
+from aid_alerts.links import app_base, app_link
 from aid_db import platform_role
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
@@ -40,7 +40,7 @@ HISTORY_DAYS = 30
 
 
 def app_url() -> str:
-    return os.environ.get("APP_URL", "http://127.0.0.1:3000").rstrip("/")
+    return app_base()
 
 
 @dataclass(frozen=True)
@@ -373,7 +373,7 @@ async def evaluate(
                             Message(
                                 "Conector com falhas",
                                 f"{row.name} · {row.integration}"[:300],
-                                f"{app_url()}/conectores",
+                                app_link("/connectors"),
                                 "Abrir os Conectores",
                             ),
                         ),
@@ -453,7 +453,7 @@ async def error_rate(connection: AsyncConnection, rule: Rule) -> list[tuple[Rule
                     Message(
                         f"Taxa de erro acima de {rule.conditions.threshold_pct:g}%",
                         f"{row.name} · {pct:.0f}% em {rule.conditions.minutes} min",
-                        f"{app_url()}/execucoes",
+                        app_link("/executions"),
                         "Abrir as Execuções",
                     ),
                 ),
@@ -487,7 +487,7 @@ async def awaiting_review(connection: AsyncConnection, rule: Rule) -> list[tuple
                 Message(
                     "Diagnóstico aguardando revisão",
                     f"{row.title} · {row.name}"[:300],
-                    f"{app_url()}/incidentes/{row.incident}",
+                    app_link(f"/incidents/{row.incident}"),
                 ),
                 once=True,
             ),

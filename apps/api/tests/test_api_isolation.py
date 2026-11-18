@@ -11,6 +11,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from aid_api.core.auth import Claims, get_claims
+from aid_api.core.rate_limit import TokenBucketLimiter, get_limiter
 from aid_api.core.storage import Storage, get_storage
 from aid_api.main import create_app
 from aid_api.orgs.mailer import Mailer, get_mailer
@@ -373,6 +374,9 @@ async def test_recurso_de_outra_organizacao_responde_404(
         )
         app = create_app()
         app.dependency_overrides[get_claims] = lambda: claims
+        # Uma requisição por rota, todas do mesmo Usuário: com as rotas de hoje, passa de 120 por
+        # minuto e o limite (não o isolamento) responderia 429. O limite tem teste próprio.
+        app.dependency_overrides[get_limiter] = lambda: TokenBucketLimiter(10_000, 10_000)
         untouched = Untouched()
         app.dependency_overrides[get_storage] = lambda: untouched
         app.dependency_overrides[get_mailer] = lambda: untouched

@@ -20,6 +20,7 @@ dev = [
     "hypothesis-jsonschema>=0.23",
     "mypy>=1.18",
     "types-jsonschema>=4.25",
+    "types-regex>=2024.11.6,<2026.10",
     "pytest>=8.4",
     "pytest-asyncio>=1.0",
     "pytest-cov>=7.0",

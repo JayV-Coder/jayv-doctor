@@ -7,6 +7,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+import regex
+
 from aid_security.detectors import IPV4, PERSONAL, SECRETS, Detector, public_ip, valid_ip
 from aid_security.references import reference_hmac
 
@@ -16,8 +18,47 @@ TRUNCATED = "[TRUNCADO]"
 TOO_DEEP = "[TRUNCADO:profundidade]"
 
 MAX_EXTRA_PATTERN = 200
-# Quantificador sobre grupo que já tem quantificador, como `(a+)+`: backtracking catastrófico.
-NESTED_QUANTIFIER = re.compile(r"\([^)]*[+*}][^)]*\)\s*[+*{]")
+# Tempo máximo de cada busca de um padrão do tenant num texto (até 8 KB). A conferência abaixo
+# barra os casos conhecidos; o que escapar dela (`(a|aa)+$`) para aqui, sem travar o worker.
+EXTRA_TIMEOUT = 0.05
+
+
+def nested_quantifier(pattern: str) -> bool:
+    """Quantificador sobre um grupo que já repete algo dentro, como `(a+)+` ou `((a+))+`:
+    backtracking catastrófico. Ignora o que está escapado (`\\(`) e dentro de `[...]`."""
+    groups: list[bool] = []
+    closed: bool | None = None
+    in_class = False
+    index = 0
+    while index < len(pattern):
+        char = pattern[index]
+        if char == "\\":
+            index += 2
+            closed = None
+            continue
+        if in_class:
+            in_class = char != "]"
+        elif char == "[":
+            in_class, closed = True, None
+        elif char == "(":
+            groups.append(False)
+            closed = None
+        elif char == ")":
+            closed = groups.pop() if groups else None
+            if closed and groups:
+                groups[-1] = True
+        elif char in "+*{":
+            if closed:
+                return True
+            if groups:
+                groups[-1] = True
+            closed = None
+        elif char != "?" or pattern[index - 1 : index] == "(":
+            # `?` depois de um quantificador (`+?`) não repete nada; o de `(?:` não é quantificador.
+            closed = None
+        index += 1
+    return False
+
 
 # Campos removidos inteiros pelo nome, em qualquer nível e grafia (`accessToken`, `DB_PASSWORD`,
 # `x-api-key`): o valor nem é inspecionado. Comparado depois de tirar `_`, `-` e espaço.
@@ -42,15 +83,17 @@ def sensitive_kind(key: str) -> str | None:
     return next((kind for suffix, kind in KEY_SUFFIXES if name.endswith(suffix)), None)
 
 
-def compile_extra(kind: str, pattern: str) -> re.Pattern[str]:
-    """Padrão do tenant, conferido na configuração: inválido, vazio ou catastrófico é recusado."""
-    if len(pattern) > MAX_EXTRA_PATTERN or NESTED_QUANTIFIER.search(pattern):
+def compile_extra(kind: str, pattern: str) -> regex.Pattern[str]:
+    """Padrão do tenant, conferido na configuração: inválido, vazio ou catastrófico é recusado.
+    Compilado com `regex` (a sintaxe do `re`), que aceita tempo limite na busca."""
+    if len(pattern) > MAX_EXTRA_PATTERN or nested_quantifier(pattern):
         raise ValueError(f"padrão de {kind} longo demais ou com quantificador aninhado")
     try:
-        compiled = re.compile(pattern)
-    except re.error as exc:
+        re.compile(pattern)
+        compiled = regex.compile(pattern, flags=regex.VERSION0)
+    except (re.error, regex.error) as exc:
         raise ValueError(f"padrão de {kind} inválido: {exc}") from exc
-    if compiled.search("") is not None:
+    if compiled.search("", timeout=EXTRA_TIMEOUT) is not None:
         raise ValueError(f"padrão de {kind} casa com texto vazio")
     return compiled
 
@@ -60,7 +103,7 @@ DIGIT = re.compile(r"\d")
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}\Z")
 
 
-def first_group(match: re.Match[str]) -> int:
+def first_group(match: re.Match[str] | regex.Match[str]) -> int:
     return next(index for index, value in enumerate(match.groups(), 1) if value is not None)
 
 
@@ -100,7 +143,7 @@ class Sanitizer:
             raise ValueError("campos de Referência exigem a chave do tenant (16+ bytes)")
         self.reference_key = reference_key or b""
         extras = [
-            Detector(kind, compile_extra(kind, pattern))
+            Detector(kind, compile_extra(kind, pattern), timeout=EXTRA_TIMEOUT)
             for kind, pattern in self.rules.extra_patterns.items()
         ]
         ips = []
@@ -206,7 +249,17 @@ class Sanitizer:
                 continue
             if detector.hints and present.isdisjoint(detector.hints):
                 continue
-            for match in detector.pattern.finditer(text):
+            pattern = detector.pattern
+            try:
+                matches: list[re.Match[str]] | list[regex.Match[str]] = (
+                    list(pattern.finditer(text, timeout=detector.timeout))
+                    if isinstance(pattern, regex.Pattern)
+                    else list(pattern.finditer(text))
+                )
+            except TimeoutError:
+                # O padrão do tenant não terminou a tempo: na dúvida, nada deste texto sai em claro.
+                return [(0, len(text), detector.kind)]
+            for match in matches:
                 group = detector.group if detector.group >= 0 else first_group(match)
                 found = match.group(group)
                 start, end = match.span(group)

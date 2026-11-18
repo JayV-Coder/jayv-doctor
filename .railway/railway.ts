@@ -49,8 +49,9 @@ export default defineRailway((ctx, project) => {
     LOG_LEVEL: "INFO",
     GCP_PROJECT_ID: "aid-local",
     OTEL_ENABLED: "false",
-    // Escuta IPv4 e IPv6: a rede privada do Railway pode ser só IPv6.
-    HOST: "::",
+    // Sem HOST: o padrão 0.0.0.0 da imagem. O healthcheck do Railway chega por IPv4, e a rede
+    // privada dos ambientes criados depois de 16/10/2025 resolve `*.railway.internal` também em
+    // IPv4. Com `::`, o uvicorn escutaria só em IPv6.
     PORT: "8080",
   };
 

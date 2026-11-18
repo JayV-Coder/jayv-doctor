@@ -173,6 +173,92 @@
         }
       }
     },
+    "/api/v1/orgs/{tenant_id}/enable": {
+      "post": {
+        "tags": ["orgs"],
+        "summary": "Enable Organization",
+        "description": "Ativa o Doctor numa Organização que já existe no jayv-coder (só o owner de lá).",
+        "operationId": "enable_organization_api_v1_orgs__tenant_id__enable_post",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Tenant Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnabledOrganization"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedOrganization"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/orgs/{tenant_id}/switch": {
       "post": {
         "tags": ["orgs"],
@@ -9442,6 +9528,30 @@
         "required": ["url"],
         "title": "Authorization"
       },
+      "AvailableOrganization": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "coder_role": {
+            "type": "string",
+            "title": "Coder Role"
+          }
+        },
+        "type": "object",
+        "required": ["id", "name", "slug", "coder_role"],
+        "title": "AvailableOrganization",
+        "description": "Organização do jayv-coder de quem pede, ainda sem o Doctor (ADR-0025): o owner a ativa."
+      },
       "Bucket": {
         "properties": {
           "start": {
@@ -10680,6 +10790,31 @@
           "published_at"
         ],
         "title": "DiagnosisSummary"
+      },
+      "EnabledOrganization": {
+        "properties": {
+          "segment": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 2,
+            "title": "Segment"
+          },
+          "llm_provider": {
+            "type": "string",
+            "enum": ["anthropic", "vertex"],
+            "title": "Llm Provider"
+          },
+          "dpa_accepted": {
+            "type": "boolean",
+            "const": true,
+            "title": "Dpa Accepted"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["segment", "llm_provider", "dpa_accepted"],
+        "title": "EnabledOrganization",
+        "description": "O que o Doctor pede para ativar numa Organização que já existe: nome e identificador são\nos do jayv-coder."
       },
       "EventDetail": {
         "properties": {
@@ -13271,6 +13406,13 @@
             "type": "array",
             "title": "Organizations"
           },
+          "available_organizations": {
+            "items": {
+              "$ref": "#/components/schemas/AvailableOrganization"
+            },
+            "type": "array",
+            "title": "Available Organizations"
+          },
           "active_tenant_id": {
             "anyOf": [
               {
@@ -13301,6 +13443,7 @@
           "aal",
           "profile",
           "organizations",
+          "available_organizations",
           "active_tenant_id",
           "active_role"
         ],

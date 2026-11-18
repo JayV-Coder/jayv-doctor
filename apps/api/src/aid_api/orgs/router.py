@@ -24,6 +24,7 @@ from aid_api.orgs.schemas import (
     AcceptedInvitation,
     CreatedInvitation,
     CreatedOrganization,
+    EnabledOrganization,
     Invitation,
     Me,
     Member,
@@ -50,13 +51,14 @@ MailerDep = Annotated[Mailer, Depends(get_mailer)]
 async def get_me(
     claims: CurrentClaims, repository: Annotated[MeRepository, Depends(get_me_repository)]
 ) -> Me:
-    profile, organizations = await repository.me(claims)
+    profile, organizations, available = await repository.me(claims)
     return Me(
         id=claims.sub,
         email=claims.email,
         aal=claims.aal,
         profile=profile,
         organizations=organizations,
+        available_organizations=available,
         active_tenant_id=claims.tenant_id,
         active_role=claims.tenant_role,
     )
@@ -72,6 +74,23 @@ async def create_organization(
     organization: NewOrganization, claims: CurrentClaims, repository: Organizations, _: Idempotent
 ) -> CreatedOrganization:
     return CreatedOrganization(id=await repository.create(claims, organization))
+
+
+@router.post(
+    "/orgs/{tenant_id}/enable",
+    status_code=status.HTTP_201_CREATED,
+    response_model=CreatedOrganization,
+    tags=["orgs"],
+)
+async def enable_organization(
+    tenant_id: UUID,
+    settings: EnabledOrganization,
+    claims: CurrentClaims,
+    repository: Organizations,
+    _: Idempotent,
+) -> CreatedOrganization:
+    """Ativa o Doctor numa Organização que já existe no jayv-coder (só o owner de lá)."""
+    return CreatedOrganization(id=await repository.enable(claims, str(tenant_id), settings))
 
 
 @router.post("/orgs/{tenant_id}/switch", status_code=status.HTTP_204_NO_CONTENT, tags=["orgs"])

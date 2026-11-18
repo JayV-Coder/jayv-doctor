@@ -60,6 +60,12 @@ BODY_CASES: list[tuple[str, str, dict[str, Any]]] = [
 # (método, caminho, recurso de B no parâmetro, corpo)
 ROUTES: list[tuple[str, str, str, dict[str, Any] | None]] = [
     ("POST", "/api/v1/orgs/{tenant_id}/switch", "tenant", None),
+    (
+        "POST",
+        "/api/v1/orgs/{tenant_id}/enable",
+        "tenant",
+        {"segment": "Indústria", "llm_provider": "anthropic", "dpa_accepted": True},
+    ),
     ("PATCH", "/api/v1/memberships/{target}", "membership", {"role": "viewer"}),
     ("DELETE", "/api/v1/memberships/{target}", "membership", None),
     ("POST", "/api/v1/invitations/{target}/resend", "invitation", None),

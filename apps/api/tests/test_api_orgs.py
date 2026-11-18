@@ -9,7 +9,7 @@ from aid_api.orgs.repo import (
     not_a_member,
     slug_taken,
 )
-from aid_api.orgs.schemas import NewOrganization
+from aid_api.orgs.schemas import EnabledOrganization, NewOrganization
 from fastapi.testclient import TestClient
 
 USER_ID = "00000000-0000-4000-8000-0000000a0001"
@@ -29,6 +29,7 @@ class FakeRepository(OrganizationRepository):
         self.error = error
         self.created: list[NewOrganization] = []
         self.switched: list[str] = []
+        self.enabled: list[tuple[str, EnabledOrganization]] = []
 
     async def create(self, claims: Claims, organization: NewOrganization) -> str:
         if self.error:
@@ -40,6 +41,12 @@ class FakeRepository(OrganizationRepository):
         if self.error:
             raise self.error
         self.switched.append(tenant_id)
+
+    async def enable(self, claims: Claims, org_id: str, settings: EnabledOrganization) -> str:
+        if self.error:
+            raise self.error
+        self.enabled.append((org_id, settings))
+        return org_id
 
 
 def client(repository: FakeRepository) -> TestClient:
@@ -95,3 +102,54 @@ def test_troca_sem_vinculo_responde_404() -> None:
     response: Any = client(FakeRepository(not_a_member())).post(f"/api/v1/orgs/{TENANT_ID}/switch")
     assert response.status_code == 404
     assert response.json()["code"] == "not_a_member"
+
+
+ENABLE = {"segment": "Indústria", "llm_provider": "anthropic", "dpa_accepted": True}
+
+
+def test_owner_ativa_o_doctor_numa_organizacao_que_ja_existe() -> None:
+    repository = FakeRepository()
+    response = client(repository).post(f"/api/v1/orgs/{TENANT_ID}/enable", json=ENABLE)
+    assert response.status_code == 201
+    assert response.json() == {"id": TENANT_ID}
+    [(org_id, settings)] = repository.enabled
+    assert (org_id, settings.segment, settings.llm_provider) == (
+        TENANT_ID,
+        "Indústria",
+        "anthropic",
+    )
+
+
+def test_ativar_exige_o_aceite_do_dpa_e_nao_aceita_nome_nem_papel() -> None:
+    repository = FakeRepository()
+    for body in (
+        {**ENABLE, "dpa_accepted": False},
+        {**ENABLE, "name": "Outra"},
+        {**ENABLE, "role": "owner"},
+        {**ENABLE, "segment": "x"},
+    ):
+        assert (
+            client(repository).post(f"/api/v1/orgs/{TENANT_ID}/enable", json=body).status_code
+            == 422
+        )
+    assert repository.enabled == []
+
+
+def test_quem_nao_e_owner_no_jayv_coder_nao_ativa() -> None:
+    from aid_api.orgs.repo import not_owner
+
+    response = client(FakeRepository(not_owner())).post(
+        f"/api/v1/orgs/{TENANT_ID}/enable", json=ENABLE
+    )
+    assert response.status_code == 403
+    assert response.json()["code"] == "not_owner"
+
+
+def test_ativar_de_novo_responde_409() -> None:
+    from aid_api.orgs.repo import already_enabled
+
+    response = client(FakeRepository(already_enabled())).post(
+        f"/api/v1/orgs/{TENANT_ID}/enable", json=ENABLE
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "already_enabled"

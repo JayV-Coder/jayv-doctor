@@ -11,9 +11,17 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from aid_api.core.auth import Claims
-from aid_api.core.db import tenant_tx, translated_tx
+from aid_api.core.db import translated_tx
 from aid_api.core.errors import ApiError
-from aid_api.orgs.schemas import Invitation, Member, NewOrganization, Organization, Profile
+from aid_api.orgs.schemas import (
+    AvailableOrganization,
+    EnabledOrganization,
+    Invitation,
+    Member,
+    NewOrganization,
+    Organization,
+    Profile,
+)
 
 Deliver = Callable[[str, str], Awaitable[None]]
 
@@ -54,6 +62,14 @@ def not_a_member() -> ApiError:
     return ApiError(404, "not_a_member", "Você não tem Vínculo com esta Organização.")
 
 
+def not_owner() -> ApiError:
+    return ApiError(403, "not_owner", "Só o owner da Organização ativa o Doctor.")
+
+
+def already_enabled() -> ApiError:
+    return ApiError(409, "already_enabled", "O Doctor já está ativo nesta Organização.")
+
+
 @asynccontextmanager
 async def transaction(
     claims: Claims, overrides: dict[str, Callable[[], ApiError]] | None = None
@@ -64,8 +80,13 @@ async def transaction(
 
 
 class MeRepository:
-    async def me(self, claims: Claims) -> tuple[Profile | None, list[Organization]]:
-        async with tenant_tx(claims) as connection:
+    async def me(
+        self, claims: Claims
+    ) -> tuple[Profile | None, list[Organization], list[AvailableOrganization]]:
+        """Antes de listar, dá o Vínculo que falta nas Organizações do jayv-coder em que o
+        Doctor está ativo (ADR-0025)."""
+        async with transaction(claims) as connection:
+            await connection.execute(text("select doctor.join_organizations()"))
             result = await connection.execute(
                 text(
                     "select display_name as full_name, avatar_url, 'pt-BR' as locale"
@@ -79,9 +100,15 @@ class MeRepository:
                     " from doctor.list_organizations() order by name"
                 )
             )
+            available = await connection.execute(
+                text(
+                    "select id::text, name, slug, coder_role from doctor.available_organizations()"
+                )
+            )
             return (
                 Profile.model_validate(dict(row)) if row else None,
                 [Organization.model_validate(dict(item)) for item in organizations.mappings()],
+                [AvailableOrganization.model_validate(dict(item)) for item in available.mappings()],
             )
 
 
@@ -93,6 +120,18 @@ class OrganizationRepository:
                     "select doctor.create_organization(:name, :slug, :segment, :llm_provider)::text"
                 ),
                 organization.model_dump(exclude={"dpa_accepted"}),
+            )
+            return str(result.scalar_one())
+
+    async def enable(self, claims: Claims, org_id: str, settings: EnabledOrganization) -> str:
+        overrides = {"42501": not_owner, "23505": already_enabled}
+        async with transaction(claims, overrides) as connection:
+            result = await connection.execute(
+                text(
+                    "select doctor.enable_organization("
+                    "cast(:org as uuid), :segment, :llm_provider)::text"
+                ),
+                {"org": org_id, **settings.model_dump(exclude={"dpa_accepted"})},
             )
             return str(result.scalar_one())
 

@@ -74,7 +74,8 @@ jobs:
         run: |
           # Usuário próprio: o `guest` só entra pelo loopback do contêiner.
           docker run -d --name rabbitmq -p 5672:5672 -e RABBITMQ_DEFAULT_USER=aid -e RABBITMQ_DEFAULT_PASS=aid rabbitmq:4.1-alpine
-          for _ in $(seq 1 60); do docker exec rabbitmq rabbitmq-diagnostics -q check_port_connectivity && exit 0; sleep 2; done
+          # Como `rabbitmq`: como root, o CLI criaria o .erlang.cookie antes do servidor e o boot falharia.
+          for _ in $(seq 1 60); do docker exec -u rabbitmq rabbitmq rabbitmq-diagnostics -q check_port_connectivity && exit 0; sleep 2; done
           docker logs rabbitmq; exit 1
       - name: Testes de integração da API e dos workers
         env:

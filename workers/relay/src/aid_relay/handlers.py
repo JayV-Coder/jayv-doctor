@@ -10,7 +10,8 @@ from fastapi import APIRouter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from aid_relay.publisher import PubSubPublisher
+from aid_relay.publisher import Publisher, PubSubPublisher
+from aid_relay.rabbit import RabbitPublisher, Topology
 from aid_relay.relay import FOLLOW_SECONDS, drain
 
 
@@ -20,7 +21,10 @@ def engine() -> AsyncEngine:
 
 
 @lru_cache
-def publisher() -> PubSubPublisher:
+def publisher() -> Publisher:
+    """Com `AMQP_URL`, o RabbitMQ (Railway, ADR-0024); sem, o Pub/Sub (ou o emulador)."""
+    if url := os.environ.get("AMQP_URL"):
+        return RabbitPublisher(url, Topology())
     return PubSubPublisher(
         os.environ["GCP_PROJECT_ID"], emulator_host=os.environ.get("PUBSUB_EMULATOR_HOST")
     )

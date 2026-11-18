@@ -1,6 +1,6 @@
-"""Tópicos e assinaturas push no emulador do Pub/Sub, para rodar fora do GCP (Dokploy, stack
-local). No GCP quem cria é o Terraform (`local.topics` em `infrastructure/terraform/stack`); um
-teste confere que esta lista é a mesma.
+"""Tópicos e assinaturas push no emulador do Pub/Sub, para a stack local e o CI. No GCP quem cria
+é o Terraform (`local.topics` em `infrastructure/terraform/stack`); um teste confere que esta
+lista é a mesma. No Railway, as filas do RabbitMQ saem desta lista (`aid_relay.rabbit`).
 
     PUBSUB_EMULATOR_HOST=pubsub:8085 GCP_PROJECT_ID=aid-local \\
     AID_WORKER_URL=http://worker-{worker}:8080 python -m aid_relay.emulator

@@ -1,4 +1,4 @@
-"""O agendador fora do GCP (Dokploy) tem os mesmos jobs e horários do Terraform."""
+"""O agendador fora do GCP (Railway) tem os mesmos jobs e horários do Terraform."""
 
 import re
 from datetime import UTC, datetime

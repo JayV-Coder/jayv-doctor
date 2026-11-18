@@ -1,0 +1,14 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/workers/relay/src/aid_relay/emulator.py",
+        "$TURBO_ROOT$/workers/runtime/src/aid_worker/scheduler.py",
+        "$TURBO_ROOT$/infrastructure/docker/python.Dockerfile"
+      ]
+    }
+  }
+}

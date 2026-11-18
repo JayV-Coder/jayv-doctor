@@ -62,4 +62,10 @@ Tudo foi validado na stack local e no CI. A configuração do GCP e do Supabase 
 - [ ] No site da JayV, definir `DOCTOR_API_URL` com o domínio público da API.
 - [ ] Na API e no `notifier`, `APP_URL` passa a ser a origem do site: os links levam a `/doctor/…`.
 - [ ] No app OAuth do Jira, trocar a callback para `<APP_URL>/doctor/tickets/jira`.
-- [ ] No Dokploy, depois do deploy sem o serviço `web`: apagar o container que sobrou (`docker compose -p jayv-doctor-vapcqa -f infrastructure/dokploy/docker-compose.yml up -d --remove-orphans`, ou `docker rm -f` no container `web`) e o domínio dele em **Domains**.
+
+## Railway (ADR-0024)
+
+- [ ] Criar o projeto no Railway, as variáveis compartilhadas e aplicar o `.railway/railway.ts` ([railway.md](railway.md)).
+- [ ] Gerar o domínio público da `api` (porta 8080) e apontar `DOCTOR_API_URL` do site para ele.
+- [ ] Conferir no log de cada worker `consumindo N filas do RabbitMQ` e, no do `scheduler`, os jobs a cada minuto. Fazer uma Importação de ponta a ponta.
+- [ ] Desligar o Dokploy: apagar o serviço Docker Compose do Doctor e os domínios dele.

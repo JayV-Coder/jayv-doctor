@@ -4,6 +4,7 @@ sem autenticação no emulador (PUBSUB_EMULATOR_HOST)."""
 import base64
 import time
 from collections.abc import Mapping, Sequence
+from typing import Protocol
 
 import httpx
 
@@ -20,9 +21,19 @@ class PublishError(RuntimeError):
     elas contam uma tentativa. `False`: o problema é do relay ou do Pub/Sub (token, IAM, 429,
     5xx, rede); a rodada para sem gastar tentativa de ninguém."""
 
-    def __init__(self, detail: str, *, rejected: bool) -> None:
+    def __init__(self, detail: str, *, rejected: bool, failed: set[int] | None = None) -> None:
         super().__init__(detail)
         self.rejected = rejected
+        # Recusa parcial: só estas posições do lote foram recusadas; as outras foram aceitas.
+        self.failed = failed
+
+
+class Publisher(Protocol):
+    """O que o relay usa: o Pub/Sub no GCP e o RabbitMQ no Railway (`aid_relay.rabbit`)."""
+
+    async def publish(
+        self, client: httpx.AsyncClient, topic: str, messages: Sequence[Message]
+    ) -> None: ...
 
 
 class PubSubPublisher:

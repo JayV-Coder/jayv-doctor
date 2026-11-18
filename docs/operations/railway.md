@@ -38,13 +38,13 @@ O Railway usa o projeto `exvsozyemolrjbjetqww`, junto com o jayv-coder ([environ
 
 ## Criar o projeto
 
-1. Instale o Railway CLI (5.42.1 ou mais novo), entre (`railway login`) e crie o projeto vazio no painel, ligado ao GitHub `JayV-Coder/jayv-doctor`. Na pasta do repositório, `railway link` escolhe o projeto e o ambiente `production`.
-2. Em **Project Settings → Shared Variables**, crie as variáveis da tabela abaixo, para o ambiente `production`.
+1. Instale o Railway CLI (5.42.1 ou mais novo), entre (`railway login`) e crie o projeto vazio no painel, ligado ao GitHub `JayV-Coder/jayv-doctor`. Na pasta do repositório, `railway link` escolhe o projeto e o ambiente (`production`, `development`…). Todo ambiente sobe a branch `main`.
+2. Em **Project Settings → Shared Variables**, crie as variáveis da tabela abaixo, no mesmo ambiente: cada ambiente tem as suas.
 3. `pnpm install` (instala o SDK do `.railway/`), `railway config plan` para conferir e `railway config apply` para criar os serviços e o volume.
 4. Na `api`, em **Settings → Networking**, gere o domínio público na porta 8080 (ou ligue um domínio próprio). Os workers, o agendador e o RabbitMQ ficam sem domínio.
 5. Faça o deploy. O log de cada worker mostra `consumindo N filas do RabbitMQ`; o do `scheduler` mostra os jobs a cada minuto.
 
-Mudanças no `.railway/railway.ts` só valem depois de `railway config apply`: o Railway não lê o arquivo no deploy. Recurso que sai do arquivo é apagado no próximo apply.
+Mudanças no `.railway/railway.ts` só valem depois de `railway config apply`: o Railway não lê o arquivo no deploy. Recurso que não está no arquivo é apagado no apply, inclusive serviço criado à mão no painel: o `plan` o mostra como destrutivo.
 
 ## Variáveis compartilhadas
 

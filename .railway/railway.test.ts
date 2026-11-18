@@ -9,17 +9,14 @@ import program from "./railway";
 const root = new URL("../", import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), "utf8");
 
-async function resources(): Promise<ResourceNode[]> {
-  const definition = await program(
-    createRailwayContext({ environmentName: "production" }),
-    project,
-  );
+async function resources(environmentName = "production"): Promise<ResourceNode[]> {
+  const definition = await program(createRailwayContext({ environmentName }), project);
   return (definition.resources ?? []).flat();
 }
 
-async function services(): Promise<Map<string, ServiceNode>> {
+async function services(environmentName = "production"): Promise<Map<string, ServiceNode>> {
   return new Map(
-    (await resources())
+    (await resources(environmentName))
       .filter((resource): resource is ServiceNode => resource.type === "service")
       .map((service) => [service.name, service]),
   );
@@ -93,6 +90,15 @@ describe("projeto do Railway", () => {
         if (/KEY|SECRET|PASS|TOKEN|DB_URL/.test(name) && value.type === "literal") {
           expect(value.value ?? "", name).toMatch(/\$\{\{/);
         }
+      }
+    }
+  });
+
+  it("em qualquer ambiente, o código vem da main", async () => {
+    for (const environment of ["production", "development"]) {
+      for (const service of (await services(environment)).values()) {
+        if (service.name === "rabbitmq") continue;
+        expect(service.source?.branch, `${environment}/${service.name}`).toBe("main");
       }
     }
   });

@@ -53,7 +53,6 @@ describe("projeto do Railway", () => {
       });
       expect(literal(worker, "WORKER_NAME")).toBe(name.replace("worker-", ""));
       expect(literal(worker, "PACKAGE")).toBe("aid-worker");
-      expect(literal(worker, "HOST")).toBe("::");
       expect(literal(worker, "PORT")).toBe("8080");
       expect(worker?.deploy?.healthcheckPath).toBe("/healthz");
     }
@@ -100,6 +99,14 @@ describe("projeto do Railway", () => {
         if (service.name === "rabbitmq") continue;
         expect(service.source?.branch, `${environment}/${service.name}`).toBe("main");
       }
+    }
+  });
+
+  it("escuta em IPv4: o healthcheck do Railway chega por IPv4", async () => {
+    // Com `HOST=::`, o uvicorn (asyncio) liga o socket só em IPv6 e o healthcheck nunca passa.
+    for (const service of (await services()).values()) {
+      if (service.name === "rabbitmq") continue;
+      expect(literal(service, "HOST"), service.name).toBeUndefined();
     }
   });
 });

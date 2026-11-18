@@ -10,7 +10,7 @@ Alternativa ao GCP para rodar a plataforma inteira, no lugar do antigo Dokploy (
 | `scheduler` | os jobs do Cloud Scheduler, a cada minuto (`python -m aid_worker.scheduler`) | só sai |
 | `rabbitmq` | o broker no lugar do Pub/Sub, com o volume `rabbitmq-data` em `/var/lib/rabbitmq` | privada, porta 5672 |
 
-Todos os serviços Python saem do mesmo `infrastructure/docker/python.Dockerfile`; as variáveis `PACKAGE`, `APP` e `SYSTEM_PACKAGES` de cada serviço viram argumentos do build. Eles escutam em `HOST=::`, porque a rede privada do Railway pode ser só IPv6. Ficam de fora o envio de métricas ao Cloud Monitoring, o backup do Storage no GCS, o tracing (OTEL desligado) e os perfis de IA do Brasil e dedicado (Vertex AI).
+Todos os serviços Python saem do mesmo `infrastructure/docker/python.Dockerfile`; as variáveis `PACKAGE`, `APP` e `SYSTEM_PACKAGES` de cada serviço viram argumentos do build. Eles escutam em `0.0.0.0` (IPv4): o healthcheck do Railway chega por IPv4, e a rede privada resolve `*.railway.internal` em IPv4 nos ambientes criados depois de 16/10/2025. Não use `HOST=::`: o uvicorn escutaria só em IPv6 e o healthcheck falharia. Ambiente mais antigo, só com IPv6 na rede privada, precisa ser recriado. Ficam de fora o envio de métricas ao Cloud Monitoring, o backup do Storage no GCS, o tracing (OTEL desligado) e os perfis de IA do Brasil e dedicado (Vertex AI).
 
 ## Filas no RabbitMQ
 

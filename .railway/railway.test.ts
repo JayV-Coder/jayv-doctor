@@ -74,6 +74,11 @@ describe("projeto do Railway", () => {
     expect(all.some((resource) => resource.type === "volume")).toBe(true);
   });
 
+  it("o volume fica na região em que foi criado (iad): mudar a região é destrutivo", async () => {
+    const volume = (await resources()).find((resource) => resource.type === "volume");
+    expect(volume?.type === "volume" ? volume.config?.region : undefined).toBe("iad");
+  });
+
   it("todas as imagens Python saem do mesmo Dockerfile", async () => {
     for (const service of (await services()).values()) {
       if (service.name === "rabbitmq") continue;

@@ -1,14 +1,12 @@
 """Acesso a dados com o RLS valendo (ADR-0004): nada de `service_role` em rota de usuário."""
 
-import json
 import os
 from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from functools import lru_cache
 
-from aid_db import supavisor_engine
-from aid_observability.tracing import traceparent
+from aid_db import session_settings, supavisor_engine
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
@@ -38,19 +36,9 @@ async def tenant_tx(
             yield current[1]
         return
     async with (engine or get_engine()).begin() as connection:
-        await connection.execute(text("set local role authenticated"))
-        await connection.execute(
-            text(
-                "select set_config('request.jwt.claims', :claims, true),"
-                " set_config('doctor.request', :meta, true),"
-                " set_config('doctor.traceparent', :trace, true)"
-            ),
-            {
-                "claims": json.dumps(claims.raw),
-                "meta": request_meta.current() or "",
-                # O trace da requisição segue pela outbox até os workers (#34).
-                "trace": traceparent() or "",
-            },
+        # IP e request_id vão para a trilha de auditoria (#32).
+        await session_settings(
+            connection, "authenticated", claims.raw, request_meta.current() or ""
         )
         if claims.tenant_id is not None:
             # O JWT vale por até 1 h; o Vínculo, não: removido (SCIM, #48, ou na tela), o acesso
@@ -109,15 +97,8 @@ async def anonymous_tx(
     Só alcança as funções do banco liberadas para `anon`, que identificam o tenant pelo token."""
     try:
         async with (engine or get_engine()).begin() as connection:
-            await connection.execute(text("set local role anon"))
             # IP, request_id e o trace também sem Usuário (#32, #34).
-            await connection.execute(
-                text(
-                    "select set_config('doctor.request', :meta, true),"
-                    " set_config('doctor.traceparent', :trace, true)"
-                ),
-                {"meta": request_meta.current() or "", "trace": traceparent() or ""},
-            )
+            await session_settings(connection, "anon", request=request_meta.current() or "")
             yield connection
     except DBAPIError as exc:
         factory = errors.get(sqlstate(exc) or "")

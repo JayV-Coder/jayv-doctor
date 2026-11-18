@@ -54,8 +54,11 @@ async def test_tenant_tx_assume_authenticated_com_as_claims_do_jwt() -> None:
     async with tenant_tx(claims, cast("AsyncEngine", engine)):
         pass
 
-    role, jwt_claims, membership = engine.connection.statements
-    assert role[0] == "set local role authenticated"
+    # Papel e claims num comando só: com o banco longe, cada ida e volta conta.
+    jwt_claims, membership = engine.connection.statements
+    assert "set_config('role', :role, true)" in jwt_claims[0]
+    assert jwt_claims[1] is not None
+    assert jwt_claims[1]["role"] == "authenticated"
     assert "doctor.memberships" in membership[0]
     assert "set_config('request.jwt.claims'" in jwt_claims[0]
     assert jwt_claims[1] is not None
@@ -92,4 +95,4 @@ async def test_tenant_tx_sem_organizacao_nao_confere_vinculo() -> None:
     )
     async with tenant_tx(claims, cast("AsyncEngine", engine)):
         pass
-    assert len(engine.connection.statements) == 2
+    assert len(engine.connection.statements) == 1

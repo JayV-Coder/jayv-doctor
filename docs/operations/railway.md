@@ -70,6 +70,10 @@ Mudanças no `.railway/railway.ts` só valem depois de `railway config apply`: o
 
 Marque as chaves e senhas como *sealed*: o valor some do painel e do `railway config pull`. O endereço público da API (`AID_PUBLIC_API_URL`) e a `AMQP_URL` vêm de referências a outros serviços, sem variável compartilhada.
 
+## Conexões com o banco
+
+Cada serviço que usa o banco guarda 5 conexões com o Supavisor (`DB_POOL_SIZE=5`), renovadas a cada 5 minutos; acima disso, abre extras e as fecha ao terminar. Sem isso, cada transação abriria uma conexão nova até São Paulo, o que custava de 2 a 5 s por página do Doctor. São 35 clientes fixos nos 7 serviços (o `scheduler` não usa o banco), dentro da fatia do Doctor ([capacity.md](capacity.md)). Papel, claims e trace vão num comando só por transação (`session_settings`).
+
 ## Região
 
 O Railway não tem região na América do Sul, e o banco fica em `sa-east-1`. Cada consulta cruza o continente: prefira a região US East (Virgínia), a mais próxima de São Paulo, para todos os serviços e o volume.

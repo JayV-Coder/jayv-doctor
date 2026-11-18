@@ -76,6 +76,7 @@ files = [
     "workers/diagnosis/src",
     "workers/diagnosis/tests",
     "packages/db/src",
+    "packages/db/tests",
     "packages/observability/src",
     "packages/observability/tests",
     "packages/security/src",

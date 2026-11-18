@@ -13,7 +13,7 @@ Plataforma SaaS B2B que coleta, correlaciona e diagnostica falhas em integraçõ
 | [docs/backlog/](docs/backlog/) | 53 tickets em 10 milestones (Sprint 1 → v1.0) |
 
 ## Stack
-Supabase (Postgres + pgvector, Auth, Storage, Realtime, Vault) · Python 3.12 + FastAPI · Cloud Run + Pub/Sub · app no site da JayV (Next.js, `/doctor` em JayV-Coder/site — ADR-0023) · Claude / Vertex AI · Terraform.
+Supabase (Postgres + pgvector, Auth, Storage, Realtime, Vault) · Python 3.12 + FastAPI · Cloud Run + Pub/Sub (ou Railway + RabbitMQ) · app no site da JayV (Next.js, `/doctor` em JayV-Coder/site — ADR-0023) · Claude / Vertex AI · Terraform.
 
 ## Desenvolvimento
 Requisitos: Node 22 com pnpm 9 (`corepack enable`), [uv](https://docs.astral.sh/uv/) e GNU make. Docker e Supabase CLI são necessários a partir do ticket #2.
@@ -32,6 +32,7 @@ make check       # lint + typecheck + testes (o mesmo que o CI)
 | `packages/*` | contracts, connectors, diagnosis-engine, knowledge, security |
 | `supabase/` | migrações, seed e testes pgTAP |
 | `infrastructure/terraform` | GCP |
+| `.railway/railway.ts` | Railway, fora do GCP, com RabbitMQ no lugar do Pub/Sub (ADR-0024) |
 | `tests/*` | integração, segurança, avaliação, carga |
 
 As telas do Doctor ficam no site da JayV (JayV-Coder/site, `/[locale]/doctor`, ADR-0023), que fala com esta API pelo servidor (`DOCTOR_API_URL`). Os testes de integração da API e dos workers rodam contra a stack local (`supabase start`) com `INTEGRATION_DB_URL`.

@@ -1,4 +1,5 @@
-"""Recebe o push autenticado do Pub/Sub e entrega ao handler do worker.
+"""Recebe o push autenticado do Pub/Sub (GCP) ou consome o RabbitMQ (Railway, ADR-0024) e
+entrega ao handler do worker.
 
 Qualquer resposta fora de 2xx faz o Pub/Sub reentregar a mensagem e, depois de 5 tentativas,
 movê-la para a DLQ. Por isso worker sem handler responde 501 em vez de confirmar: confirmar
@@ -9,7 +10,8 @@ import base64
 import json
 import logging
 import os
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from contextlib import asynccontextmanager
 from typing import Any
 
 from aid_observability import logs, tracing
@@ -106,8 +108,63 @@ def routers_for(worker: str) -> list[APIRouter]:
     return []
 
 
-def create_app(worker: str, handlers: Mapping[str, Handler]) -> FastAPI:
-    app = FastAPI(title=f"worker-{worker}", openapi_url=None)
+async def process(worker: str, topic: str, message: PubSubMessage, handler: Handler) -> bool:
+    """Roda o handler no contexto da mensagem (tópico, tenant e trace). `False`: falhou e deve
+    ser reentregue (no push, o 500; no RabbitMQ, a fila de espera)."""
+    attributes = message.attributes
+    # Filho do span de quem gravou a mensagem na outbox (atributo `traceparent`, #34).
+    with (
+        tracer.start_as_current_span(
+            f"pubsub {topic}", context=context_from(attributes), kind=SpanKind.CONSUMER
+        ) as span,
+        bind(
+            worker=worker,
+            topic=topic,
+            message_id=message.message_id,
+            tenant_id=attributes.get("tenant_id"),
+        ),
+    ):
+        span.set_attribute("messaging.message.id", message.message_id)
+        if attributes.get("tenant_id"):
+            span.set_attribute("tenant.id", attributes["tenant_id"])
+        try:
+            await handler(message)
+        except Exception as exc:
+            # Registrado aqui, dentro do contexto (tópico, mensagem, tenant e trace).
+            logger.exception("falha ao processar a mensagem")
+            span.record_exception(exc)
+            return False
+        finally:
+            tracing.flush()
+    return True
+
+
+def create_app(
+    worker: str, handlers: Mapping[str, Handler], amqp_url: str | None = None
+) -> FastAPI:
+    """Com `amqp_url` (Railway, ADR-0024), o worker também consome as filas do RabbitMQ dos seus
+    tópicos; sem ele, recebe só o push do Pub/Sub em `/pubsub` (GCP)."""
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        consumer = None
+        if amqp_url and handlers:
+            from aid_worker.rabbit import Consumer
+
+            consumer = Consumer(amqp_url, worker, handlers)
+            await consumer.start()
+        try:
+            yield
+        finally:
+            if consumer is not None:
+                await consumer.close()
+
+    app = FastAPI(title=f"worker-{worker}", openapi_url=None, lifespan=lifespan)
+
+    # Healthcheck do deploy no Railway: o app só sobe depois de conectar ao broker.
+    @app.get("/healthz")
+    async def healthz() -> dict[str, str]:
+        return {"status": "ok"}
 
     @app.post("/pubsub", status_code=status.HTTP_204_NO_CONTENT)
     async def receive(envelope: PushEnvelope) -> Response:
@@ -122,32 +179,9 @@ def create_app(worker: str, handlers: Mapping[str, Handler]) -> FastAPI:
                 envelope.message.message_id,
             )
             return Response(status_code=status.HTTP_501_NOT_IMPLEMENTED)
-        attributes = envelope.message.attributes
-        # Filho do span de quem gravou a mensagem na outbox (atributo `traceparent`, #34).
-        with (
-            tracer.start_as_current_span(
-                f"pubsub {topic}", context=context_from(attributes), kind=SpanKind.CONSUMER
-            ) as span,
-            bind(
-                worker=worker,
-                topic=topic,
-                message_id=envelope.message.message_id,
-                tenant_id=attributes.get("tenant_id"),
-            ),
-        ):
-            span.set_attribute("messaging.message.id", envelope.message.message_id)
-            if attributes.get("tenant_id"):
-                span.set_attribute("tenant.id", attributes["tenant_id"])
-            try:
-                await handler(envelope.message)
-            except Exception as exc:
-                # Registrado aqui, dentro do contexto (tópico, mensagem, tenant e trace); o 500
-                # faz o Pub/Sub reentregar.
-                logger.exception("falha ao processar a mensagem")
-                span.record_exception(exc)
-                return Response(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            finally:
-                tracing.flush()
+        if not await process(worker, topic, envelope.message, handler):
+            # O 500 faz o Pub/Sub reentregar.
+            return Response(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     for router in routers_for(worker):
@@ -159,4 +193,4 @@ WORKER = os.environ.get("WORKER_NAME", "")
 # Logs JSON para o Cloud Logging e traces no Cloud Trace (com OTEL_ENABLED), antes das rotas.
 logs.configure_logging()
 tracing.configure(f"worker-{WORKER}")
-app = create_app(WORKER, handlers_for(WORKER))
+app = create_app(WORKER, handlers_for(WORKER), os.environ.get("AMQP_URL"))

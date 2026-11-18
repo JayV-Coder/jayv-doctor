@@ -128,3 +128,9 @@ def test_falha_do_handler_e_registrada_com_o_contexto_e_reentregue(
     )
     assert response.status_code == 500
     assert "falha ao processar a mensagem" in caplog.text
+
+
+def test_healthz_responde_para_o_healthcheck_do_deploy() -> None:
+    response = TestClient(create_app("ingestion", {})).get("/healthz")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}

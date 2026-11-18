@@ -42,5 +42,5 @@ RUN useradd --system --uid 10001 aid
 WORKDIR /app
 COPY --from=build /app/.venv .venv
 USER 10001
-# O Cloud Run informa a porta em $PORT.
-CMD ["sh", "-c", "exec uvicorn \"$APP\" --host 0.0.0.0 --port \"${PORT:-8080}\""]
+# O Cloud Run informa a porta em $PORT. No Railway, HOST=:: atende IPv4 e IPv6 na rede privada.
+CMD ["sh", "-c", "exec uvicorn \"$APP\" --host \"${HOST:-0.0.0.0}\" --port \"${PORT:-8080}\""]

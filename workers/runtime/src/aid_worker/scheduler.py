@@ -1,4 +1,4 @@
-"""Os jobs do Cloud Scheduler fora do GCP (Dokploy, stack local): a cada minuto, chama as rotas
+"""Os jobs do Cloud Scheduler fora do GCP (Railway, stack local): a cada minuto, chama as rotas
 dos workers cujo horário bate. No GCP quem agenda é o Terraform (`google_cloud_scheduler_job`);
 um teste confere que estes horários são os de lá. Ficam de fora o envio de métricas ao Cloud
 Monitoring e o backup do Storage no GCS, que dependem do GCP.

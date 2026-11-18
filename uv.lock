@@ -351,6 +351,7 @@ source = { editable = "workers/relay" }
 dependencies = [
     { name = "aid-db" },
     { name = "aid-observability" },
+    { name = "aio-pika" },
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "httpx" },
@@ -361,6 +362,7 @@ dependencies = [
 requires-dist = [
     { name = "aid-db", editable = "packages/db" },
     { name = "aid-observability", editable = "packages/observability" },
+    { name = "aio-pika", specifier = ">=10.2.1,<11" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "fastapi", specifier = ">=0.162" },
     { name = "httpx", specifier = ">=0.28" },
@@ -410,6 +412,19 @@ requires-dist = [
 ]
 
 [[package]]
+name = "aio-pika"
+version = "10.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiormq" },
+    { name = "yarl" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5d/31/70f0d7a9fe1affc3241d86d24c24714a4a2ac648961efd3d835ef734a6a1/aio_pika-10.2.1.tar.gz", hash = "sha256:e4f77afd9179a3cca5a904c3b0a1190256a36d9f90650db908b1b2245eb27487", size = 101040, upload-time = "2026-10-25T11:47:24.577Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b4/ae/f69eb62f240f743d5d3aff659a6ed76077f73b722a0d8f9f9559ab825836/aio_pika-10.2.1-py3-none-any.whl", hash = "sha256:66c85d311e30f1dd3e28109d686c9bf1d9dd1a74582004c7cb7bed284d8fe3b1", size = 61568, upload-time = "2026-10-25T11:47:23.119Z" },
+]
+
+[[package]]
 name = "aiohappyeyeballs"
 version = "2.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -453,6 +468,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ae/ce/1f08114679d49655b30a6e0a29858375c94b82c1de1a0bd0a20c2fee8b02/aiohttp-3.14.5-cp312-cp312-win_amd64.whl", hash = "sha256:2cc38a4f2b516bef1714e690df87a0e043faf1a7693c82d860091684453d5111", size = 506141, upload-time = "2026-10-11T01:00:50.272Z" },
     { url = "https://files.pythonhosted.org/packages/79/d4/c7b4f60b16a1b7e43249fa9031ae05e7e8c341ba4b7d1866f914dafeaa0e/aiohttp-3.14.5-cp312-cp312-win_arm64.whl", hash = "sha256:a63afd1f757de949028387e65a7127b61ad0f775432dbb0e62816ae619fe69ac", size = 488108, upload-time = "2026-10-11T01:00:52.321Z" },
     { url = "https://files.pythonhosted.org/packages/68/30/173960c42b05a6c59f7558e4b12a4b0d9ba376cf6aa9bde7f9e08a30ca8d/aiohttp-3.14.5-py3-none-any.whl", hash = "sha256:efc21a454892828368b11c2c780de0ff8bc991f73f6b99c6b66e56205470929b", size = 279517, upload-time = "2026-10-11T01:05:08.523Z" },
+]
+
+[[package]]
+name = "aiormq"
+version = "7.2.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pamqp" },
+    { name = "yarl" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a8/c3/18ca94e389ba11a17778160780fa25da5e153a1deb787c5158fa48fdbff6/aiormq-7.2.5.tar.gz", hash = "sha256:250dc99381c004e0b9c3a58a38b0fc04564339aa1e05740fcf3a9578fe810fc2", size = 81592, upload-time = "2026-11-01T12:01:44.908Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fe/4e/2e4e274d4f717aa38e536dc23388f0e4a3c2929a9d07b941ca539021d417/aiormq-7.2.5-py3-none-any.whl", hash = "sha256:c408686d190d10788ca132899c5ede6b123541bee2ce54ea7167404fac11d779", size = 40696, upload-time = "2026-11-01T12:01:43.45Z" },
 ]
 
 [[package]]
@@ -1732,6 +1760,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/7d/fa/3944b40b07da9ce895c0e6303a5ab7d53da063554f534556b134a54d6093/packaging-26.3.tar.gz", hash = "sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79", size = 313412, upload-time = "2026-08-04T18:15:28.737Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl", hash = "sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c", size = 129956, upload-time = "2026-08-04T18:15:27.159Z" },
+]
+
+[[package]]
+name = "pamqp"
+version = "5.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/db/10/3a0d1040a1bac414ef1b4cb9b6f53344b6bc33e57eef287ac58d6dc1d1de/pamqp-5.0.0.tar.gz", hash = "sha256:d76dd4af900802483cda5f318a5328c86a1e9b127159f5455b17d9a0bb658b89", size = 137474, upload-time = "2026-10-30T15:41:57.894Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ed/ac/fd44d9085dc1270e9f6a9eae0a08bbc69d8354c66623c647fe45ecd4b97d/pamqp-5.0.0-py3-none-any.whl", hash = "sha256:f426351b57f6a9e453ee27682431e532c44771cb61b4f74018b8a7088f4cac20", size = 32793, upload-time = "2026-10-30T15:41:56.381Z" },
 ]
 
 [[package]]

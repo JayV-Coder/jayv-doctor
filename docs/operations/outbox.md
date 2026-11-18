@@ -29,4 +29,4 @@ from doctor.outbox_messages where published_at is null group by topic;
 
 Só o relay tem `roles/pubsub.publisher` nos tópicos. Os workers recebem por push autenticado e, depois de 5 falhas, a mensagem vai para a DLQ do tópico (`<tópico>.dlq`).
 
-Localmente e no CI, o relay publica no emulador quando `PUBSUB_EMULATOR_HOST` está definido.
+Localmente e no CI, o relay publica no emulador quando `PUBSUB_EMULATOR_HOST` está definido. No Railway, com `AMQP_URL`, publica no RabbitMQ, e os workers consomem as filas dos seus tópicos, com novas tentativas e DLQ equivalentes ([railway.md](railway.md), ADR-0024).

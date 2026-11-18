@@ -4,6 +4,7 @@
 |---|---|
 | Ambientes, migrações no projeto Supabase compartilhado e o hook de JWT | [environments.md](environments.md) |
 | Infraestrutura GCP: primeiro uso, deploy, DLQ e custos | [gcp.md](gcp.md) |
+| Railway (fora do GCP, com RabbitMQ): criar o projeto e as variáveis | [railway.md](railway.md) |
 | Rotação de segredos | [segredos.md](segredos.md) |
 | Observabilidade, alertas e `/admin/health` | [observabilidade.md](observabilidade.md) |
 | Runbooks dos alertas e da recuperação | [runbooks/](runbooks/) |

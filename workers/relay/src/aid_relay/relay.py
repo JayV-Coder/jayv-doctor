@@ -2,8 +2,9 @@
 
 `FOR UPDATE SKIP LOCKED` deixa dois relays rodarem juntos sem publicar a mesma linha. Cada lote
 sai numa chamada por tópico, com um cliente HTTP só, e a rodada para antes do prazo do Cloud Run.
-A entrega é pelo menos uma vez: se o commit falhar depois do publish, a mensagem sai de novo, e
-os consumidores são idempotentes.
+No Railway, o broker é o RabbitMQ (ADR-0024), com a mesma interface. A entrega é pelo menos uma
+vez: se o commit falhar depois do publish, a mensagem sai de novo, e os consumidores são
+idempotentes.
 
 Só a recusa do Pub/Sub (tópico inexistente, pedido inválido) conta tentativa. Falha do próprio
 relay ou do Pub/Sub encerra a rodada sem gastar tentativa de ninguém: uma queda de 10 minutos não
@@ -23,7 +24,7 @@ from aid_db import platform_role
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
-from aid_relay.publisher import Message, PublishError, PubSubPublisher
+from aid_relay.publisher import Message, Publisher, PublishError
 
 logger = logging.getLogger(__name__)
 MAX_ATTEMPTS = 10
@@ -55,7 +56,7 @@ async def mark(connection: AsyncConnection, published: list[int], rejected: list
 
 
 async def publish_batch(
-    client: httpx.AsyncClient, publisher: PubSubPublisher, rows: list[Any], stats: Stats
+    client: httpx.AsyncClient, publisher: Publisher, rows: list[Any], stats: Stats
 ) -> tuple[list[int], list[int]]:
     by_topic: dict[str, list[Any]] = defaultdict(list)
     for row in rows:
@@ -95,7 +96,7 @@ async def publish_batch(
 
 async def drain(
     engine: AsyncEngine,
-    publisher: PubSubPublisher,
+    publisher: Publisher,
     *,
     batch: int = 100,
     seconds: float = ROUND_SECONDS,

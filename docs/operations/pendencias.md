@@ -57,6 +57,9 @@ Tudo foi validado na stack local e no CI. A configuração do GCP e do Supabase 
 - [ ] Confirmar que o Realtime está ligado no projeto. A migração do ticket #16 só acrescenta `doctor.connectors` à publicação `supabase_realtime`, que é do projeto inteiro: conferir antes que a publicação não é `FOR ALL TABLES` e o que o jayv-coder já publica.
 - [ ] Confirmar que o schema `doctor` **não** está em "Exposed schemas" da API de dados (PostgREST). `anon` executa as funções do token de ingestão (ticket #12), e expor o schema deixaria chamá-las sem passar pela validação da API. O worker valida de novo, mas a porta certa é só a API.
 
-## App web
+## App no site (ADR-0023)
 
-- [ ] Definir onde o Next.js roda em produção (ainda sem ticket próprio de deploy) e as variáveis `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SITE_URL` e `API_URL`.
+- [ ] No site da JayV, definir `DOCTOR_API_URL` com o domínio público da API.
+- [ ] Na API e no `notifier`, `APP_URL` passa a ser a origem do site: os links levam a `/doctor/…`.
+- [ ] No app OAuth do Jira, trocar a callback para `<APP_URL>/doctor/tickets/jira`.
+- [ ] No Dokploy, depois do deploy sem o serviço `web`: apagar o container que sobrou (`docker compose -p jayv-doctor-vapcqa -f infrastructure/dokploy/docker-compose.yml up -d --remove-orphans`, ou `docker rm -f` no container `web`) e o domínio dele em **Domains**.

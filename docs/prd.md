@@ -187,7 +187,7 @@ Os mockups estão em [`docs/mockups/index.html`](mockups/index.html).
 ## 10. Repositório
 
 ```text
-apps/web            Next.js (PWA)
+apps/web            Next.js (PWA) — hoje no site da JayV, `/doctor` (ADR-0023)
 apps/api            FastAPI
 workers/{ingestion,correlation,diagnosis,connectors,retention}
 packages/contracts  JSON Schema → tipos TS e modelos Pydantic

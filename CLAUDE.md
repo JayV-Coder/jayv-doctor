@@ -1,6 +1,6 @@
 # Integration AI Doctor
 
-SaaS B2B que diagnostica falhas de integrações (SAP, Salesforce, GCP). Supabase (Postgres, Auth, Storage, Realtime, Vault) + FastAPI/workers no Cloud Run + Next.js PWA mobile first.
+SaaS B2B que diagnostica falhas de integrações (SAP, Salesforce, GCP). Supabase (Postgres, Auth, Storage, Realtime, Vault) + FastAPI/workers no Cloud Run; as telas ficam no site da JayV (JayV-Coder/site, `/doctor`, mobile first; ADR-0023).
 
 ## Antes de agir
 - **Vocabulário** (Organização, Execução, Incidente, Diagnóstico, Evidência…): [GLOSSARY.md](GLOSSARY.md). Use esses termos em código, UI e issues.

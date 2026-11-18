@@ -13,7 +13,7 @@ Plataforma SaaS B2B que coleta, correlaciona e diagnostica falhas em integraçõ
 | [docs/backlog/](docs/backlog/) | 53 tickets em 10 milestones (Sprint 1 → v1.0) |
 
 ## Stack
-Supabase (Postgres + pgvector, Auth, Storage, Realtime, Vault) · Python 3.12 + FastAPI · Cloud Run + Pub/Sub · Next.js + TypeScript (PWA, kit CSS do mockup — ADR-0010) · Claude / Vertex AI · Terraform.
+Supabase (Postgres + pgvector, Auth, Storage, Realtime, Vault) · Python 3.12 + FastAPI · Cloud Run + Pub/Sub · app no site da JayV (Next.js, `/doctor` em JayV-Coder/site — ADR-0023) · Claude / Vertex AI · Terraform.
 
 ## Desenvolvimento
 Requisitos: Node 22 com pnpm 9 (`corepack enable`), [uv](https://docs.astral.sh/uv/) e GNU make. Docker e Supabase CLI são necessários a partir do ticket #2.
@@ -26,7 +26,7 @@ make check       # lint + typecheck + testes (o mesmo que o CI)
 
 | Pasta | Conteúdo |
 |---|---|
-| `apps/web`, `apps/api` | Next.js (PWA) e FastAPI |
+| `apps/api` | FastAPI; o app fica no site da JayV (JayV-Coder/site, `/doctor`, ADR-0023) |
 | `vendor/supabase` | submódulo `JayV-Coder/supabase`: migrações (`*_doctor_*`) e testes de banco (`tests/doctor/`) |
 | `workers/*` | ingestion, correlation, diagnosis, connectors, retention |
 | `packages/*` | contracts, connectors, diagnosis-engine, knowledge, security |
@@ -34,7 +34,7 @@ make check       # lint + typecheck + testes (o mesmo que o CI)
 | `infrastructure/terraform` | GCP |
 | `tests/*` | integração, segurança, avaliação, carga |
 
-Testes E2E do app web (`apps/web`): com a stack local de pé (`supabase start`), `pnpm --filter @aid/web test:e2e` roda os projetos `mobile-chrome` (Pixel 7, todos os fluxos) e `desktop` (só o shell). O Playwright reaproveita um `pnpm start` que já esteja de pé; nesse caso, suba-o com `COMPONENT_CATALOG=1`, ou o catálogo dos snapshots (`/componentes`) responde 404. Mudou um componente base de propósito? Regere os snapshots com `pnpm --filter @aid/web exec playwright test e2e/components.spec.ts --update-snapshots` e confira as imagens no diff. Os ícones do PWA saem de `apps/web/scripts/icons.mjs`.
+As telas do Doctor ficam no site da JayV (JayV-Coder/site, `/[locale]/doctor`, ADR-0023), que fala com esta API pelo servidor (`DOCTOR_API_URL`). Os testes de integração da API e dos workers rodam contra a stack local (`supabase start`) com `INTEGRATION_DB_URL`.
 
 Pacotes TS são workspaces pnpm (orquestrados pelo Turborepo). Pacotes Python são membros do workspace uv em `pyproject.toml`; nomes de arquivos de teste Python são únicos no repositório.
 

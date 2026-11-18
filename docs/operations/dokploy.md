@@ -8,25 +8,25 @@ O Dokploy usa o projeto `exvsozyemolrjbjetqww`, junto com o jayv-coder ([environ
 
 1. Aplicar as migrações do Doctor com `scripts/apply-doctor-migrations.py --check` e depois `--apply` (URL direta, porta 5432). Elas vêm do submódulo `vendor/supabase` (ADR-0022): no servidor, rode `git submodule update --init` na pasta do código antes, ou ligue os submódulos na fonte Git do serviço no Dokploy.
 2. Ligar o Custom Access Token Hook (`doctor.custom_access_token_hook`), conferindo antes que não há outro hook. Em seguida, testar o login do jayv-coder.
-3. Acrescentar `https://<APP_URL>/auth/callback**` às URLs de redirecionamento do Auth.
+3. O app é o site da JayV (`/doctor`, ADR-0023): no serviço do site, defina `DOCTOR_API_URL` com o domínio da API. A volta do login já está nas URLs de redirecionamento do Auth, porque é a do site.
 4. Rodar a Base global uma vez: `python -m aid_knowledge.global_seed`, com `SUPABASE_DB_URL` e `VOYAGE_API_KEY`.
 
 ## No Dokploy
 
 1. Crie um serviço **Docker Compose** apontando para o repositório e a branch a testar, com o arquivo `infrastructure/dokploy/docker-compose.yml`.
 2. Em **Environment**, cole as variáveis de [infrastructure/dokploy/.env.example](../../infrastructure/dokploy/.env.example), preenchidas (tabela abaixo).
-3. Em **Domains**, crie dois domínios com HTTPS: `web`, porta 3000 (`APP_URL`), e `api`, porta 8080 (`API_PUBLIC_URL`). Os workers, o emulador e o agendador não recebem domínio.
+3. Em **Domains**, crie o domínio com HTTPS da `api`, porta 8080 (`API_PUBLIC_URL`). Os workers, o emulador e o agendador não recebem domínio.
 4. Faça o deploy. No log do `scheduler`, a primeira rodada cria os tópicos; depois disso, só aparece aviso se o emulador reiniciar e os tópicos forem recriados.
 
 ## Variáveis
 
 | Variável | Valor | Onde vai |
 |---|---|---|
-| `SUPABASE_URL` | `https://exvsozyemolrjbjetqww.supabase.co` | todos (e vira `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_JWT_ISSUER`) |
-| `SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_7PeIEX0yh_svIEeNw3Gwew_lEbMVtMm` (pública) | web e API |
+| `SUPABASE_URL` | `https://exvsozyemolrjbjetqww.supabase.co` | todos (e vira `SUPABASE_JWT_ISSUER`) |
+| `SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_7PeIEX0yh_svIEeNw3Gwew_lEbMVtMm` (pública) | API |
 | `SUPABASE_DB_URL` | pooler de transações, porta 6543: `postgresql://postgres.exvsozyemolrjbjetqww:<senha>@aws-0-sa-east-1.pooler.supabase.com:6543/postgres` (Dashboard → Connect) | API e workers |
 | `SUPABASE_SERVICE_ROLE_KEY` | Dashboard → Settings → API Keys → secret key | workers de ingestão e diagnóstico |
-| `APP_URL` | domínio da web, sem barra no fim | web, API e notifier |
+| `APP_URL` | origem do site (`https://jayv…`), sem barra no fim: os links levam a `/doctor/…` (ADR-0023) | API e notifier |
 | `API_PUBLIC_URL` | domínio da API, sem barra no fim | API e notifier (webhooks de ITSM) |
 | `SMTP_URL` | `smtp://usuario:senha@host:587` do provedor de e-mail | API e workers |
 | `MAIL_FROM` | remetente (opcional) | API e workers |

@@ -7,7 +7,7 @@ dev-setup: ## instala dependências TS e Python e os hooks de pre-commit
 	uv sync --all-packages
 	uvx pre-commit install
 
-dev: ## sobe os apps em modo dev (web e api chegam nos tickets #7 e #9)
+dev: ## sobe os pacotes TS em modo dev (o app é o site da JayV, ADR-0023)
 	pnpm turbo run dev
 
 lint:

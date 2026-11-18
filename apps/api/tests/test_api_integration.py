@@ -1209,3 +1209,33 @@ async def test_me_responde_mesmo_se_o_acesso_automatico_falhar(
     first, second = tenants
     _, organizations, _ = await MeRepository().me(claims_for(first, user))
     assert {item.id for item in organizations} == {first, second}
+
+
+@pytest.mark.asyncio
+async def test_conexao_reaproveitada_nao_leva_papel_nem_claims_do_pedido_anterior(
+    tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Com DB_POOL_SIZE (Railway), a mesma conexão atende pedidos de pessoas diferentes."""
+    from aid_db import supavisor_engine
+
+    assert URL is not None
+    monkeypatch.setenv("DB_POOL_SIZE", "1")
+    pooled = supavisor_engine(URL)
+    first, _ = tenants
+    try:
+        async with tenant_tx(claims_for(first, user), pooled) as connection:
+            assert await connection.scalar(text("select current_user")) == "authenticated"
+        async with pooled.begin() as connection:
+            backend, role, claims = (
+                await connection.execute(
+                    text(
+                        "select pg_backend_pid(), current_user,"
+                        " coalesce(current_setting('request.jwt.claims', true), '')"
+                    )
+                )
+            ).one()
+            assert (role, claims) == ("postgres", "")
+        async with pooled.begin() as connection:
+            assert await connection.scalar(text("select pg_backend_pid()")) == backend
+    finally:
+        await pooled.dispose()

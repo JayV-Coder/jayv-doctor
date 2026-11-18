@@ -55,6 +55,10 @@ export default defineRailway((ctx, project) => {
     // privada dos ambientes criados depois de 16/10/2025 resolve `*.railway.internal` também em
     // IPv4. Com `::`, o uvicorn escutaria só em IPv6.
     PORT: "8080",
+    // O Railway não tem região na América do Sul e o banco fica em São Paulo: cada processo guarda
+    // até 5 conexões (10 com a folga), em vez de abrir uma por transação. 8 serviços × 10 = 80
+    // clientes do Supavisor, dentro da fatia do Doctor (docs/operations/capacity.md).
+    DB_POOL_SIZE: "5",
   };
 
   const python = (name: string, env: Env, extra: { start?: string; healthcheck?: boolean } = {}) =>

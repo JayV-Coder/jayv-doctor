@@ -38,10 +38,12 @@ async def tenant_tx(
             yield current[1]
         return
     async with (engine or get_engine()).begin() as connection:
-        await connection.execute(text("set local role authenticated"))
+        # Papel e claims num comando só (`set_config('role', …, true)` = `set local role`): com o
+        # banco longe, cada ida e volta conta.
         await connection.execute(
             text(
-                "select set_config('request.jwt.claims', :claims, true),"
+                "select set_config('role', 'authenticated', true),"
+                " set_config('request.jwt.claims', :claims, true),"
                 " set_config('doctor.request', :meta, true),"
                 " set_config('doctor.traceparent', :trace, true)"
             ),

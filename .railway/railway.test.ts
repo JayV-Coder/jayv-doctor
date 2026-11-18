@@ -114,4 +114,11 @@ describe("projeto do Railway", () => {
       expect(literal(service, "HOST"), service.name).toBeUndefined();
     }
   });
+
+  it("guarda conexões com o banco: em São Paulo, abrir uma a cada pedido custa segundos", async () => {
+    for (const service of (await services()).values()) {
+      if (service.name === "rabbitmq") continue;
+      expect(literal(service, "DB_POOL_SIZE"), service.name).toBe("5");
+    }
+  });
 });

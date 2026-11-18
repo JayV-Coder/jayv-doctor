@@ -2,7 +2,12 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { createIntegration, expectNoHorizontalScroll, ownerWithOrganization } from "./helpers";
+import {
+  createIntegration,
+  expectNoHorizontalScroll,
+  inThisApp,
+  ownerWithOrganization,
+} from "./helpers";
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -60,10 +65,10 @@ test("Relatório técnico: gera, baixa, compartilha e revoga o link (Tela 19)", 
   // Link: abre sem conta, e revogado deixa de abrir.
   await page.getByRole("button", { name: "Compartilhar link" }).click();
   const link = await page.getByLabel("Link compartilhável").inputValue();
-  expect(link).toContain("/compartilhado#");
+  expect(link).toContain("/doctor/shared#");
   const guest = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const visitor = await guest.newPage();
-  await visitor.goto(link);
+  await visitor.goto(inThisApp(link));
   const shared = visitor.waitForEvent("download");
   await visitor.getByRole("button", { name: "Baixar relatório" }).click();
   expect(readFileSync(await (await shared).path(), "utf8")).toContain("INC-0001");

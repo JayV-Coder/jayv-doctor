@@ -45,6 +45,24 @@ export async function lastEmailLink(email: string): Promise<string> {
   return link ?? "";
 }
 
+// Os links que a plataforma manda apontam para o app no site (`/doctor/...`, ADR-0023); até o
+// apps/web sair, o E2E confere o link novo e segue pela rota equivalente daqui (a mesma origem:
+// no E2E, `APP_URL` é o próprio apps/web).
+const SITE_ROUTES: [RegExp, string][] = [
+  [/\/doctor\/invitations\/accept#/, "/convites/aceitar#"],
+  [/\/doctor\/shared#/, "/compartilhado#"],
+];
+
+export function inThisApp(link: string): string {
+  const url = new URL(link);
+  for (const [site, here] of SITE_ROUTES) {
+    if (site.test(url.pathname + url.hash)) {
+      return `${url.origin}${(url.pathname + url.hash).replace(site, here)}`;
+    }
+  }
+  return link;
+}
+
 // Link do convite: o token vem no fragmento, que aparece só no texto do e-mail.
 export async function lastInvitationLink(email: string): Promise<string> {
   let link: string | undefined;
@@ -58,11 +76,11 @@ export async function lastInvitationLink(email: string): Promise<string> {
       if (!id) return false;
       const message = await fetch(`${MAILPIT_URL}/api/v1/message/${id}`);
       const { Text } = (await message.json()) as { Text: string };
-      link = /(http\S+\/convites\/aceitar#\S+)/.exec(Text)?.[1];
+      link = /(http\S+\/doctor\/invitations\/accept#\S+)/.exec(Text)?.[1];
       return link !== undefined;
     })
     .toBe(true);
-  return link ?? "";
+  return inThisApp(link ?? "");
 }
 
 // A verificação só acontece no clique: um scanner de e-mail que abre o link não gasta o token.

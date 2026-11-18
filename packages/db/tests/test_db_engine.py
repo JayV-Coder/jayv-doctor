@@ -13,16 +13,24 @@ def test_sem_db_pool_size_nao_guarda_conexoes(monkeypatch: pytest.MonkeyPatch) -
     assert isinstance(supavisor_engine(URL).pool, NullPool)
 
 
-def test_com_db_pool_size_reaproveita_e_confere_a_conexao(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_com_db_pool_size_guarda_conexoes_sem_teto(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DB_POOL_SIZE", "4")
     pool = supavisor_engine(URL).pool
     assert isinstance(pool, AsyncAdaptedQueuePool)
     assert pool.size() == 4
-    # Conexão parada há muito tempo o Supavisor pode ter fechado: confere antes de usar.
-    assert pool._pre_ping is True
+    # Acima das guardadas, abre extras como o NullPool: nenhum pedido espera na fila do pool.
+    assert pool._max_overflow == -1
 
 
 @pytest.mark.parametrize("value", ["0", "", "abc", "-2"])
 def test_valor_invalido_ou_zero_fica_sem_pool(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
     monkeypatch.setenv("DB_POOL_SIZE", value)
     assert isinstance(supavisor_engine(URL).pool, NullPool)
+
+
+@pytest.mark.asyncio
+async def test_papel_desconhecido_nao_chega_ao_banco() -> None:
+    from aid_db import session_settings
+
+    with pytest.raises(ValueError, match="papel inesperado"):
+        await session_settings(None, "postgres")  # type: ignore[arg-type]

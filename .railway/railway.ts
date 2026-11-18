@@ -55,10 +55,6 @@ export default defineRailway((ctx, project) => {
     // privada dos ambientes criados depois de 16/10/2025 resolve `*.railway.internal` também em
     // IPv4. Com `::`, o uvicorn escutaria só em IPv6.
     PORT: "8080",
-    // O Railway não tem região na América do Sul e o banco fica em São Paulo: cada processo guarda
-    // até 5 conexões (10 com a folga), em vez de abrir uma por transação. 8 serviços × 10 = 80
-    // clientes do Supavisor, dentro da fatia do Doctor (docs/operations/capacity.md).
-    DB_POOL_SIZE: "5",
   };
 
   const python = (name: string, env: Env, extra: { start?: string; healthcheck?: boolean } = {}) =>
@@ -75,6 +71,11 @@ export default defineRailway((ctx, project) => {
       env: { ...common, ...env },
     });
 
+  // O Railway não tem região na América do Sul e o banco fica em São Paulo: quem usa o banco
+  // guarda 5 conexões, em vez de abrir uma por transação. 7 serviços × 5 = 35 clientes fixos do
+  // Supavisor, dentro da fatia do Doctor (docs/operations/capacity.md).
+  const DB_POOL_SIZE = "5";
+
   const worker = (name: string, env: Env = {}) =>
     python(`worker-${name}`, {
       PACKAGE: "aid-worker",
@@ -83,6 +84,7 @@ export default defineRailway((ctx, project) => {
       AMQP_URL: rabbitmq.env.AMQP_URL,
       SUPABASE_DB_URL: shared("SUPABASE_DB_URL"),
       SUPABASE_URL: shared("SUPABASE_URL"),
+      DB_POOL_SIZE,
       ...env,
     });
 
@@ -90,6 +92,7 @@ export default defineRailway((ctx, project) => {
     PACKAGE: "aid-api",
     APP: "aid_api.main:app",
     SUPABASE_DB_URL: shared("SUPABASE_DB_URL"),
+    DB_POOL_SIZE,
     SUPABASE_URL: shared("SUPABASE_URL"),
     SUPABASE_JWT_ISSUER: "${{shared.SUPABASE_URL}}/auth/v1",
     SUPABASE_PUBLISHABLE_KEY: shared("SUPABASE_PUBLISHABLE_KEY"),

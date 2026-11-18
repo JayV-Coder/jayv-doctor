@@ -56,7 +56,9 @@ async def test_tenant_tx_assume_authenticated_com_as_claims_do_jwt() -> None:
 
     # Papel e claims num comando só: com o banco longe, cada ida e volta conta.
     jwt_claims, membership = engine.connection.statements
-    assert "set_config('role', 'authenticated', true)" in jwt_claims[0]
+    assert "set_config('role', :role, true)" in jwt_claims[0]
+    assert jwt_claims[1] is not None
+    assert jwt_claims[1]["role"] == "authenticated"
     assert "doctor.memberships" in membership[0]
     assert "set_config('request.jwt.claims'" in jwt_claims[0]
     assert jwt_claims[1] is not None

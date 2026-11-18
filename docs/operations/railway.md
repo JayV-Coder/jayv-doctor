@@ -72,7 +72,7 @@ Marque as chaves e senhas como *sealed*: o valor some do painel e do `railway co
 
 ## Conexões com o banco
 
-Cada serviço Python guarda até 5 conexões com o Supavisor (`DB_POOL_SIZE=5`, 10 com a folga), conferidas com um ping antes de usar. Sem isso, cada transação abriria uma conexão nova até São Paulo, o que custava de 2 a 5 s por página do Doctor. São 80 clientes no máximo nos 8 serviços, dentro da fatia do Doctor ([capacity.md](capacity.md)).
+Cada serviço que usa o banco guarda 5 conexões com o Supavisor (`DB_POOL_SIZE=5`), renovadas a cada 5 minutos; acima disso, abre extras e as fecha ao terminar. Sem isso, cada transação abriria uma conexão nova até São Paulo, o que custava de 2 a 5 s por página do Doctor. São 35 clientes fixos nos 7 serviços (o `scheduler` não usa o banco), dentro da fatia do Doctor ([capacity.md](capacity.md)). Papel, claims e trace vão num comando só por transação (`session_settings`).
 
 ## Região
 

@@ -20,7 +20,7 @@ Premissa do PRD §12: **100 mil Eventos por dia** e **1.000 Diagnósticos por m�
 
 ### Conexões
 
-O `aid_db` usa `NullPool` por padrão (ADR-0009): o pool é o do Supavisor, em modo transação. Com `DB_POOL_SIZE` (o Railway usa 5), cada processo guarda até essa quantidade de conexões de cliente, mais o mesmo tanto de folga, e o limite por processo passa a ser `2 × DB_POOL_SIZE`. No GCP, sem a variável, no pior caso cada requisição em curso abre uma conexão de cliente:
+O `aid_db` usa `NullPool` por padrão (ADR-0009): o pool é o do Supavisor, em modo transação. Com `DB_POOL_SIZE` (o Railway usa 5), cada processo guarda essa quantidade de conexões de cliente o tempo todo; os picos abrem extras, como no `NullPool`. No GCP, sem a variável, no pior caso cada requisição em curso abre uma conexão de cliente:
 
 ```text
 clientes = api_max_instances × api_concurrency + Σ(max_instances de cada worker) × worker_concurrency

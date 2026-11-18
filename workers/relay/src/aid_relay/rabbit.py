@@ -14,10 +14,16 @@ Quem conecta declara tudo (relay e workers): a declaração é idempotente."""
 import asyncio
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import aio_pika
 import httpx
-from aio_pika.abc import AbstractChannel, AbstractExchange, AbstractRobustConnection
+from aio_pika.abc import (
+    AbstractChannel,
+    AbstractExchange,
+    AbstractQueue,
+    AbstractRobustConnection,
+)
 from aiormq.exceptions import AMQPError
 
 from aid_relay.emulator import TOPICS
@@ -27,7 +33,16 @@ MAX_ATTEMPTS = 5
 # Esperas entre as tentativas, como o backoff do Pub/Sub (de 10 s em diante).
 RETRY_DELAYS = (10, 30, 90, 270)
 DEAD_TTL_MS = 7 * 24 * 3600 * 1000
+# Como a retenção do Pub/Sub: mensagem que ninguém consome em 7 dias vai para a DLQ, onde aparece.
+QUEUE_TTL_MS = 7 * 24 * 3600 * 1000
 ATTEMPT_HEADER = "x-aid-attempt"
+
+
+class Declared(NamedTuple):
+    exchange: AbstractExchange
+    # Tópico → a fila declarada neste canal: consumir por ela deixa o canal robusto restaurar o
+    # consumo depois de uma reconexão.
+    queues: dict[str, AbstractQueue]
 
 
 @dataclass(frozen=True)
@@ -54,13 +69,14 @@ class Topology:
         """Fila de espera depois da tentativa `attempt` (1 = a primeira falhou)."""
         return f"{self.namespace}.retry.{self.delays[min(attempt, len(self.delays)) - 1]}s"
 
-    async def declare(self, channel: AbstractChannel) -> AbstractExchange:
+    async def declare(self, channel: AbstractChannel) -> Declared:
         exchange = await channel.declare_exchange(
             self.exchange, aio_pika.ExchangeType.DIRECT, durable=True
         )
         dead = await channel.declare_exchange(
             self.dead_exchange, aio_pika.ExchangeType.DIRECT, durable=True
         )
+        queues: dict[str, AbstractQueue] = {}
         for topic in self.topics:
             queue = await channel.declare_queue(
                 self.queue(topic),
@@ -71,9 +87,11 @@ class Topology:
                     # filas de espera e não contam aqui.
                     "x-delivery-limit": MAX_ATTEMPTS,
                     "x-dead-letter-exchange": self.dead_exchange,
+                    "x-message-ttl": QUEUE_TTL_MS,
                 },
             )
             await queue.bind(exchange, routing_key=topic)
+            queues[topic] = queue
             dlq = await channel.declare_queue(
                 self.dead(topic), durable=True, arguments={"x-message-ttl": DEAD_TTL_MS}
             )
@@ -91,7 +109,7 @@ class Topology:
                 },
             )
             await queue.bind(wait)
-        return exchange
+        return Declared(exchange, queues)
 
     async def delete(self, channel: AbstractChannel) -> None:
         """Só para testes: apaga o que `declare` criou."""
@@ -129,11 +147,18 @@ class RabbitPublisher:
     async def ready(self) -> AbstractExchange:
         async with self.lock:
             if self.exchange is None:
-                self.connection = await aio_pika.connect_robust(self.url, timeout=10)
-                channel = await self.connection.channel(
-                    publisher_confirms=True, on_return_raises=True
-                )
-                self.exchange = await self.topology.declare(channel)
+                connection = await aio_pika.connect_robust(self.url, timeout=10)
+                try:
+                    channel = await connection.channel(
+                        publisher_confirms=True, on_return_raises=True
+                    )
+                    self.exchange = (await self.topology.declare(channel)).exchange
+                except BaseException:
+                    # Sem isso, cada rodada abriria uma conexão nova e deixaria a anterior
+                    # tentando reconectar para sempre.
+                    await connection.close()
+                    raise
+                self.connection = connection
             return self.exchange
 
     async def publish(
@@ -144,20 +169,32 @@ class RabbitPublisher:
             exchange = await self.ready()
         except (TimeoutError, OSError, AMQPError) as exc:
             raise PublishError(f"{topic}: broker indisponível", rejected=False) from exc
-        try:
-            await asyncio.gather(
-                *(
-                    exchange.publish(
-                        amqp_message(data, dict(attributes)), routing_key=topic, mandatory=True
-                    )
-                    for data, attributes in messages
+        results = await asyncio.gather(
+            *(
+                exchange.publish(
+                    amqp_message(data, dict(attributes)), routing_key=topic, mandatory=True
                 )
-            )
-        except aio_pika.exceptions.DeliveryError as exc:
-            # Voltou (sem fila para o tópico) ou o broker recusou (nack).
-            raise PublishError(f"{topic}: recusada pelo broker", rejected=True) from exc
-        except (TimeoutError, OSError, AMQPError) as exc:
-            raise PublishError(f"{topic}: {type(exc).__name__}", rejected=False) from exc
+                for data, attributes in messages
+            ),
+            return_exceptions=True,
+        )
+        errors = [result for result in results if isinstance(result, BaseException)]
+        if not errors:
+            return
+        unexpected = [
+            error for error in errors if not isinstance(error, aio_pika.exceptions.DeliveryError)
+        ]
+        if unexpected:
+            # Conexão ou broker: a rodada para sem gastar tentativa; o que já saiu sai de novo
+            # na próxima (pelo menos uma vez).
+            raise PublishError(
+                f"{topic}: {type(unexpected[0]).__name__}", rejected=False
+            ) from unexpected[0]
+        # Voltou (sem fila para o tópico) ou o broker recusou (nack): só essas contam tentativa.
+        failed = {n for n, result in enumerate(results) if isinstance(result, BaseException)}
+        raise PublishError(
+            f"{topic}: {len(failed)} recusadas pelo broker", rejected=True, failed=failed
+        ) from errors[0]
 
     async def close(self) -> None:
         if self.connection is not None:

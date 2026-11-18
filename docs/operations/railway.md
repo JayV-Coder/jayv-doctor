@@ -20,8 +20,10 @@ O relay publica cada mensagem da outbox na exchange `aid`, com a routing key do 
 - falha volta à fila depois de 10 s, 30 s, 90 s e 270 s (filas `aid.retry.<n>s`);
 - depois da 5ª falha, a mensagem vai para `aid.dead.<tópico>` e fica 7 dias;
 - se o worker cair no meio, o broker reentrega; a fila quorum manda à DLQ a mensagem que derruba o worker 5 vezes.
+- mensagem que ninguém consome em 7 dias também vai para a DLQ, como a retenção do Pub/Sub;
+- cada worker processa até 8 mensagens ao mesmo tempo, somadas todas as suas filas, como a concorrência do Cloud Run.
 
-Mensagem de tópico sem fila volta para o relay e conta uma tentativa na outbox, como a recusa do Pub/Sub. Quem conecta (relay e workers) declara as filas; a declaração é idempotente.
+Mensagem de tópico sem fila volta para o relay e conta uma tentativa na outbox, como a recusa do Pub/Sub. Se o broker cair, os workers reconectam e voltam a consumir sozinhos, e o `/healthz` responde 503 enquanto não consomem. Quem conecta (relay e workers) declara as filas; a declaração é idempotente.
 
 Para ver as DLQs: `railway ssh --service rabbitmq` e depois `rabbitmqctl list_queues name messages | grep dead`.
 

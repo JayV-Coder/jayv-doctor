@@ -35,11 +35,13 @@ async def topology() -> AsyncIterator[Topology]:
         await created.delete(await connection.channel())
 
 
-async def publish(topology: Topology, payload: object, attributes: dict[str, str]) -> None:
+async def publish(
+    topology: Topology, payload: object, attributes: dict[str, str], topic: str = TOPIC
+) -> None:
     assert URL is not None
     publisher = RabbitPublisher(URL, topology)
     async with httpx.AsyncClient() as client:
-        await publisher.publish(client, TOPIC, [(json.dumps(payload).encode(), attributes)])
+        await publisher.publish(client, topic, [(json.dumps(payload).encode(), attributes)])
     await publisher.close()
 
 
@@ -81,18 +83,21 @@ async def test_entrega_ao_handler_e_confirma(topology: Topology) -> None:
 
 
 async def test_falha_volta_depois_da_espera(topology: Topology) -> None:
-    calls: list[str] = []
+    calls: list[PubSubMessage] = []
 
     async def handler(message: PubSubMessage) -> None:
-        calls.append(message.message_id)
+        calls.append(message)
         if len(calls) == 1:
             raise RuntimeError("falha passageira")
 
     consumer = await run(topology, handler)
-    await publish(topology, {}, {"outbox_id": "1"})
+    await publish(topology, {}, {"outbox_id": "1", "tenant_id": "t"})
     await until(lambda: len(calls) == 2)
     await consumer.close()
-    assert calls == ["1", "1"]
+    assert [call.message_id for call in calls] == ["1", "1"]
+    # Os cabeçalhos do broker (x-death, x-first-death-*) não chegam ao handler: os atributos são
+    # os mesmos do Pub/Sub.
+    assert calls[1].attributes == {"outbox_id": "1", "tenant_id": "t"}
 
 
 async def test_depois_da_quinta_falha_vai_para_a_dlq(topology: Topology) -> None:
@@ -118,3 +123,60 @@ async def test_depois_da_quinta_falha_vai_para_a_dlq(topology: Topology) -> None
         assert json.loads(message.body) == {"x": 1}
         assert message.headers["tenant_id"] == "t"
         assert message.message_id == "5"
+
+
+async def test_volta_a_consumir_depois_que_a_conexao_cai(topology: Topology) -> None:
+    received: list[str] = []
+
+    async def handler(message: PubSubMessage) -> None:
+        received.append(message.message_id)
+
+    consumer = await run(topology, handler)
+    assert consumer.connection is not None
+    assert consumer.connection.transport is not None
+    reconnected = asyncio.Event()
+    consumer.connection.reconnect_callbacks.add(lambda *_: reconnected.set())
+    await consumer.connection.transport.connection.close(ConnectionResetError("queda"))
+    await asyncio.wait_for(reconnected.wait(), 20)
+    await publish(topology, {}, {"outbox_id": "2"})
+    await until(lambda: received == ["2"])
+    await consumer.close()
+
+
+async def test_limita_as_mensagens_ao_mesmo_tempo_no_worker_inteiro(topology: Topology) -> None:
+    running = 0
+    peak = 0
+    done = 0
+
+    async def handler(_: PubSubMessage) -> None:
+        nonlocal running, peak, done
+        running += 1
+        peak = max(peak, running)
+        await asyncio.sleep(0.3)
+        running -= 1
+        done += 1
+
+    assert URL is not None
+    topics = (TOPIC, "incident.opened", "incident.updated")
+    consumer = Consumer(URL, "diagnosis", dict.fromkeys(topics, handler), topology, prefetch=2)
+    await consumer.start()
+    for topic in topics:
+        for n in range(3):
+            await publish(topology, {}, {"outbox_id": f"{topic}{n}"}, topic)
+    await until(lambda: done == 9)
+    await consumer.close()
+    assert peak <= 2
+
+
+async def test_healthz_acompanha_o_consumo(topology: Topology) -> None:
+    from aid_worker.main import create_app
+    from fastapi.testclient import TestClient
+
+    async def handler(_: PubSubMessage) -> None:
+        return None
+
+    app = create_app("diagnosis", {TOPIC: handler}, URL, topology)
+    with TestClient(app) as client:
+        assert client.get("/healthz").status_code == 200
+        client.portal.call(app.state.consumer.close)  # type: ignore[union-attr]
+        assert client.get("/healthz").status_code == 503

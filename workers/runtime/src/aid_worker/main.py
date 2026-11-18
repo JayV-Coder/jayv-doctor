@@ -12,14 +12,18 @@ import logging
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aid_observability import logs, tracing
 from aid_observability.logs import bind
 from aid_observability.tracing import context_from, tracer
 from fastapi import APIRouter, FastAPI, Response, status
+from fastapi.responses import JSONResponse
 from opentelemetry.trace import SpanKind
 from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from aid_relay.rabbit import Topology
 
 logger = logging.getLogger(__name__)
 
@@ -140,31 +144,37 @@ async def process(worker: str, topic: str, message: PubSubMessage, handler: Hand
 
 
 def create_app(
-    worker: str, handlers: Mapping[str, Handler], amqp_url: str | None = None
+    worker: str,
+    handlers: Mapping[str, Handler],
+    amqp_url: str | None = None,
+    topology: "Topology | None" = None,
 ) -> FastAPI:
     """Com `amqp_url` (Railway, ADR-0024), o worker também consome as filas do RabbitMQ dos seus
     tópicos; sem ele, recebe só o push do Pub/Sub em `/pubsub` (GCP)."""
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        consumer = None
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        app.state.consumer = None
         if amqp_url and handlers:
             from aid_worker.rabbit import Consumer
 
-            consumer = Consumer(amqp_url, worker, handlers)
-            await consumer.start()
+            app.state.consumer = Consumer(amqp_url, worker, handlers, topology)
+            await app.state.consumer.start()
         try:
             yield
         finally:
-            if consumer is not None:
-                await consumer.close()
+            if app.state.consumer is not None:
+                await app.state.consumer.close()
 
     app = FastAPI(title=f"worker-{worker}", openapi_url=None, lifespan=lifespan)
 
-    # Healthcheck do deploy no Railway: o app só sobe depois de conectar ao broker.
+    # Healthcheck do deploy no Railway: com RabbitMQ, só responde 200 enquanto consome.
     @app.get("/healthz")
-    async def healthz() -> dict[str, str]:
-        return {"status": "ok"}
+    async def healthz() -> Response:
+        consumer = getattr(app.state, "consumer", None)
+        if consumer is not None and not consumer.healthy:
+            return Response(status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return JSONResponse({"status": "ok"})
 
     @app.post("/pubsub", status_code=status.HTTP_204_NO_CONTENT)
     async def receive(envelope: PushEnvelope) -> Response:

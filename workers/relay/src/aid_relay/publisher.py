@@ -21,9 +21,11 @@ class PublishError(RuntimeError):
     elas contam uma tentativa. `False`: o problema é do relay ou do Pub/Sub (token, IAM, 429,
     5xx, rede); a rodada para sem gastar tentativa de ninguém."""
 
-    def __init__(self, detail: str, *, rejected: bool) -> None:
+    def __init__(self, detail: str, *, rejected: bool, failed: set[int] | None = None) -> None:
         super().__init__(detail)
         self.rejected = rejected
+        # Recusa parcial: só estas posições do lote foram recusadas; as outras foram aceitas.
+        self.failed = failed
 
 
 class Publisher(Protocol):

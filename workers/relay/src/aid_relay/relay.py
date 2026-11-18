@@ -84,6 +84,10 @@ async def publish_batch(
             if not exc.rejected:
                 stats.stopped = True
                 break
+            if exc.failed is not None:
+                rejected.extend(row.id for n, row in enumerate(items) if n in exc.failed)
+                published.extend(row.id for n, row in enumerate(items) if n not in exc.failed)
+                continue
             rejected.extend(row.id for row in items)
         except Exception:
             logger.exception("outbox: erro inesperado ao publicar em %s", topic)

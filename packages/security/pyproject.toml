@@ -3,7 +3,7 @@ name = "aid-security"
 version = "0.1.0"
 description = "Sanitização de segredos e dados pessoais e HMAC de Referências de negócio"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = ["regex>=2024.11.6,<2026.10"]
 
 [build-system]
 requires = ["uv_build>=0.9.5,<0.10"]

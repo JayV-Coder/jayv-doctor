@@ -6,11 +6,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from ipaddress import ip_address
 
+import regex
+
 
 @dataclass(frozen=True)
 class Detector:
     kind: str
-    pattern: re.Pattern[str]
+    # `regex.Pattern` nos padrões do tenant (rodam com tempo limite); `re` nos da plataforma.
+    pattern: "re.Pattern[str] | regex.Pattern[str]"
     # Confere o trecho achado (dígito verificador, Luhn); `None` aceita tudo.
     check: Callable[[str], bool] | None = None
     # Grupo que vira marcador; 0 é o trecho inteiro. Em `password=valor`, só o valor; -1 é o
@@ -21,6 +24,8 @@ class Detector:
     hints: tuple[str, ...] = ()
     # Só casa com dígitos no texto (cartão, documentos, telefone, IP).
     needs_digit: bool = False
+    # Tempo máximo da busca, em segundos, nos padrões do tenant: estourou, o texto inteiro sai.
+    timeout: float | None = None
 
 
 def digits(text: str) -> list[int]:

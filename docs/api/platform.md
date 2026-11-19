@@ -16,6 +16,8 @@ Em `POST`, `PATCH` e `DELETE`, dentro de uma Organização ativa, por Usuário:
 
 Reserva, efeito e resposta gravada ficam na mesma transação: em erro, nada é gravado, e a próxima tentativa executa de verdade. A permissão é conferida antes de devolver uma resposta gravada. Respostas ficam 24 h; a limpeza é feita pela própria API.
 
+As rotas que agem sobre o Usuário, e não sobre a Organização ativa (`POST /orgs`, `/orgs/{id}/enable`, `/orgs/{id}/switch` e `/invitations/accept`), aceitam a chave mas não a gravam: são a saída de quem perdeu o acesso à Organização ativa (Vínculo removido ou MFA exigido, [policies.md](policies.md)). Repetir é seguro mesmo assim: trocar é idempotente, e criar, ativar e aceitar de novo respondem `409` ou `410`.
+
 ## Rate limit
 
 Token bucket por Organização e Usuário, em memória por instância: `RATE_LIMIT_PER_MINUTE` (padrão 120). Acima disso, `429 rate_limited` com `Retry-After`. O limite global por IP é do Cloud Armor.

@@ -15,10 +15,10 @@ class FakeConnection:
     async def execute(self, statement: Any, parameters: dict[str, Any] | None = None) -> None:
         self.statements.append((str(statement), parameters))
 
-    async def scalar(self, statement: Any, parameters: dict[str, Any] | None = None) -> bool:
-        # A conferência do Vínculo (#48): aqui ele existe.
+    async def scalar(self, statement: Any, parameters: dict[str, Any] | None = None) -> str | None:
+        # A conferência do acesso (#48, #49): aqui não há problema.
         self.statements.append((str(statement), parameters))
-        return True
+        return None
 
 
 class FakeBegin:
@@ -59,16 +59,49 @@ async def test_tenant_tx_assume_authenticated_com_as_claims_do_jwt() -> None:
     assert "set_config('role', :role, true)" in jwt_claims[0]
     assert jwt_claims[1] is not None
     assert jwt_claims[1]["role"] == "authenticated"
-    assert "doctor.memberships" in membership[0]
+    assert "doctor.access_problem()" in membership[0]
     assert "set_config('request.jwt.claims'" in jwt_claims[0]
     assert jwt_claims[1] is not None
     assert json.loads(jwt_claims[1]["claims"]) == {"sub": "u1"}
 
 
 class RevokedConnection(FakeConnection):
-    async def scalar(self, statement: Any, parameters: dict[str, Any] | None = None) -> bool:
+    async def scalar(self, statement: Any, parameters: dict[str, Any] | None = None) -> str | None:
         self.statements.append((str(statement), parameters))
-        return False
+        return "no_membership"
+
+
+class MfaConnection(FakeConnection):
+    async def scalar(self, statement: Any, parameters: dict[str, Any] | None = None) -> str | None:
+        self.statements.append((str(statement), parameters))
+        return "mfa_required"
+
+
+@pytest.mark.asyncio
+async def test_tenant_tx_pede_o_mfa_quando_a_organizacao_o_exige() -> None:
+    from aid_api.core.errors import ApiError
+
+    engine = FakeEngine()
+    engine.connection = MfaConnection()
+    claims = Claims(
+        sub="u1", email=None, aal="aal1", tenant_id="t1", tenant_role="viewer", raw={"sub": "u1"}
+    )
+    with pytest.raises(ApiError) as missing:
+        async with tenant_tx(claims, cast("AsyncEngine", engine)):
+            pass
+    assert (missing.value.status, missing.value.code) == (403, "mfa_required")
+
+
+@pytest.mark.asyncio
+async def test_tenant_tx_sem_conferir_acesso_deixa_o_me_responder() -> None:
+    engine = FakeEngine()
+    engine.connection = MfaConnection()
+    claims = Claims(
+        sub="u1", email=None, aal="aal1", tenant_id="t1", tenant_role="viewer", raw={"sub": "u1"}
+    )
+    async with tenant_tx(claims, cast("AsyncEngine", engine), check_access=False):
+        pass
+    assert len(engine.connection.statements) == 1
 
 
 @pytest.mark.asyncio

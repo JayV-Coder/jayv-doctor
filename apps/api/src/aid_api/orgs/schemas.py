@@ -39,6 +39,17 @@ class Me(BaseModel):
     available_organizations: list[AvailableOrganization]
     active_tenant_id: str | None
     active_role: str | None
+    # A Organização ativa exige MFA (#49) e a sessão não o tem: o site manda configurá-lo.
+    mfa_required: bool = False
+
+
+class MeData(BaseModel):
+    """O que o repositório lê para o /me."""
+
+    profile: Profile | None
+    organizations: list[Organization]
+    available: list[AvailableOrganization]
+    mfa_required: bool
 
 
 class NewOrganization(BaseModel):

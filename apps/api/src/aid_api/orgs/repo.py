@@ -19,6 +19,7 @@ from aid_api.orgs.schemas import (
     AvailableOrganization,
     EnabledOrganization,
     Invitation,
+    MeData,
     Member,
     NewOrganization,
     Organization,
@@ -75,34 +76,42 @@ def already_enabled() -> ApiError:
 
 @asynccontextmanager
 async def transaction(
-    claims: Claims, overrides: dict[str, Callable[[], ApiError]] | None = None
+    claims: Claims,
+    overrides: dict[str, Callable[[], ApiError]] | None = None,
+    *,
+    check_access: bool = True,
 ) -> AsyncIterator[AsyncConnection]:
     """`tenant_tx` que traduz o erro do banco em erro da API; `overrides` vale por rota."""
-    async with translated_tx(claims, {**ERRORS, **(overrides or {})}) as connection:
+    async with translated_tx(
+        claims, {**ERRORS, **(overrides or {})}, check_access=check_access
+    ) as connection:
         yield connection
 
 
 class MeRepository:
     JOIN = "select doctor.join_organizations()"
 
-    async def me(
-        self, claims: Claims
-    ) -> tuple[Profile | None, list[Organization], list[AvailableOrganization]]:
+    async def me(self, claims: Claims) -> MeData:
         """Antes de listar, dá o Vínculo que falta nas Organizações do jayv-coder em que o
-        Doctor está ativo (ADR-0025). Num savepoint: se falhar, o /me responde com o que há."""
-        async with transaction(claims) as connection:
+        Doctor está ativo (ADR-0025). Num savepoint: se falhar, o /me responde com o que há.
+        Sem conferir o acesso: o /me responde também sem o MFA que a Organização exige (#49)."""
+        async with transaction(claims, check_access=False) as connection:
             try:
                 async with connection.begin_nested():
                     await connection.execute(text(self.JOIN))
             except DBAPIError:
                 logger.warning("acesso automático às Organizações falhou", exc_info=True)
+            # O motivo do acesso vai na mesma ida ao banco que o perfil (sem perfil, a linha vem).
             result = await connection.execute(
                 text(
-                    "select display_name as full_name, avatar_url, 'pt-BR' as locale"
-                    " from public.profiles where user_id = auth.uid()"
+                    "select p.display_name as full_name, p.avatar_url, 'pt-BR' as locale,"
+                    " p.user_id is not null as has_profile,"
+                    " doctor.access_problem() is not distinct from 'mfa_required' as mfa_required"
+                    " from (select 1) one"
+                    " left join public.profiles p on p.user_id = auth.uid()"
                 )
             )
-            row = result.mappings().first()
+            row = result.mappings().one()
             organizations = await connection.execute(
                 text(
                     "select id::text, name, slug, role"
@@ -114,10 +123,20 @@ class MeRepository:
                     "select id::text, name, slug, coder_role from doctor.available_organizations()"
                 )
             )
-            return (
-                Profile.model_validate(dict(row)) if row else None,
-                [Organization.model_validate(dict(item)) for item in organizations.mappings()],
-                [AvailableOrganization.model_validate(dict(item)) for item in available.mappings()],
+            return MeData(
+                profile=Profile.model_validate(
+                    {key: row[key] for key in ("full_name", "avatar_url", "locale")}
+                )
+                if row["has_profile"]
+                else None,
+                organizations=[
+                    Organization.model_validate(dict(item)) for item in organizations.mappings()
+                ],
+                available=[
+                    AvailableOrganization.model_validate(dict(item))
+                    for item in available.mappings()
+                ],
+                mfa_required=bool(row["mfa_required"]),
             )
 
 

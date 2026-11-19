@@ -3,7 +3,7 @@ from typing import Any
 from aid_api.core.auth import Claims, TokenVerifier, get_claims, get_verifier
 from aid_api.main import create_app
 from aid_api.orgs.repo import MeRepository, get_me_repository
-from aid_api.orgs.schemas import AvailableOrganization, Organization, Profile
+from aid_api.orgs.schemas import AvailableOrganization, MeData, Organization, Profile
 from fastapi.testclient import TestClient
 
 USER_ID = "00000000-0000-4000-8000-0000000a0001"
@@ -16,10 +16,13 @@ AVAILABLE = AvailableOrganization(
 
 
 class FakeRepository(MeRepository):
-    async def me(
-        self, claims: Claims
-    ) -> tuple[Profile | None, list[Organization], list[AvailableOrganization]]:
-        return PROFILE, [ORGANIZATION] if claims.tenant_id else [], [AVAILABLE]
+    async def me(self, claims: Claims) -> MeData:
+        return MeData(
+            profile=PROFILE,
+            organizations=[ORGANIZATION] if claims.tenant_id else [],
+            available=[AVAILABLE],
+            mfa_required=claims.aal != "aal2" and claims.tenant_id is not None,
+        )
 
 
 def get_me(claims: Claims) -> Any:
@@ -45,7 +48,18 @@ def test_me_devolve_perfil_organizacoes_e_papel_ativo() -> None:
         ],
         "active_tenant_id": TENANT_ID,
         "active_role": "owner",
+        "mfa_required": False,
     }
+
+
+def test_me_avisa_quando_a_organizacao_exige_mfa() -> None:
+    """#49: o /me responde mesmo sem o MFA, para o site mandar configurá-lo."""
+    claims = Claims(sub=USER_ID, email=None, aal="aal1", tenant_id=TENANT_ID, tenant_role="viewer")
+    response = get_me(claims)
+    assert response.status_code == 200
+    # Igual ao doctor_read.me: sem o MFA, a Organização do token não está ativa.
+    assert (response.json()["mfa_required"], response.json()["active_tenant_id"]) == (True, None)
+    assert response.json()["active_role"] is None
 
 
 def test_me_sem_organizacao_ativa_nao_falha() -> None:

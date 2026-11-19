@@ -69,3 +69,9 @@ Tudo foi validado na stack local e no CI. A configuração do GCP e do Supabase 
 - [ ] Gerar o domínio público da `api` (porta 8080) e apontar `DOCTOR_API_URL` do site para ele.
 - [ ] Conferir no log de cada worker `consumindo N filas do RabbitMQ` e, no do `scheduler`, os jobs a cada minuto. Fazer uma Importação de ponta a ponta.
 - [ ] Desligar o Dokploy: apagar o serviço Docker Compose do Doctor e os domínios dele.
+
+## Leituras diretas no Supabase (ADR-0026)
+
+- [ ] Aplicar `20261119100000_doctor_read.sql` (na janela combinada, com `apply-doctor-migrations.py`).
+- [ ] Em Settings → Data API → "Exposed schemas", acrescentar `doctor_read` (sem tirar nada e **sem** `doctor`).
+- [ ] Conferir no log HTTP da `api` que `GET /me`, `GET /dashboard` e `POST /incidents/search` sem termo deixaram de chegar.

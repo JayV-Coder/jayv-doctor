@@ -3308,6 +3308,11 @@ export interface components {
       created_at: string;
       /** Error Rate 24H */
       error_rate_24h?: number | null;
+      /**
+       * Deletable
+       * @default false
+       */
+      deletable: boolean;
     };
     /**
      * IntegrationChange

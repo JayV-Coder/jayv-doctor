@@ -272,6 +272,10 @@ async def test_exclui_integracao_sem_historico_e_recusa_com_historico(
             {"t": first, "i": used.id},
         )
 
+    listed = {
+        item.name: item.deletable for item in await repository.list(admin, include_archived=False)
+    }
+    assert listed == {"Vazia": True, "Usada": False}
     with pytest.raises(ApiError) as foreign:
         await repository.delete(claims_for(second, user, "admin", "aal2"), empty.id)
     assert foreign.value.status == 404

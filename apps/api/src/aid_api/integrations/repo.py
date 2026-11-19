@@ -10,10 +10,11 @@ from aid_api.core.db import translated_tx
 from aid_api.core.errors import ApiError
 from aid_api.integrations.schemas import Integration, IntegrationChange, NewIntegration
 
-# As colunas são constantes daqui; o `noqa: S608` nas consultas se apoia nisso.
+# As colunas são constantes daqui; o `noqa: S608` nas consultas se apoia nisso. `deletable`: sem
+# histórico nem configuração ligada (`doctor.integration_deletable`); a tela só oferece Excluir aí.
 COLUMNS = (
     "id::text, name, description, source_system, target_system, owner_team, environment,"
-    " archived_at, created_at"
+    " archived_at, created_at, doctor.integration_deletable(id) as deletable"
 )
 # Taxa de erro das últimas 24 h pelas estatísticas por hora (as mesmas do painel): falhas sobre
 # o total. Sem Execução no período, nula: 0% passaria a ideia de que está tudo bem.
@@ -49,7 +50,8 @@ def integration_in_use() -> ApiError:
     return ApiError(
         409,
         "integration_in_use",
-        "A Integração tem histórico (Execuções, Eventos, Conectores ou Importações): arquive-a.",
+        "A Integração tem histórico (Execuções, Eventos, Incidentes) ou configuração ligada"
+        " (Conectores, Agentes, tokens de ingestão, Importações, Regras de alerta): arquive-a.",
     )
 
 
@@ -148,11 +150,16 @@ class IntegrationRepository:
             return to_integration(row) if row else await missed(connection, target)
 
     async def delete(self, claims: Claims, target: str) -> None:
-        """Exclusão de verdade, só sem histórico: as chaves estrangeiras das Execuções, Eventos,
-        Conectores, Importações... recusam (23503), e o caminho é arquivar."""
-        async with translated_tx(
-            claims, {**ERRORS, "23503": integration_in_use}, self.engine
-        ) as connection:
+        """Exclusão de verdade, só sem histórico nem configuração ligada: o gatilho do banco
+        recusa (23503), e o caminho é arquivar."""
+        # Sem o 42501 → `forbidden`: aqui, ele só vem de grant faltando (migração não aplicada),
+        # e precisa aparecer como erro, não como falta de Papel. O RLS de quem não pode devolve
+        # zero linhas, e a resposta sai de `visible` abaixo.
+        errors = {
+            **{code: error for code, error in ERRORS.items() if code != "42501"},
+            "23503": integration_in_use,
+        }
+        async with translated_tx(claims, errors, self.engine) as connection:
             deleted = await connection.scalar(
                 text(
                     "delete from doctor.integrations where id = cast(:target as uuid) returning id"

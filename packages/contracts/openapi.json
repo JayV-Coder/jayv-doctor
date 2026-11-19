@@ -12815,6 +12815,11 @@
               }
             ],
             "title": "Error Rate 24H"
+          },
+          "deletable": {
+            "type": "boolean",
+            "title": "Deletable",
+            "default": false
           }
         },
         "type": "object",

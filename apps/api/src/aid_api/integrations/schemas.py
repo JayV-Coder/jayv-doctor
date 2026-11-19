@@ -25,6 +25,8 @@ class Integration(BaseModel):
     created_at: datetime
     # Vem das Execuções (ticket #17). Até lá, `null`: sem Execução não há taxa, nem 0%.
     error_rate_24h: float | None = None
+    # Sem histórico nem configuração ligada: dá para excluir de verdade (senão, arquivar).
+    deletable: bool = False
 
 
 class NewIntegration(BaseModel):

@@ -137,7 +137,9 @@ class MeRepository:
 
 class OrganizationRepository:
     async def create(self, claims: Claims, organization: NewOrganization) -> str:
-        async with transaction(claims, {"23505": slug_taken}) as connection:
+        # Criar, ativar, trocar e aceitar Convite agem sobre o Usuário, não sobre a Organização
+        # ativa: valem mesmo sem o MFA que ela exige (#49), que é como se sai dela.
+        async with transaction(claims, {"23505": slug_taken}, check_access=False) as connection:
             result = await connection.execute(
                 text(
                     "select doctor.create_organization(:name, :slug, :segment, :llm_provider)::text"
@@ -148,7 +150,7 @@ class OrganizationRepository:
 
     async def enable(self, claims: Claims, org_id: str, settings: EnabledOrganization) -> str:
         overrides = {"42501": not_owner, "23505": already_enabled}
-        async with transaction(claims, overrides) as connection:
+        async with transaction(claims, overrides, check_access=False) as connection:
             result = await connection.execute(
                 text(
                     "select doctor.enable_organization("
@@ -159,7 +161,7 @@ class OrganizationRepository:
             return str(result.scalar_one())
 
     async def switch(self, claims: Claims, tenant_id: str) -> None:
-        async with transaction(claims, {"42501": not_a_member}) as connection:
+        async with transaction(claims, {"42501": not_a_member}, check_access=False) as connection:
             await connection.execute(
                 text("select doctor.switch_organization(cast(:tenant_id as uuid))"),
                 {"tenant_id": tenant_id},
@@ -214,7 +216,7 @@ class MemberRepository:
             )
 
     async def accept(self, claims: Claims, token_hash: str) -> str:
-        async with transaction(claims) as connection:
+        async with transaction(claims, check_access=False) as connection:
             result = await connection.execute(
                 text("select doctor.accept_invitation(:h)::text"), {"h": token_hash}
             )

@@ -28,7 +28,7 @@ _request: ContextVar[tuple[Claims, AsyncConnection] | None] = ContextVar("reques
 
 @asynccontextmanager
 async def tenant_tx(
-    claims: Claims, engine: AsyncEngine | None = None
+    claims: Claims, engine: AsyncEngine | None = None, *, check_access: bool = True
 ) -> AsyncIterator[AsyncConnection]:
     current = _request.get()
     if current is not None and current[0] == claims:
@@ -40,18 +40,19 @@ async def tenant_tx(
         await session_settings(
             connection, "authenticated", claims.raw, request_meta.current() or ""
         )
-        if claims.tenant_id is not None:
-            # O JWT vale por até 1 h; o Vínculo, não: removido (SCIM, #48, ou na tela), o acesso
-            # cai no pedido seguinte, sem esperar o token vencer.
-            alive = await connection.scalar(
-                text(
-                    "select exists (select 1 from doctor.memberships m"
-                    " where m.tenant_id = doctor.current_tenant_id() and m.user_id = auth.uid())"
-                )
-            )
-            if not alive:
+        if check_access and claims.tenant_id is not None:
+            # O JWT vale por até 1 h; o Vínculo e as políticas, não: Vínculo removido (SCIM, #48,
+            # ou na tela) ou MFA passado a obrigatório (#49), o acesso cai no pedido seguinte.
+            problem = await connection.scalar(text("select doctor.access_problem()"))
+            if problem == "no_membership":
                 raise ApiError(
                     401, "membership_revoked", "Seu acesso a esta Organização foi encerrado."
+                )
+            if problem == "mfa_required":
+                raise ApiError(
+                    403,
+                    "mfa_required",
+                    "Esta Organização exige verificação em duas etapas. Configure-a para entrar.",
                 )
         yield connection
 
@@ -77,10 +78,12 @@ async def translated_tx(
     claims: Claims,
     errors: Mapping[str, Callable[[], ApiError]],
     engine: AsyncEngine | None = None,
+    *,
+    check_access: bool = True,
 ) -> AsyncIterator[AsyncConnection]:
     """`tenant_tx` que traduz o SQLSTATE do banco no erro da API de cada módulo."""
     try:
-        async with tenant_tx(claims, engine) as connection:
+        async with tenant_tx(claims, engine, check_access=check_access) as connection:
             yield connection
     except DBAPIError as exc:
         factory = errors.get(sqlstate(exc) or "")

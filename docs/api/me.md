@@ -11,11 +11,12 @@ Perfil, Organizações e Papel na Organização ativa do Usuário autenticado. E
   "organizations": [{ "id": "uuid", "name": "Acme", "slug": "acme", "role": "owner" }],
   "available_organizations": [{ "id": "uuid", "name": "Varejo", "slug": "varejo", "coder_role": "owner" }],
   "active_tenant_id": "uuid",
-  "active_role": "owner"
+  "active_role": "owner",
+  "mfa_required": false
 }
 ```
 
-`organizations` traz as Organizações em que o Usuário tem Papel no Doctor. Antes de listar, o `/me` dá o Vínculo que falta nas Organizações do jayv-coder em que o Doctor está ativo, com o Papel equivalente (owner → Owner, maintainer → Admin, member → Viewer), menos onde o Doctor removeu a pessoa (ADR-0025). `available_organizations` traz as Organizações do jayv-coder do Usuário em que o Doctor ainda não está ativo, com o Papel de lá (`coder_role`): só o owner as ativa (`POST /orgs/{id}/enable`). `profile` vem de `public.profiles` e é `null` numa sessão `aal1` de quem tem MFA verificado, até o código ser confirmado.
+`organizations` traz as Organizações em que o Usuário tem Papel no Doctor. Antes de listar, o `/me` dá o Vínculo que falta nas Organizações do jayv-coder em que o Doctor está ativo, com o Papel equivalente (owner → Owner, maintainer → Admin, member → Viewer), menos onde o Doctor removeu a pessoa (ADR-0025). `available_organizations` traz as Organizações do jayv-coder do Usuário em que o Doctor ainda não está ativo, com o Papel de lá (`coder_role`): só o owner as ativa (`POST /orgs/{id}/enable`). `mfa_required` é `true` quando a Organização ativa exige MFA (#49, [policies.md](policies.md)) e a sessão é `aal1`: o `/me` responde mesmo assim, e o site manda configurar o app autenticador. `profile` vem de `public.profiles` e é `null` numa sessão `aal1` de quem tem MFA verificado, até o código ser confirmado.
 
 ## Erros (`application/problem+json`)
 

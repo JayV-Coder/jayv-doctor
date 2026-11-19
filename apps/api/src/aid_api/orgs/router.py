@@ -51,16 +51,17 @@ MailerDep = Annotated[Mailer, Depends(get_mailer)]
 async def get_me(
     claims: CurrentClaims, repository: Annotated[MeRepository, Depends(get_me_repository)]
 ) -> Me:
-    profile, organizations, available = await repository.me(claims)
+    data = await repository.me(claims)
     return Me(
         id=claims.sub,
         email=claims.email,
         aal=claims.aal,
-        profile=profile,
-        organizations=organizations,
-        available_organizations=available,
+        profile=data.profile,
+        organizations=data.organizations,
+        available_organizations=data.available,
         active_tenant_id=claims.tenant_id,
         active_role=claims.tenant_role,
+        mfa_required=data.mfa_required,
     )
 
 

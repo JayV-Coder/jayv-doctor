@@ -19,6 +19,7 @@ from aid_api.integrations import router as integrations
 from aid_api.itsm import router as itsm
 from aid_api.knowledge import router as knowledge
 from aid_api.orgs import router as orgs
+from aid_api.policies import router as policies
 from aid_api.privacy import router as privacy
 from aid_api.reports import router as reports
 from aid_api.sso import router as sso
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(reports.router)
     app.include_router(reports.shared)
     app.include_router(sso.router)
+    app.include_router(policies.router)
     app.include_router(sso.public)
     app.include_router(scim.router)
     telemetry.configure(app)

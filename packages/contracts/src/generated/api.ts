@@ -1829,6 +1829,24 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/policies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get Policies */
+    get: operations["get_policies_api_v1_policies_get"];
+    /** Update Policies */
+    put: operations["update_policies_api_v1_policies_put"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/sso/discover": {
     parameters: {
       query?: never;
@@ -3566,6 +3584,11 @@ export interface components {
       active_tenant_id: string | null;
       /** Active Role */
       active_role: string | null;
+      /**
+       * Mfa Required
+       * @default false
+       */
+      mfa_required: boolean;
     };
     /** Member */
     Member: {
@@ -3752,6 +3775,11 @@ export interface components {
       slug: string;
       /** Role */
       role: string;
+    };
+    /** Policies */
+    Policies: {
+      /** Require Mfa */
+      require_mfa: boolean;
     };
     /** Preferences */
     Preferences: {
@@ -9035,6 +9063,73 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["SsoProvisioned"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  get_policies_api_v1_policies_get: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Policies"];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["HTTPValidationError"];
+        };
+      };
+    };
+  };
+  update_policies_api_v1_policies_put: {
+    parameters: {
+      query?: never;
+      header?: {
+        authorization?: string | null;
+        "idempotency-key"?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["Policies"];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Policies"];
         };
       };
       /** @description Validation Error */

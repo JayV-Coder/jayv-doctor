@@ -1169,7 +1169,8 @@ async def test_organizacao_do_jayv_coder_aparece_e_o_owner_ativa_o_doctor_sem_cr
         )
     try:
         owner = claims_for(None, user, None)
-        _, organizations, available = await MeRepository().me(owner)
+        me = await MeRepository().me(owner)
+        organizations, available = me.organizations, me.available
         assert organizations == []
         assert [(item.id, item.coder_role) for item in available] == [(org, "owner")]
 
@@ -1177,12 +1178,13 @@ async def test_organizacao_do_jayv_coder_aparece_e_o_owner_ativa_o_doctor_sem_cr
             segment="Indústria", llm_provider="anthropic", dpa_accepted=True
         )
         assert await OrganizationRepository().enable(owner, org, settings) == org
-        _, organizations, available = await MeRepository().me(owner)
+        me = await MeRepository().me(owner)
+        organizations, available = me.organizations, me.available
         assert [(item.id, item.role) for item in organizations] == [(org, "owner")]
         assert available == []
 
         maintainer = claims_for(None, member, None)
-        _, organizations, _ = await MeRepository().me(maintainer)
+        organizations = (await MeRepository().me(maintainer)).organizations
         assert [(item.id, item.role) for item in organizations] == [(org, "admin")]
         with pytest.raises(ApiError) as again:
             await OrganizationRepository().enable(owner, org, settings)
@@ -1207,8 +1209,36 @@ async def test_me_responde_mesmo_se_o_acesso_automatico_falhar(
     monkeypatch.setattr(db, "get_engine", lambda: engine)
     monkeypatch.setattr(MeRepository, "JOIN", "select doctor.funcao_que_nao_existe()")
     first, second = tenants
-    _, organizations, _ = await MeRepository().me(claims_for(first, user))
-    assert {item.id for item in organizations} == {first, second}
+    me = await MeRepository().me(claims_for(first, user))
+    assert {item.id for item in me.organizations} == {first, second}
+
+
+@pytest.mark.asyncio
+async def test_organizacao_com_mfa_obrigatorio_recusa_sessao_sem_mfa(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#49: com o MFA obrigatório, aal1 recebe 403 `mfa_required`; o /me ainda responde e avisa."""
+    import aid_api.core.db as db
+    from aid_api.orgs.repo import MeRepository
+
+    monkeypatch.setattr(db, "get_engine", lambda: engine)
+    first, _ = tenants
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("update doctor.tenants set require_mfa = true where id = :i"), {"i": first}
+        )
+    with pytest.raises(ApiError) as refused:
+        await IntegrationRepository().list(claims_for(first, user), include_archived=False)
+    assert (refused.value.status, refused.value.code) == (403, "mfa_required")
+    me = await MeRepository().me(claims_for(first, user))
+    assert me.mfa_required is True
+    assert (
+        await IntegrationRepository().list(
+            claims_for(first, user, aal="aal2"), include_archived=False
+        )
+        == []
+    )
+    assert (await MeRepository().me(claims_for(first, user, aal="aal2"))).mfa_required is False
 
 
 @pytest.mark.asyncio

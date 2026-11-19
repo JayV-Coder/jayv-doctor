@@ -115,6 +115,40 @@ async def test_admin_com_mfa_liga_o_mfa_obrigatorio(app: FastAPI, org: dict[str,
 
 
 @pytest.mark.asyncio
+async def test_sem_o_mfa_exigido_ainda_troca_de_organizacao_com_idempotency_key(
+    app: FastAPI, org: dict[str, str], engine: AsyncEngine
+) -> None:
+    """A saída de quem não tem MFA é trocar de Organização: vale também com `Idempotency-Key`,
+    que a reserva da chave não confere a Organização de que a pessoa está saindo."""
+    other = str(uuid4())
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("update doctor.tenants set require_mfa = true where id = :t"), {"t": org["tenant"]}
+        )
+        await connection.execute(
+            text("insert into public.organizations (id, name, slug) values (:o, 'Outra', :s)"),
+            {"o": other, "s": f"outra-{other[:8]}"},
+        )
+        await connection.execute(text("insert into doctor.tenants (id) values (:o)"), {"o": other})
+        for sql in (
+            "insert into public.organization_members (org_id, user_id, role)"
+            " values (:o, :v, 'member')",
+            "insert into doctor.memberships (tenant_id, user_id, role) values (:o, :v, 'viewer')",
+        ):
+            await connection.execute(text(sql), {"o": other, "v": org["viewer"]})
+    try:
+        viewer = claims(org["viewer"], org["tenant"], "viewer", aal="aal1")
+        response = await call(app, viewer, "POST", f"/orgs/{other}/switch")
+        assert response.status_code == 204
+    finally:
+        async with engine.begin() as connection:
+            await connection.execute(text("delete from doctor.tenants where id = :o"), {"o": other})
+            await connection.execute(
+                text("delete from public.organizations where id = :o"), {"o": other}
+            )
+
+
+@pytest.mark.asyncio
 async def test_so_owner_ou_admin_com_mfa_mudam_a_politica(
     app: FastAPI, org: dict[str, str]
 ) -> None:

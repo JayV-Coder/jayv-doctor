@@ -7,7 +7,7 @@ from functools import lru_cache
 from typing import Annotated, Any
 
 import jwt
-from fastapi import Depends, Header
+from fastapi import Depends, Header, Request
 
 from aid_api.core.errors import ApiError
 from aid_api.core.telemetry import annotate_span
@@ -129,3 +129,22 @@ def require_role(*roles: str) -> Callable[[Claims], Claims]:
         return claims
 
     return dependency
+
+
+def user_claims(request: Request, claims: Annotated[Claims, Depends(get_claims)]) -> Claims:
+    """Rotas que agem sobre o Usuário, não sobre a Organização ativa (criar, ativar, trocar e
+    aceitar Convite): as claims sem a Organização. A transação não confere o acesso a ela, e a
+    reserva da `Idempotency-Key`, que é por Organização, fica de fora; assim quem perdeu o acesso
+    à ativa (Vínculo removido, MFA exigido, #49) ainda sai dela."""
+    request.state.user_scoped = True
+    raw = {
+        key: value for key, value in claims.raw.items() if key not in ("tenant_id", "tenant_role")
+    }
+    return Claims(
+        sub=claims.sub,
+        email=claims.email,
+        aal=claims.aal,
+        tenant_id=None,
+        tenant_role=None,
+        raw=raw,
+    )

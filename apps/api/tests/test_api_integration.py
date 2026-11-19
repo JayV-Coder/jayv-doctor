@@ -1242,23 +1242,6 @@ async def test_organizacao_com_mfa_obrigatorio_recusa_sessao_sem_mfa(
 
 
 @pytest.mark.asyncio
-async def test_sem_o_mfa_exigido_ainda_troca_de_organizacao(
-    engine: AsyncEngine, tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """#49: a saída de quem não tem MFA é trocar para outra Organização (ou configurar o MFA)."""
-    import aid_api.core.db as db
-    from aid_api.orgs.repo import OrganizationRepository
-
-    monkeypatch.setattr(db, "get_engine", lambda: engine)
-    first, second = tenants
-    async with engine.begin() as connection:
-        await connection.execute(
-            text("update doctor.tenants set require_mfa = true where id = :i"), {"i": first}
-        )
-    await OrganizationRepository().switch(claims_for(first, user), second)
-
-
-@pytest.mark.asyncio
 async def test_conexao_reaproveitada_nao_leva_papel_nem_claims_do_pedido_anterior(
     tenants: tuple[str, str], user: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

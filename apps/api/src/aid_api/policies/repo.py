@@ -31,11 +31,11 @@ class PolicyRepository:
 
     async def update(self, claims: Claims, policies: Policies) -> Policies:
         async with translated_tx(claims, ERRORS, self.engine) as connection:
-            await connection.execute(
+            saved = await connection.scalar(
                 text("select doctor.set_require_mfa(:enabled)"),
                 {"enabled": policies.require_mfa},
             )
-        return await self.get(claims)
+        return Policies(require_mfa=bool(saved))
 
 
 def get_policy_repository() -> PolicyRepository:

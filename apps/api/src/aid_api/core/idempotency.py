@@ -122,6 +122,8 @@ async def idempotency(
     """Põe por último entre as dependências da rota: só marca a chave, quem reserva é a rota."""
     if idempotency_key is None or claims.tenant_id is None:
         return
+    if getattr(request.state, "user_scoped", False):
+        return
     digest = hashlib.sha256(
         b"\0".join(
             [

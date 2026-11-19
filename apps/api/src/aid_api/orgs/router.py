@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 
-from aid_api.core.auth import Claims, get_claims, require_manager
+from aid_api.core.auth import Claims, get_claims, require_manager, user_claims
 from aid_api.core.idempotency import Idempotent, IdempotentRoute
 from aid_api.core.permissions import MANAGE_MEMBERS
 from aid_api.core.rate_limit import rate_limit
@@ -41,6 +41,7 @@ router = APIRouter(
 
 
 CurrentClaims = Annotated[Claims, Depends(get_claims)]
+UserClaims = Annotated[Claims, Depends(user_claims)]
 Manager = Annotated[Claims, Depends(require_manager(*MANAGE_MEMBERS))]
 Members = Annotated[MemberRepository, Depends(get_member_repository)]
 Organizations = Annotated[OrganizationRepository, Depends(get_organization_repository)]
@@ -59,8 +60,9 @@ async def get_me(
         profile=data.profile,
         organizations=data.organizations,
         available_organizations=data.available,
-        active_tenant_id=claims.tenant_id,
-        active_role=claims.tenant_role,
+        # Sem o MFA que a Organização exige, ela não está ativa (como no doctor_read.me).
+        active_tenant_id=None if data.mfa_required else claims.tenant_id,
+        active_role=None if data.mfa_required else claims.tenant_role,
         mfa_required=data.mfa_required,
     )
 
@@ -72,7 +74,7 @@ async def get_me(
     tags=["orgs"],
 )
 async def create_organization(
-    organization: NewOrganization, claims: CurrentClaims, repository: Organizations, _: Idempotent
+    organization: NewOrganization, claims: UserClaims, repository: Organizations, _: Idempotent
 ) -> CreatedOrganization:
     return CreatedOrganization(id=await repository.create(claims, organization))
 
@@ -86,7 +88,7 @@ async def create_organization(
 async def enable_organization(
     tenant_id: UUID,
     settings: EnabledOrganization,
-    claims: CurrentClaims,
+    claims: UserClaims,
     repository: Organizations,
     _: Idempotent,
 ) -> CreatedOrganization:
@@ -96,7 +98,7 @@ async def enable_organization(
 
 @router.post("/orgs/{tenant_id}/switch", status_code=status.HTTP_204_NO_CONTENT, tags=["orgs"])
 async def switch_organization(
-    tenant_id: UUID, claims: CurrentClaims, repository: Organizations, _: Idempotent
+    tenant_id: UUID, claims: UserClaims, repository: Organizations, _: Idempotent
 ) -> None:
     await repository.switch(claims, str(tenant_id))
 
@@ -148,7 +150,7 @@ async def create_invitation(
 
 @router.post("/invitations/accept", response_model=AcceptedInvitation, tags=["members"])
 async def accept_invitation(
-    acceptance: Acceptance, claims: CurrentClaims, repository: Members, _: Idempotent
+    acceptance: Acceptance, claims: UserClaims, repository: Members, _: Idempotent
 ) -> AcceptedInvitation:
     tenant_id = await repository.accept(claims, service.hash_token(acceptance.token))
     return AcceptedInvitation(tenant_id=tenant_id)

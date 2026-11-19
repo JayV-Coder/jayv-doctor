@@ -101,13 +101,17 @@ class MeRepository:
                     await connection.execute(text(self.JOIN))
             except DBAPIError:
                 logger.warning("acesso automático às Organizações falhou", exc_info=True)
+            # O motivo do acesso vai na mesma ida ao banco que o perfil (sem perfil, a linha vem).
             result = await connection.execute(
                 text(
-                    "select display_name as full_name, avatar_url, 'pt-BR' as locale"
-                    " from public.profiles where user_id = auth.uid()"
+                    "select p.display_name as full_name, p.avatar_url, 'pt-BR' as locale,"
+                    " p.user_id is not null as has_profile,"
+                    " doctor.access_problem() is not distinct from 'mfa_required' as mfa_required"
+                    " from (select 1) one"
+                    " left join public.profiles p on p.user_id = auth.uid()"
                 )
             )
-            row = result.mappings().first()
+            row = result.mappings().one()
             organizations = await connection.execute(
                 text(
                     "select id::text, name, slug, role"
@@ -119,11 +123,12 @@ class MeRepository:
                     "select id::text, name, slug, coder_role from doctor.available_organizations()"
                 )
             )
-            mfa_required = await connection.scalar(
-                text("select doctor.access_problem() is not distinct from 'mfa_required'")
-            )
             return MeData(
-                profile=Profile.model_validate(dict(row)) if row else None,
+                profile=Profile.model_validate(
+                    {key: row[key] for key in ("full_name", "avatar_url", "locale")}
+                )
+                if row["has_profile"]
+                else None,
                 organizations=[
                     Organization.model_validate(dict(item)) for item in organizations.mappings()
                 ],
@@ -131,15 +136,13 @@ class MeRepository:
                     AvailableOrganization.model_validate(dict(item))
                     for item in available.mappings()
                 ],
-                mfa_required=bool(mfa_required),
+                mfa_required=bool(row["mfa_required"]),
             )
 
 
 class OrganizationRepository:
     async def create(self, claims: Claims, organization: NewOrganization) -> str:
-        # Criar, ativar, trocar e aceitar Convite agem sobre o Usuário, não sobre a Organização
-        # ativa: valem mesmo sem o MFA que ela exige (#49), que é como se sai dela.
-        async with transaction(claims, {"23505": slug_taken}, check_access=False) as connection:
+        async with transaction(claims, {"23505": slug_taken}) as connection:
             result = await connection.execute(
                 text(
                     "select doctor.create_organization(:name, :slug, :segment, :llm_provider)::text"
@@ -150,7 +153,7 @@ class OrganizationRepository:
 
     async def enable(self, claims: Claims, org_id: str, settings: EnabledOrganization) -> str:
         overrides = {"42501": not_owner, "23505": already_enabled}
-        async with transaction(claims, overrides, check_access=False) as connection:
+        async with transaction(claims, overrides) as connection:
             result = await connection.execute(
                 text(
                     "select doctor.enable_organization("
@@ -161,7 +164,7 @@ class OrganizationRepository:
             return str(result.scalar_one())
 
     async def switch(self, claims: Claims, tenant_id: str) -> None:
-        async with transaction(claims, {"42501": not_a_member}, check_access=False) as connection:
+        async with transaction(claims, {"42501": not_a_member}) as connection:
             await connection.execute(
                 text("select doctor.switch_organization(cast(:tenant_id as uuid))"),
                 {"tenant_id": tenant_id},
@@ -216,7 +219,7 @@ class MemberRepository:
             )
 
     async def accept(self, claims: Claims, token_hash: str) -> str:
-        async with transaction(claims, check_access=False) as connection:
+        async with transaction(claims) as connection:
             result = await connection.execute(
                 text("select doctor.accept_invitation(:h)::text"), {"h": token_hash}
             )

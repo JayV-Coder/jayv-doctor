@@ -57,7 +57,9 @@ def test_me_avisa_quando_a_organizacao_exige_mfa() -> None:
     claims = Claims(sub=USER_ID, email=None, aal="aal1", tenant_id=TENANT_ID, tenant_role="viewer")
     response = get_me(claims)
     assert response.status_code == 200
-    assert response.json()["mfa_required"] is True
+    # Igual ao doctor_read.me: sem o MFA, a Organização do token não está ativa.
+    assert (response.json()["mfa_required"], response.json()["active_tenant_id"]) == (True, None)
+    assert response.json()["active_role"] is None
 
 
 def test_me_sem_organizacao_ativa_nao_falha() -> None:

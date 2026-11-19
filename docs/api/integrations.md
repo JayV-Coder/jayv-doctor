@@ -8,6 +8,7 @@ Exigem `Authorization: Bearer <JWT do Supabase Auth>` e Organização ativa. Tod
 | `POST /api/v1/integrations` | Cadastra → `201` com a Integração |
 | `PATCH /api/v1/integrations/{id}` | Altera só os campos enviados; `description` e `owner_team` aceitam `null` |
 | `POST /api/v1/integrations/{id}/archive` | Arquiva → `200`; repetir devolve a arquivada, com a data original |
+| `DELETE /api/v1/integrations/{id}` | Exclui de verdade → `204`, só sem histórico; leva junto os Mapas de identificadores, os de colunas e as estatísticas por hora |
 
 Corpo do `POST`:
 
@@ -25,7 +26,7 @@ Corpo do `POST`:
 - `source_system` e `target_system`: `sap`, `salesforce`, `gcp` ou `other`. `environment`: `dev`, `hml` ou `prd`.
 - O nome é único por Organização e Ambiente entre as ativas: arquivar libera o nome. O mesmo nome vale em outra Organização.
 - O payload não define tenant, autor nem arquivamento: campos extras viram `422`.
-- Não há exclusão física, porque Execuções e Incidentes apontam para a Integração. Arquivada, ela some das listas padrão e fica congelada: não volta e não muda. Os Conectores (ticket #14) devem ignorar Integrações arquivadas ao sincronizar.
+- Exclusão física só sem histórico: com Execuções, Eventos, Incidentes, Conectores, Agentes, tokens de ingestão ou Importações, o `DELETE` responde `409 integration_in_use`, e o caminho é arquivar. Arquivada, ela some das listas padrão e fica congelada: não volta e não muda. Os Conectores (ticket #14) devem ignorar Integrações arquivadas ao sincronizar.
 - `error_rate_24h`: falhas ÷ Execuções das últimas 24 h, pelas estatísticas por hora (as mesmas do painel); `null` sem Execuções no período: sem Execução não há taxa, nem 0%.
 
 ## Erros (`application/problem+json`)
@@ -39,4 +40,5 @@ Corpo do `POST`:
 | 404 | `not_found` | Integração inexistente nesta Organização |
 | 409 | `integration_exists` | Nome e Ambiente já usados por uma Integração ativa desta Organização |
 | 409 | `integration_archived` | `PATCH` em Integração arquivada |
+| 409 | `integration_in_use` | `DELETE` em Integração com histórico (arquive) |
 | 422 | `validation_error` | Corpo inválido |

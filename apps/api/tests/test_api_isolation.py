@@ -72,6 +72,7 @@ ROUTES: list[tuple[str, str, str, dict[str, Any] | None]] = [
     ("DELETE", "/api/v1/invitations/{target}", "invitation", None),
     ("PATCH", "/api/v1/integrations/{target}", "integration", {"name": "Invadida"}),
     ("POST", "/api/v1/integrations/{target}/archive", "integration", None),
+    ("DELETE", "/api/v1/integrations/{target}", "integration", None),
     ("PATCH", "/api/v1/alert-rules/{target}", "alert_rule", {"enabled": False}),
     ("DELETE", "/api/v1/alert-rules/{target}", "alert_rule", None),
     ("DELETE", "/api/v1/notification-channels/{target}", "channel", None),

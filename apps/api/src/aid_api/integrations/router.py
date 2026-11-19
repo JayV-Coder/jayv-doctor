@@ -50,9 +50,17 @@ async def update_integration(
     return await repository.update(claims, str(target), change)
 
 
-# Sem exclusão física: Execuções e Incidentes apontam para a Integração.
+# Arquivar: o caminho para a Integração com histórico, que não pode ser excluída.
 @router.post("/{target}/archive", response_model=Integration)
 async def archive_integration(
     target: UUID, claims: Manager, repository: Integrations, _: Idempotent
 ) -> Integration:
     return await repository.archive(claims, str(target))
+
+
+# Exclusão de verdade só sem histórico; com Execuções e Incidentes, `409 integration_in_use`.
+@router.delete("/{target}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_integration(
+    target: UUID, claims: Manager, repository: Integrations, _: Idempotent
+) -> None:
+    await repository.delete(claims, str(target))

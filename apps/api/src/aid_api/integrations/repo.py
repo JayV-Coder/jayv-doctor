@@ -45,6 +45,14 @@ def integration_archived() -> ApiError:
     return ApiError(409, "integration_archived", "Integração arquivada não muda.")
 
 
+def integration_in_use() -> ApiError:
+    return ApiError(
+        409,
+        "integration_in_use",
+        "A Integração tem histórico (Execuções, Eventos, Conectores ou Importações): arquive-a.",
+    )
+
+
 ERRORS = {"23505": integration_exists, "42501": forbidden}
 
 
@@ -138,6 +146,23 @@ class IntegrationRepository:
             )
             row = result.mappings().first()
             return to_integration(row) if row else await missed(connection, target)
+
+    async def delete(self, claims: Claims, target: str) -> None:
+        """Exclusão de verdade, só sem histórico: as chaves estrangeiras das Execuções, Eventos,
+        Conectores, Importações... recusam (23503), e o caminho é arquivar."""
+        async with translated_tx(
+            claims, {**ERRORS, "23503": integration_in_use}, self.engine
+        ) as connection:
+            deleted = await connection.scalar(
+                text(
+                    "delete from doctor.integrations where id = cast(:target as uuid) returning id"
+                ),
+                {"target": target},
+            )
+            if deleted is None:
+                # Não alcançou a linha: de outra Organização (404) ou sem o Papel (403).
+                await visible(connection, target)
+                raise forbidden()
 
 
 def get_integration_repository() -> IntegrationRepository:

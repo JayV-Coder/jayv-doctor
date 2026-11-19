@@ -245,6 +245,52 @@ async def test_integracoes_isoladas_com_nome_unico_por_organizacao(
 
 
 @pytest.mark.asyncio
+async def test_exclui_integracao_sem_historico_e_recusa_com_historico(
+    engine: AsyncEngine, tenants: tuple[str, str], user: str
+) -> None:
+    """Excluir é de verdade só sem histórico; com Execução, `409 integration_in_use` (arquivar)."""
+    first, second = tenants
+    for tenant in tenants:
+        await add_admin(engine, tenant, user)
+    repository = IntegrationRepository(engine)
+    admin = claims_for(first, user, "admin", "aal2")
+    empty = await repository.create(
+        admin,
+        NewIntegration(name="Vazia", source_system="sap", target_system="gcp", environment="dev"),
+    )
+    used = await repository.create(
+        admin,
+        NewIntegration(name="Usada", source_system="sap", target_system="gcp", environment="prd"),
+    )
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "insert into doctor.executions (tenant_id, integration_id, status,"
+                " first_event_at, last_event_at, correlation_keys)"
+                " values (:t, :i, 'failed', now(), now(), '{}')"
+            ),
+            {"t": first, "i": used.id},
+        )
+
+    with pytest.raises(ApiError) as foreign:
+        await repository.delete(claims_for(second, user, "admin", "aal2"), empty.id)
+    assert foreign.value.status == 404
+    with pytest.raises(ApiError) as viewer:
+        await repository.delete(claims_for(first, user, "viewer", "aal1"), empty.id)
+    assert viewer.value.status == 403
+    with pytest.raises(ApiError) as in_use:
+        await repository.delete(admin, used.id)
+    assert (in_use.value.status, in_use.value.code) == (409, "integration_in_use")
+
+    await repository.delete(admin, empty.id)
+    remaining = await repository.list(admin, include_archived=True)
+    assert [item.id for item in remaining] == [used.id]
+    with pytest.raises(ApiError) as gone:
+        await repository.delete(admin, empty.id)
+    assert gone.value.status == 404
+
+
+@pytest.mark.asyncio
 async def test_admin_rebaixado_com_jwt_antigo_recebe_403_e_nao_404(
     engine: AsyncEngine, tenants: tuple[str, str], user: str
 ) -> None:

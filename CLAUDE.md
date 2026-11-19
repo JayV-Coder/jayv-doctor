@@ -13,7 +13,7 @@ SaaS B2B que diagnostica falhas de integrações (SAP, Salesforce, GCP). Supabas
 - O projeto Supabase é compartilhado com o jayv-coder em produção: tudo do Doctor fica no schema `doctor`, e `public` não é alterado ([ADR-0009](docs/adr/0009-doctor-no-projeto-supabase-do-jayv-coder.md)).
 - O `tenant_id` vem só do JWT (claim do Custom Access Token Hook) ou da identidade do conector; payload externo nunca o define.
 - Toda tabela de tenant: `tenant_id`, `unique (tenant_id, id)`, FKs compostas, RLS e teste de isolamento.
-- A API acessa dados dentro de `tenant_tx(claims)`, com o RLS valendo; `service_role` fica restrita a jobs de plataforma.
+- A API acessa dados dentro de `tenant_tx(claims)`, com o RLS valendo; `service_role` fica restrita a jobs de plataforma. O site lê direto pelo schema `doctor_read` (ADR-0026); escritas, só pela API.
 - Logs e documentos de clientes chegam ao LLM sanitizados e delimitados como dados não confiáveis; Recomendações são sempre ações humanas.
 - Diagnóstico publicado é imutável; nova análise = nova versão. Toda Evidência aponta para um registro real do mesmo tenant.
 - Confiança é exibida sempre como "heurística".
